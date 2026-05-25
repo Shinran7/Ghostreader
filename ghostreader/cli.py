@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -85,7 +86,103 @@ def analyze(
     no_cache: NoCacheOption = False,
 ) -> None:
     """Analyze a manuscript file or directory of chapter files."""
-    rprint("Analysis not yet implemented")
+    asyncio.run(_run_ingestion(path, model=model))
+
+
+async def _run_ingestion(path: Path, *, model: str | None = None) -> None:
+    """Execute the ingestion pipeline: load → summarize → index."""
+    from ghostreader.ingestion.epub_loader import load_epub
+    from ghostreader.ingestion.indexer import index_manuscript
+    from ghostreader.ingestion.markdown_loader import load_markdown
+    from ghostreader.ingestion.summarizer import build_summary_hierarchy
+
+    path = path.resolve()
+
+    # ── Load chapters ──
+    rprint(f"[cyan]Loading manuscript from:[/cyan] {path}")
+    if path.is_file() and path.suffix.lower() == ".epub":
+        chapters = load_epub(path)
+    else:
+        chapters = load_markdown(path)
+
+    rprint(f"  Found [green]{len(chapters)}[/green] chapter(s)")
+
+    # ── Build summary hierarchy ──
+    rprint("[cyan]Building summary hierarchy...[/cyan]")
+    llm = _get_llm(model)
+    hierarchy = await build_summary_hierarchy(chapters, llm)
+    rprint(
+        f"  Summaries: [green]{len(hierarchy.chapter_summaries)}[/green] chapter, "
+        f"[green]{len(hierarchy.act_summaries)}[/green] act, "
+        f"[green]1[/green] global"
+    )
+
+    # ── Index into LanceDB ──
+    project_dir = path.parent if path.is_file() else path
+    rprint("[cyan]Indexing into LanceDB...[/cyan]")
+    chunk_count, db_path = index_manuscript(chapters, hierarchy, project_dir)
+    rprint(f"  Indexed [green]{chunk_count}[/green] chunks → {db_path}")
+
+    # ── Summary panel ──
+    table = Table(title="Ingestion Summary")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("Chapters", str(len(chapters)))
+    table.add_row("Chunks", str(chunk_count))
+    table.add_row("Chapter summaries", str(len(hierarchy.chapter_summaries)))
+    table.add_row("Act summaries", str(len(hierarchy.act_summaries)))
+    table.add_row("Global summary", "yes" if hierarchy.global_summary else "no")
+    table.add_row("Database", str(db_path))
+    rprint(table)
+    rprint("[yellow]Analysis agents not yet implemented — ingestion complete.[/yellow]")
+
+
+def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
+    """Create a langchain ChatModel from config or --model override.
+
+    Falls back to a FakeChatModel for testing when no real backend is
+    configured or available.
+    """
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import AIMessage, BaseMessage
+
+    model_name = model or "stub"
+
+    # Try real backends when a model name looks like a known provider
+    if model_name.startswith("gpt-") or model_name.startswith("o"):
+        try:
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(model=model_name)
+        except Exception:
+            pass
+    elif model_name.startswith("claude-"):
+        try:
+            from langchain_anthropic import ChatAnthropic
+            return ChatAnthropic(model=model_name)
+        except Exception:
+            pass
+
+    # Stub model for pipeline testing without API keys
+    class _StubChatModel(BaseChatModel):
+        """Returns placeholder summaries so the pipeline runs end-to-end."""
+
+        @property
+        def _llm_type(self) -> str:
+            return "stub"
+
+        def _generate(
+            self, messages: list[BaseMessage], **kwargs: object
+        ) -> object:
+            from langchain_core.outputs import ChatGeneration, ChatResult
+            text = f"[stub summary of {len(messages[-1].content)} chars]"
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])
+
+        async def _agenerate(
+            self, messages: list[BaseMessage], **kwargs: object
+        ) -> object:
+            return self._generate(messages, **kwargs)
+
+    return _StubChatModel()
 
 
 @app.command()
