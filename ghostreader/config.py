@@ -39,12 +39,15 @@ class GhostreaderConfig(BaseModel):
         return cls()
 
     def save(self, directory: Path) -> Path:
-        """Write config to ``config.yaml`` in *directory*."""
+        """Write config to ``config.yaml`` in *directory*.
+
+        All fields are written so the user can see every available setting.
+        """
         path = directory / "config.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             yaml.dump(
-                self.model_dump(exclude_none=True),
+                self.model_dump(),
                 f,
                 default_flow_style=False,
                 sort_keys=False,

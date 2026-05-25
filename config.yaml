@@ -1,0 +1,7 @@
+model: null
+embedding_model: all-MiniLM-L6-v2
+temperature: null
+max_tokens: null
+genre: null
+depth: standard
+format: markdown
