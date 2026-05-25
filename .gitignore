@@ -20,6 +20,10 @@ htmlcov/
 .vscode/
 .idea/
 
+# Secrets (track .example templates only)
+secrets/*
+!secrets/*.example
+
 # Virtual envs
 .venv/
 venv/

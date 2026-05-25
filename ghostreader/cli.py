@@ -237,16 +237,59 @@ async def _run_analyze(
         rprint("[dim]Results cached.[/dim]")
 
 
+def _load_secrets() -> None:
+    """Load API keys from secrets/llm.env if it exists."""
+    import os
+
+    secrets_path = Path.cwd() / "secrets" / "llm.env"
+    if not secrets_path.exists():
+        # Walk up to find project root
+        for d in [Path.cwd(), *Path.cwd().parents]:
+            candidate = d / "secrets" / "llm.env"
+            if candidate.exists():
+                secrets_path = candidate
+                break
+        else:
+            return
+
+    for line in secrets_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if value and key not in os.environ:
+            os.environ[key] = value
+
+
+def _resolve_model_name(model: str | None = None) -> str:
+    """Determine which model to use: --model flag > config.yaml > stub."""
+    if model:
+        return model
+
+    project_dir = _find_project_dir()
+    if project_dir:
+        cfg = GhostreaderConfig.load(project_dir)
+        # Try default_model first, then preference order
+        candidates = [cfg.default_model, *cfg.model_preference_order]
+        for name in candidates:
+            if name and name != "stub":
+                return name
+
+    return "stub"
+
+
 def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
     """Create a langchain ChatModel from config or --model override.
 
-    Falls back to a FakeChatModel for testing when no real backend is
-    configured or available.
+    Resolution order: --model flag > config.yaml default_model > stub.
+    Loads API keys from secrets/llm.env automatically.
     """
     from langchain_core.language_models import BaseChatModel
     from langchain_core.messages import AIMessage, BaseMessage
 
-    model_name = model or "stub"
+    _load_secrets()
+    model_name = _resolve_model_name(model)
 
     # Try real backends when a model name looks like a known provider
     if model_name.startswith("gpt-") or model_name.startswith("o"):
@@ -281,6 +324,9 @@ def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
             self, messages: list[BaseMessage], **kwargs: object
         ) -> object:
             return self._generate(messages, **kwargs)
+
+    if model_name != "stub":
+        rprint(f"[yellow]Warning:[/yellow] Could not initialize '{model_name}', falling back to stub LLM.")
 
     return _StubChatModel()
 
