@@ -188,9 +188,17 @@ def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
 @app.command()
 def chat(
     project: Annotated[str, typer.Argument(help="Project name to chat about.")],
+    model: ModelOption = None,
 ) -> None:
     """Interactive follow-up chat with a previous analysis."""
-    rprint("Chat not yet implemented")
+    from ghostreader.commands.chat import run_chat
+
+    project_dir = Path.cwd() / project
+    if not (project_dir / ".ghostreader").is_dir():
+        rprint(f"[red]Error:[/red] No Ghostreader project found at '{project_dir}'.")
+        raise typer.Exit(code=1)
+
+    run_chat(project_dir, model=model)
 
 
 @app.command()
@@ -204,7 +212,14 @@ def compare(
     no_cache: NoCacheOption = False,
 ) -> None:
     """Compare two manuscripts with a side-by-side quality scorecard."""
-    rprint("Compare not yet implemented")
+    from ghostreader.commands.compare import run_compare
+
+    run_compare(
+        path1,
+        path2,
+        output_format=format or "markdown",
+        no_cache=no_cache,
+    )
 
 
 # ── Config sub-commands ──────────────────────────────────────────────
