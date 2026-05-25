@@ -42,14 +42,44 @@ class GhostreaderConfig(BaseModel):
         """Write config to ``config.yaml`` in *directory*.
 
         All fields are written so the user can see every available setting.
+        Uses a hand-written template so inline comments are preserved.
         """
         path = directory / "config.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _fmt(val: object) -> str:
+            if val is None:
+                return "null"
+            if isinstance(val, bool):
+                return str(val).lower()
+            return str(val)
+
+        lines = [
+            f"# LLM model (required). e.g. gpt-4o, claude-sonnet-4-20250514, grok-beta, ollama:llama3, gemini-2.5-pro",
+            f"model: {_fmt(self.model)}",
+            f"",
+            f"# Embedding model for vector search. Default: all-MiniLM-L6-v2 (local, no API key)",
+            f"embedding_model: {_fmt(self.embedding_model)}",
+            f"",
+            f"# Temperature for LLM generation. null = provider default (typically 0.7-1.0)",
+            f"temperature: {_fmt(self.temperature)}",
+            f"",
+            f"# Max tokens for LLM responses. null = provider default",
+            f"max_tokens: {_fmt(self.max_tokens)}",
+            f"",
+            f"# Genre lens for analysis prompts. null = genre-agnostic analysis",
+            f"# Options: literary, fantasy, thriller, romance, sci-fi, mystery, horror, etc.",
+            f"genre: {_fmt(self.genre)}",
+            f"",
+            f"# Analysis depth: quick, standard, or deep",
+            f"depth: {_fmt(self.depth)}",
+            f"",
+            f"# Output format: markdown or json",
+            f"format: {_fmt(self.format)}",
+            f"",
+        ]
+
         with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(
-                self.model_dump(),
-                f,
-                default_flow_style=False,
-                sort_keys=False,
-            )
+            f.write("\n".join(lines))
+
         return path

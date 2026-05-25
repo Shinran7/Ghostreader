@@ -1,7 +1,21 @@
+# LLM model (required). e.g. gpt-4o, claude-sonnet-4-20250514, grok-beta, ollama:llama3, gemini-2.5-pro
 model: null
+
+# Embedding model for vector search. Default: all-MiniLM-L6-v2 (local, no API key)
 embedding_model: all-MiniLM-L6-v2
+
+# Temperature for LLM generation. null = provider default (typically 0.7-1.0)
 temperature: null
+
+# Max tokens for LLM responses. null = provider default
 max_tokens: null
+
+# Genre lens for analysis prompts. null = genre-agnostic analysis
+# Options: literary, fantasy, thriller, romance, sci-fi, mystery, horror, etc.
 genre: null
+
+# Analysis depth: quick, standard, or deep
 depth: standard
+
+# Output format: markdown or json
 format: markdown
