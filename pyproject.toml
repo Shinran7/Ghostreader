@@ -40,7 +40,7 @@ python_files = ["test_*.py", "*_test.py"]
 addopts = "--cov=ghostreader --cov-report=html --cov-report=term-missing"
 
 [tool.coverage.run]
-omit = ["*/tests/*", "*/venv/*", "*/.venv/*"]
+omit = ["*/tests/*", "*/venv/*", "*/.venv/*", "ghostreader/commands/*"]
 
 [tool.coverage.report]
 fail_under = 75

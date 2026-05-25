@@ -7,7 +7,7 @@
   },
   "plan": {
     "title": "Report Generation",
-    "status": "running",
+    "status": "completed",
     "narrative": "Implement output formatting: Rich terminal display with color-coded severity sections, full markdown report saved to reports/manuscript_name_YYYY-MM-DD.md with inline chapter/line references, and JSON output via --format json for scripting and Autonomicon integration. Optional example rewrites via --show-rewrites. Traces: FR-18, FR-19, FR-20, FR-22.",
     "items": [
       {
@@ -27,6 +27,6 @@
         "narrative": "When --show-rewrites is passed, include 'one possible alternative' passages. Framed as suggestions, not corrections. FR-22."
       }
     ],
-    "updated": "2026-05-25T15:20:10Z"
+    "updated": "2026-05-25T15:57:42Z"
   }
 }

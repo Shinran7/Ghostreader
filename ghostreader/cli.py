@@ -84,32 +84,74 @@ def analyze(
     model: ModelOption = None,
     format: FormatOption = None,
     no_cache: NoCacheOption = False,
+    show_rewrites: Annotated[
+        bool,
+        typer.Option("--show-rewrites", help="Include rewrite suggestions in output."),
+    ] = False,
 ) -> None:
     """Analyze a manuscript file or directory of chapter files."""
-    asyncio.run(_run_ingestion(path, model=model))
+    asyncio.run(
+        _run_analyze(
+            path,
+            depth=depth,
+            genre=genre,
+            model=model,
+            output_format=format,
+            no_cache=no_cache,
+            show_rewrites=show_rewrites,
+        )
+    )
 
 
-async def _run_ingestion(path: Path, *, model: str | None = None) -> None:
-    """Execute the ingestion pipeline: load → summarize → index."""
+async def _run_analyze(
+    path: Path,
+    *,
+    depth: str | None = None,
+    genre: str | None = None,
+    model: str | None = None,
+    output_format: str | None = None,
+    no_cache: bool = False,
+    show_rewrites: bool = False,
+) -> None:
+    """Execute the full analysis pipeline: ingest → detect → analyze → report."""
+    from ghostreader.analyzers.repetition_detector import RepetitionDetector
+    from ghostreader.cache import CacheManager
+    from ghostreader.graph import (
+        AnalysisConfig,
+        chapters_to_dicts,
+        hierarchy_to_dict,
+        repetition_report_to_dicts,
+    )
+    from ghostreader.graph.workflow import build_analysis_graph
     from ghostreader.ingestion.epub_loader import load_epub
     from ghostreader.ingestion.indexer import index_manuscript
     from ghostreader.ingestion.markdown_loader import load_markdown
     from ghostreader.ingestion.summarizer import build_summary_hierarchy
+    from ghostreader.report import ReportOutput
+    from ghostreader.report.json_export import export_json
+    from ghostreader.report.markdown_writer import write_markdown_report
+    from ghostreader.report.rewrites import generate_rewrites
+    from ghostreader.report.terminal_output import render_report
 
     path = path.resolve()
+    project_dir = path.parent if path.is_file() else path
+    fmt = output_format or "terminal"
+    analysis_depth = depth or "standard"
+    llm = _get_llm(model)
 
-    # ── Load chapters ──
+    # ── Cache check ──
+    cache = CacheManager(project_dir)
+    cache.load_cache()
+
+    # ── 1. Ingestion: load → summarize → index ──
     rprint(f"[cyan]Loading manuscript from:[/cyan] {path}")
     if path.is_file() and path.suffix.lower() == ".epub":
         chapters = load_epub(path)
     else:
         chapters = load_markdown(path)
-
     rprint(f"  Found [green]{len(chapters)}[/green] chapter(s)")
 
-    # ── Build summary hierarchy ──
     rprint("[cyan]Building summary hierarchy...[/cyan]")
-    llm = _get_llm(model)
     hierarchy = await build_summary_hierarchy(chapters, llm)
     rprint(
         f"  Summaries: [green]{len(hierarchy.chapter_summaries)}[/green] chapter, "
@@ -117,24 +159,82 @@ async def _run_ingestion(path: Path, *, model: str | None = None) -> None:
         f"[green]1[/green] global"
     )
 
-    # ── Index into LanceDB ──
-    project_dir = path.parent if path.is_file() else path
     rprint("[cyan]Indexing into LanceDB...[/cyan]")
     chunk_count, db_path = index_manuscript(chapters, hierarchy, project_dir)
     rprint(f"  Indexed [green]{chunk_count}[/green] chunks → {db_path}")
 
-    # ── Summary panel ──
-    table = Table(title="Ingestion Summary")
-    table.add_column("Metric", style="cyan")
-    table.add_column("Value", style="green")
-    table.add_row("Chapters", str(len(chapters)))
-    table.add_row("Chunks", str(chunk_count))
-    table.add_row("Chapter summaries", str(len(hierarchy.chapter_summaries)))
-    table.add_row("Act summaries", str(len(hierarchy.act_summaries)))
-    table.add_row("Global summary", "yes" if hierarchy.global_summary else "no")
-    table.add_row("Database", str(db_path))
-    rprint(table)
-    rprint("[yellow]Analysis agents not yet implemented — ingestion complete.[/yellow]")
+    # ── 2. Repetition detection (algorithmic, no LLM) ──
+    rprint("[cyan]Running repetition detection...[/cyan]")
+    detector = RepetitionDetector()
+    rep_report = detector.run(chapters)
+    rprint(
+        f"  Words: [green]{len(rep_report.word_frequencies)}[/green], "
+        f"Phrases: [green]{len(rep_report.repeated_phrases)}[/green], "
+        f"Patterns: [green]{len(rep_report.sentence_patterns)}[/green], "
+        f"Dialogue tags: [green]{len(rep_report.dialogue_tags)}[/green]"
+    )
+
+    # ── 3. Build initial graph state ──
+    config: AnalysisConfig = {
+        "depth": analysis_depth,
+        "genre": genre,
+        "model": model,
+        "format": fmt,
+        "db_path": str(db_path),
+    }
+    initial_state = {
+        "chapters": chapters_to_dicts(chapters),
+        "chunk_count": chunk_count,
+        "summary_hierarchy": hierarchy_to_dict(hierarchy),
+        "repetition_data": repetition_report_to_dicts(rep_report),
+        "config": config,
+    }
+
+    # ── 4. Run LangGraph analysis workflow ──
+    rprint("[cyan]Running analysis agents...[/cyan]")
+    graph = build_analysis_graph(llm)
+    result = await graph.ainvoke(initial_state)
+
+    final_report = result.get("final_report", {})
+    rprint("[green]Analysis complete.[/green]")
+
+    # ── 5. Build typed report ──
+    manuscript_name = path.stem if path.is_file() else path.name
+    report = ReportOutput.from_final_report(
+        final_report, manuscript_name=manuscript_name
+    )
+
+    # ── 5b. Optional rewrite suggestions ──
+    if show_rewrites and report.prioritized_findings:
+        rprint("[cyan]Generating rewrite suggestions...[/cyan]")
+        report.rewrite_suggestions = await generate_rewrites(
+            report.prioritized_findings, llm
+        )
+
+    # ── 6. Render output ──
+    if fmt == "json":
+        export_json(report)
+    elif fmt == "markdown":
+        md_path = write_markdown_report(
+            report,
+            output_dir=project_dir / "reports",
+            show_rewrites=show_rewrites,
+        )
+        rprint(f"[green]Report written to:[/green] {md_path}")
+    else:
+        render_report(report, show_rewrites=show_rewrites)
+
+    # ── 7. Cache results ──
+    if not no_cache:
+        for ch in chapters:
+            cache.update_cache_entry(
+                ch.chapter_number,
+                ch.content,
+                final_report,
+            )
+        cache.save_cache()
+        cache.clear_checkpoint()
+        rprint("[dim]Results cached.[/dim]")
 
 
 def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821

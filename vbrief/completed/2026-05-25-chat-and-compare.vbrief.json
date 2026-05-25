@@ -7,7 +7,7 @@
   },
   "plan": {
     "title": "Chat and Compare Commands",
-    "status": "running",
+    "status": "completed",
     "narrative": "Implement the chat and compare commands. Chat rehydrates stored analysis from .ghostreader/ and provides conversational RAG over results — no agent re-invocation for MVP. Compare runs analyze on two inputs (or reuses cached results) and produces a side-by-side scorecard with per-dimension severity ratings and deltas. Traces: FR-3, FR-4.",
     "items": [
       {
@@ -19,6 +19,6 @@
         "narrative": "Accept two paths, run analyze on each (or reuse cache), extract per-dimension severity counts, produce side-by-side table with deltas. FR-4."
       }
     ],
-    "updated": "2026-05-25T15:20:11Z"
+    "updated": "2026-05-25T15:57:43Z"
   }
 }

@@ -110,6 +110,46 @@ def hierarchy_to_dict(h: SummaryHierarchy) -> dict[str, Any]:
     }
 
 
+def repetition_report_to_dicts(
+    report: "RepetitionReport",  # noqa: F821
+) -> list[dict[str, Any]]:
+    """Serialize a RepetitionReport into the list[dict] expected by AnalysisState.
+
+    Converts the top word-frequency and repeated-phrase entries into the
+    simplified ``{phrase, count, chapters, severity}`` format consumed by
+    the prose analyst agent.
+    """
+    from ghostreader.analyzers import RepetitionReport as _RR  # noqa: F811
+
+    entries: list[dict[str, Any]] = []
+
+    for wf in report.word_frequencies[:30]:
+        chapter_nums = sorted({loc.chapter_number for loc in wf.locations})
+        severity = "high" if wf.tfidf_score > 0.3 else (
+            "moderate" if wf.tfidf_score > 0.15 else "low"
+        )
+        entries.append({
+            "phrase": wf.term,
+            "count": wf.count,
+            "chapters": chapter_nums,
+            "severity": severity,
+        })
+
+    for rp in report.repeated_phrases[:20]:
+        chapter_nums = sorted({loc.chapter_number for loc in rp.locations})
+        severity = "high" if rp.count >= 10 else (
+            "moderate" if rp.count >= 5 else "low"
+        )
+        entries.append({
+            "phrase": rp.phrase,
+            "count": rp.count,
+            "chapters": chapter_nums,
+            "severity": severity,
+        })
+
+    return entries
+
+
 __all__ = [
     "AnalysisConfig",
     "AnalysisState",
@@ -118,4 +158,5 @@ __all__ = [
     "RepetitionEntry",
     "chapters_to_dicts",
     "hierarchy_to_dict",
+    "repetition_report_to_dicts",
 ]
