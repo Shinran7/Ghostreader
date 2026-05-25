@@ -12,82 +12,40 @@ from ghostreader.config import GhostreaderConfig
 class TestGhostreaderConfig:
     def test_defaults(self) -> None:
         cfg = GhostreaderConfig()
-        assert cfg.default_model == "grok-beta"
+        assert cfg.model is None
         assert cfg.depth == "standard"
         assert cfg.format == "markdown"
+        assert cfg.temperature is None
+        assert cfg.max_tokens is None
 
-    def test_save_global_and_load(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr(
-            "ghostreader.paths.global_config_dir", lambda: fake_config
-        )
-
-        cfg = GhostreaderConfig(default_model="test-model", depth="deep")
-        cfg.save_global()
-        loaded = GhostreaderConfig.load()
-        assert loaded.default_model == "test-model"
+    def test_save_and_load(self, tmp_path: Path) -> None:
+        cfg = GhostreaderConfig(model="gpt-4o", depth="deep", temperature=0.7)
+        cfg.save(tmp_path)
+        loaded = GhostreaderConfig.load(tmp_path)
+        assert loaded.model == "gpt-4o"
         assert loaded.depth == "deep"
+        assert loaded.temperature == 0.7
 
-    def test_save_project_and_load(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr(
-            "ghostreader.paths.global_config_dir", lambda: fake_config
-        )
+    def test_load_no_config_returns_defaults(self, tmp_path: Path) -> None:
+        cfg = GhostreaderConfig.load(tmp_path)
+        assert cfg.model is None
+        assert cfg.depth == "standard"
 
-        project = tmp_path / "my-novel"
-        project.mkdir()
-        cfg = GhostreaderConfig(default_model="project-model", depth="deep")
-        cfg.save_project(project)
+    def test_load_from_child_dir(self, tmp_path: Path) -> None:
+        cfg = GhostreaderConfig(model="claude-sonnet-4-20250514")
+        cfg.save(tmp_path)
 
-        manuscript = project / "chapter.md"
-        manuscript.write_text("# Ch1", encoding="utf-8")
-        loaded = GhostreaderConfig.load(manuscript)
-        assert loaded.default_model == "project-model"
-
-    def test_load_no_config_returns_defaults(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr(
-            "ghostreader.paths.global_config_dir", lambda: fake_config
-        )
-        cfg = GhostreaderConfig.load()
-        assert cfg.default_model == "grok-beta"
-
-    def test_project_override_merges_with_global(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr(
-            "ghostreader.paths.global_config_dir", lambda: fake_config
-        )
-
-        # Write global config
-        global_cfg = GhostreaderConfig(default_model="global-model", depth="standard")
-        global_cfg.save_global()
-
-        # Write project override (only overrides depth)
-        project = tmp_path / "project"
-        project.mkdir()
-        (project / "ghostreader.yaml").write_text(
-            "depth: deep\n", encoding="utf-8"
-        )
-
-        loaded = GhostreaderConfig.load(project / "novel.md")
-        assert loaded.default_model == "global-model"  # from global
-        assert loaded.depth == "deep"  # from project override
+        child = tmp_path / "manuscripts" / "novel.md"
+        child.parent.mkdir(parents=True)
+        child.write_text("# Ch1", encoding="utf-8")
+        loaded = GhostreaderConfig.load(child)
+        assert loaded.model == "claude-sonnet-4-20250514"
 
     def test_model_dump(self) -> None:
         cfg = GhostreaderConfig()
         data = cfg.model_dump()
-        assert "default_model" in data
+        assert "model" in data
         assert "depth" in data
         assert "format" in data
+        assert "temperature" in data
+        assert "max_tokens" in data

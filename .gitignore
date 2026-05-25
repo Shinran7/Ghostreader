@@ -2,6 +2,9 @@
 .deft-cache/
 vbrief/.eval/
 
+# Ghostreader per-manuscript state
+.ghostreader/
+
 # Python
 __pycache__/
 *.pyc

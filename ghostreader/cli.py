@@ -56,23 +56,23 @@ NoCacheOption = Annotated[
 @app.command()
 def init(
     directory: Annotated[
-        Path, typer.Argument(help="Directory in which to create a ghostreader.yaml override.")
+        Path, typer.Argument(help="Directory in which to create a config.yaml.")
     ] = Path("."),
 ) -> None:
-    """Create a project-level config override (ghostreader.yaml) in the given directory."""
+    """Create a config.yaml in the given directory."""
     directory = directory.resolve()
-    override_path = directory / "ghostreader.yaml"
+    cfg_path = directory / "config.yaml"
 
-    if override_path.exists():
-        rprint(f"[yellow]ghostreader.yaml already exists at:[/yellow] {override_path}")
+    if cfg_path.exists():
+        rprint(f"[yellow]config.yaml already exists at:[/yellow] {cfg_path}")
         raise typer.Exit(code=1)
 
     directory.mkdir(parents=True, exist_ok=True)
     cfg = GhostreaderConfig()
-    config_path = cfg.save_project(directory)
+    written = cfg.save(directory)
 
-    rprint(Panel(f"[green]Project override created:[/green] {config_path}\n"
-                 "  Edit this file to override global defaults for manuscripts in this tree.",
+    rprint(Panel(f"[green]Config created:[/green] {written}\n"
+                 "  Set 'model' to your preferred LLM (e.g. gpt-4o, claude-sonnet-4-20250514).",
                  title="ghostreader init"))
 
 
@@ -242,19 +242,17 @@ async def _run_analyze(
 
 
 def _load_secrets() -> None:
-    """Load API keys from secrets/llm.env if it exists."""
+    """Load API keys from secrets/llm.env if it exists.
+
+    Environment variables already set take precedence over file values.
+    """
     import os
 
-    secrets_path = Path.cwd() / "secrets" / "llm.env"
-    if not secrets_path.exists():
-        # Walk up to find project root
-        for d in [Path.cwd(), *Path.cwd().parents]:
-            candidate = d / "secrets" / "llm.env"
-            if candidate.exists():
-                secrets_path = candidate
-                break
-        else:
-            return
+    from ghostreader.paths import find_secrets_env
+
+    secrets_path = find_secrets_env()
+    if secrets_path is None:
+        return
 
     for line in secrets_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -266,61 +264,74 @@ def _load_secrets() -> None:
             os.environ[key] = value
 
 
-def _resolve_model_name(model: str | None = None, manuscript_path: Path | None = None) -> str:
-    """Determine which model to use: --model flag > config > stub."""
+def _resolve_model_name(model: str | None = None, manuscript_path: Path | None = None) -> str | None:
+    """Determine which model to use: --model flag > config.yaml > None."""
     if model:
         return model
 
     cfg = GhostreaderConfig.load(manuscript_path)
-    candidates = [cfg.default_model, *cfg.model_preference_order]
-    for name in candidates:
-        if name and name != "stub":
-            return name
-
-    return "stub"
+    return cfg.model
 
 
 def _get_llm(model: str | None = None, manuscript_path: Path | None = None) -> "BaseChatModel":  # noqa: F821
     """Create a langchain ChatModel from config or --model override.
 
-    Resolution order: --model flag > config.yaml default_model > stub.
+    Resolution order: --model flag > config.yaml model field.
     Loads API keys from secrets/llm.env automatically.
+
+    Raises typer.Exit if no model is configured and --model is not given
+    (unless model is explicitly 'stub' for testing).
     """
     from langchain_core.language_models import BaseChatModel
     from langchain_core.messages import AIMessage, BaseMessage
 
     _load_secrets()
     model_name = _resolve_model_name(model, manuscript_path=manuscript_path)
+    cfg = GhostreaderConfig.load(manuscript_path)
+
+    if not model_name:
+        rprint(
+            "[red]Error:[/red] No model specified. "
+            "Use [cyan]--model[/cyan] or set 'model' in config.yaml."
+        )
+        raise typer.Exit(code=1)
+
+    # Build kwargs for temperature / max_tokens when configured
+    extra_kwargs: dict[str, object] = {}
+    if cfg.temperature is not None:
+        extra_kwargs["temperature"] = cfg.temperature
+    if cfg.max_tokens is not None:
+        extra_kwargs["max_tokens"] = cfg.max_tokens
 
     # Try real backends when a model name looks like a known provider
     if model_name.startswith("gpt-") or model_name.startswith("o"):
         try:
             from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model_name)
+            return ChatOpenAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
     elif model_name.startswith("claude-"):
         try:
             from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(model=model_name)
+            return ChatAnthropic(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
     elif model_name.startswith("grok-"):
         try:
             from langchain_xai import ChatXAI
-            return ChatXAI(model=model_name)
+            return ChatXAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
     elif model_name.startswith("ollama:"):
         try:
             from langchain_ollama import ChatOllama
-            return ChatOllama(model=model_name.removeprefix("ollama:"))
+            return ChatOllama(model=model_name.removeprefix("ollama:"), **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
     elif model_name.startswith("gemini-"):
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(model=model_name)
+            return ChatGoogleGenerativeAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -398,33 +409,24 @@ def compare(
 @config_app.callback(invoke_without_command=True)
 def config_show(
     ctx: typer.Context,
-    project: Annotated[
-        bool, typer.Option("--project", help="Show project-level override instead of global.")
-    ] = False,
 ) -> None:
-    """View current configuration (global by default)."""
+    """View current configuration."""
     if ctx.invoked_subcommand is not None:
         return
 
-    from ghostreader.paths import find_project_override, global_config_path
+    from ghostreader.paths import config_path as _find_cfg
 
-    if project:
-        override = find_project_override(Path.cwd())
-        if override is None:
-            rprint("[red]Error:[/red] No ghostreader.yaml found in current directory tree.")
-            raise typer.Exit(code=1)
-        cfg = GhostreaderConfig.load(Path.cwd())
-        label = str(override)
-    else:
-        cfg = GhostreaderConfig.load()
-        label = str(global_config_path())
+    cfg_file = _find_cfg()
+    cfg = GhostreaderConfig.load()
+    label = str(cfg_file) if cfg_file else "(defaults — no config.yaml found)"
 
     table = Table(title=f"Config — {label}")
     table.add_column("Key", style="cyan")
     table.add_column("Value", style="green")
 
     for key, value in cfg.model_dump().items():
-        table.add_row(key, str(value))
+        display = str(value) if value is not None else "[dim](not set)[/dim]"
+        table.add_row(key, display)
 
     rprint(table)
 
@@ -433,12 +435,17 @@ def config_show(
 def config_set(
     key: Annotated[str, typer.Argument(help="Config key to set.")],
     value: Annotated[str, typer.Argument(help="New value.")],
-    project: Annotated[
-        bool, typer.Option("--project", help="Write to project-level override instead of global.")
-    ] = False,
 ) -> None:
-    """Set a configuration value (global by default)."""
-    from ghostreader.paths import find_project_override
+    """Set a configuration value in config.yaml."""
+    from ghostreader.paths import find_project_root
+
+    root = find_project_root()
+    if root is None:
+        rprint(
+            "[red]Error:[/red] No config.yaml found. "
+            "Run [cyan]ghostreader init[/cyan] first."
+        )
+        raise typer.Exit(code=1)
 
     cfg = GhostreaderConfig.load()
     data = cfg.model_dump()
@@ -450,23 +457,17 @@ def config_set(
 
     # Coerce value to the right type
     current = data[key]
-    if isinstance(current, list):
-        coerced = [v.strip() for v in value.split(",")]
-    elif isinstance(current, bool):
-        coerced = value.lower() in ("true", "1", "yes")
+    if isinstance(current, bool):
+        coerced: object = value.lower() in ("true", "1", "yes")
+    elif isinstance(current, float) or key in ("temperature",):
+        coerced = float(value)
+    elif isinstance(current, int) or key in ("max_tokens",):
+        coerced = int(value)
     else:
         coerced = value
 
     data[key] = coerced
     updated = GhostreaderConfig(**data)
-
-    if project:
-        override = find_project_override(Path.cwd())
-        if override is None:
-            rprint("[red]Error:[/red] No ghostreader.yaml found. Run [cyan]ghostreader init[/cyan] first.")
-            raise typer.Exit(code=1)
-        updated.save_project(override.parent)
-    else:
-        updated.save_global()
+    updated.save(root)
 
     rprint(f"[green]Set[/green] {key} = {coerced}")

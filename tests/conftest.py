@@ -113,18 +113,13 @@ def tmp_project(tmp_state_dir: Path) -> Path:
 
 @pytest.fixture()
 def tmp_manuscript_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Create a temp dir with chapter markdown files.
-
-    Patches ``ghostreader.paths.global_config_dir`` so state goes under
-    ``tmp_path`` instead of the real user config directory.
-    """
+    """Create a temp dir with chapter markdown files and a config.yaml."""
     ms_dir = tmp_path / "manuscript"
     ms_dir.mkdir()
 
-    fake_config = tmp_path / "ghostreader-config"
-    fake_config.mkdir()
-    monkeypatch.setattr(
-        "ghostreader.paths.global_config_dir", lambda: fake_config
+    # Write a config.yaml so paths.find_project_root works
+    (tmp_path / "config.yaml").write_text(
+        "embedding_model: stub\n", encoding="utf-8"
     )
 
     for i in range(1, 4):

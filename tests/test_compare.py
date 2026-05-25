@@ -125,13 +125,7 @@ class TestBuildScorecard:
 
 
 class TestRunCompare:
-    def test_missing_report_exits(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr("ghostreader.paths.global_config_dir", lambda: fake_config)
-
+    def test_missing_report_exits(self, tmp_path: Path) -> None:
         from ghostreader.commands.compare import run_compare
 
         with pytest.raises(SystemExit):

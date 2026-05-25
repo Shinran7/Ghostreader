@@ -11,19 +11,13 @@ from ghostreader.cli import _get_llm, _resolve_model_name
 
 
 class TestResolveModelName:
-    def test_explicit_model_wins(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr("ghostreader.paths.global_config_dir", lambda: fake_config)
+    def test_explicit_model_wins(self) -> None:
         assert _resolve_model_name("gpt-4o") == "gpt-4o"
 
-    def test_falls_back_to_stub(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        fake_config = tmp_path / "ghostreader-config"
-        fake_config.mkdir()
-        monkeypatch.setattr("ghostreader.paths.global_config_dir", lambda: fake_config)
-        # No config file → default_model should resolve; but if it's "stub" or blank, return "stub"
+    def test_returns_none_when_no_config(self, tmp_path: Path) -> None:
+        # No config.yaml anywhere → model should be None
         result = _resolve_model_name(None, manuscript_path=tmp_path / "nonexistent.md")
-        assert isinstance(result, str)
+        assert result is None
 
 
 class TestGetLlmRouting:
