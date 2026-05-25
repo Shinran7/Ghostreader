@@ -46,9 +46,23 @@ def config_path(start: Path | None = None) -> Path | None:
     return None
 
 
+# Directory names that are too generic to use as a manuscript identifier.
+_GENERIC_DIR_NAMES = {"chapters", "src", "manuscript", "manuscripts", "content", "text", "docs"}
+
+
 def _manuscript_slug(manuscript_path: Path) -> str:
-    """Derive a human-readable directory name from the manuscript path."""
-    name = manuscript_path.stem if manuscript_path.is_file() else manuscript_path.name
+    """Derive a human-readable directory name from the manuscript path.
+
+    When the immediate name is generic (e.g. 'chapters'), uses the parent
+    directory name instead.
+    """
+    resolved = manuscript_path.resolve()
+    if resolved.is_file():
+        name = resolved.stem
+    else:
+        name = resolved.name
+        if name.lower() in _GENERIC_DIR_NAMES and resolved.parent.name:
+            name = resolved.parent.name
     # Sanitize to filesystem-safe slug
     slug = re.sub(r"[^\w\-]", "-", name.lower()).strip("-")
     return slug or "manuscript"

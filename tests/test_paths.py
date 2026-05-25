@@ -76,11 +76,17 @@ class TestStateDirFor:
         b.write_text("b", encoding="utf-8")
         assert state_dir_for(a, project_root=tmp_path) != state_dir_for(b, project_root=tmp_path)
 
-    def test_uses_directory_name_for_dirs(self, tmp_path: Path) -> None:
+    def test_uses_parent_name_for_generic_dirs(self, tmp_path: Path) -> None:
         ms_dir = tmp_path / "bay-four" / "chapters"
         ms_dir.mkdir(parents=True)
         state = state_dir_for(ms_dir, project_root=tmp_path)
-        assert state.name == "chapters"
+        assert state.name == "bay-four"
+
+    def test_uses_own_name_for_specific_dirs(self, tmp_path: Path) -> None:
+        ms_dir = tmp_path / "my-novel"
+        ms_dir.mkdir(parents=True)
+        state = state_dir_for(ms_dir, project_root=tmp_path)
+        assert state.name == "my-novel"
 
 
 class TestNextReportPath:
