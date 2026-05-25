@@ -7,7 +7,7 @@
   },
   "plan": {
     "title": "Ingestion Pipeline",
-    "status": "proposed",
+    "status": "running",
     "narrative": "Implement the Ingestion Node: load .md files (primary) and .epub files (secondary), detect chapters via chapter-NNN.md naming convention, build hierarchical summaries (chapter > act > global), chunk text, and index into LanceDB. Auto-detect file vs. directory input. Epub conversion uses ebooklib + stdlib xml.etree.ElementTree. Traces: FR-2, FR-6, FR-7, FR-13, NFR-1, NFR-3.",
     "items": [
       {
@@ -26,6 +26,7 @@
         "title": "LanceDB indexing",
         "narrative": "Chunk text, generate embeddings, index chunks + summaries into LanceDB under .ghostreader/. FR-13."
       }
-    ]
+    ],
+    "updated": "2026-05-25T15:20:08Z"
   }
 }

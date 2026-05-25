@@ -7,7 +7,7 @@
   },
   "plan": {
     "title": "CLI Scaffold and Config",
-    "status": "proposed",
+    "status": "running",
     "narrative": "Set up the project structure (pyproject.toml, Typer CLI entrypoint, pydantic-settings config model) and implement the 'init' and 'config' commands. The init command creates a project folder with config.yaml and .ghostreader/ state directory. The config command views and edits settings (default model, genre, depth). Traces: FR-1, FR-5, FR-17, FR-21.",
     "items": [
       {
@@ -26,6 +26,7 @@
         "title": "Config command",
         "narrative": "'ghostreader config' views current config; 'ghostreader config set <key> <value>' edits. FR-5."
       }
-    ]
+    ],
+    "updated": "2026-05-25T15:20:00Z"
   }
 }
