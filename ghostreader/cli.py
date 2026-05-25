@@ -16,7 +16,16 @@ from ghostreader.paths import state_dir_for
 
 app = typer.Typer(
     name="ghostreader",
-    help="AI literary analysis tool for fiction manuscripts.",
+    help=(
+        "AI literary analysis tool for fiction manuscripts.\n\n"
+        "Analyzes prose quality, narrative structure, and consistency "
+        "using LLM-powered agents. Supports .md chapter directories and .epub files.\n\n"
+        "Quick start:\n\n"
+        "  ghostreader init              Create config.yaml\n"
+        "  ghostreader analyze ./novel    Analyze a manuscript\n"
+        "  ghostreader chat ./novel       Chat about a previous analysis\n"
+        "  ghostreader compare a/ b/      Side-by-side scorecard\n"
+    ),
     no_args_is_help=True,
 )
 
@@ -29,24 +38,28 @@ DepthOption = Annotated[
     Optional[str],
     typer.Option(
         "--depth",
-        help="Analysis depth: quick, standard, or deep.",
+        help="Analysis depth: quick, standard, or deep. [default: standard]",
     ),
 ]
 GenreOption = Annotated[
     Optional[str],
-    typer.Option("--genre", help="Genre lens (e.g. literary, fantasy, thriller)."),
+    typer.Option("--genre", help="Genre lens for prompts (e.g. literary, fantasy, thriller, romance, sci-fi)."),
 ]
 ModelOption = Annotated[
     Optional[str],
-    typer.Option("--model", help="Override default LLM model."),
+    typer.Option("--model", help="LLM model override. Takes precedence over config.yaml."),
 ]
 FormatOption = Annotated[
     Optional[str],
-    typer.Option("--format", help="Output format: markdown or json."),
+    typer.Option("--format", help="Terminal output format: terminal (default) or json."),
 ]
 NoCacheOption = Annotated[
     bool,
-    typer.Option("--no-cache", help="Force fresh analysis, ignoring cached results."),
+    typer.Option("--no-cache", help="Skip cached results and re-analyze from scratch."),
+]
+OutputOption = Annotated[
+    Optional[Path],
+    typer.Option("--output", "-o", help="Write an additional copy of the report to this path."),
 ]
 
 
@@ -78,7 +91,7 @@ def init(
 
 @app.command()
 def analyze(
-    path: Annotated[Path, typer.Argument(help="Path to .md/.epub file or directory.")],
+    path: Annotated[Path, typer.Argument(help="Manuscript path: .md/.epub file, or directory of chapter files.")],
     depth: DepthOption = None,
     genre: GenreOption = None,
     model: ModelOption = None,
@@ -86,10 +99,15 @@ def analyze(
     no_cache: NoCacheOption = False,
     show_rewrites: Annotated[
         bool,
-        typer.Option("--show-rewrites", help="Include rewrite suggestions in output."),
+        typer.Option("--show-rewrites", help="Include rewrite suggestions in the report."),
     ] = False,
+    output: OutputOption = None,
 ) -> None:
-    """Analyze a manuscript file or directory of chapter files."""
+    """Analyze a manuscript and produce a literary diagnostic report.
+
+    Runs prose, narrative, and consistency agents against the manuscript,
+    then saves a markdown report to .ghostreader/<name>/reports/.
+    """
     asyncio.run(
         _run_analyze(
             path,
@@ -99,6 +117,7 @@ def analyze(
             output_format=format,
             no_cache=no_cache,
             show_rewrites=show_rewrites,
+            output_path=output,
         )
     )
 
@@ -112,6 +131,7 @@ async def _run_analyze(
     output_format: str | None = None,
     no_cache: bool = False,
     show_rewrites: bool = False,
+    output_path: Path | None = None,
 ) -> None:
     """Execute the full analysis pipeline: ingest → detect → analyze → report."""
     from ghostreader.analyzers.repetition_detector import RepetitionDetector
@@ -230,6 +250,17 @@ async def _run_analyze(
         filename=md_path.name,
     )
     rprint(f"[green]Report saved:[/green] {md_path}")
+
+    # ── 6c. Optional additional copy ──
+    if output_path is not None:
+        output_path = output_path.resolve()
+        write_markdown_report(
+            report,
+            output_dir=output_path.parent,
+            show_rewrites=show_rewrites,
+            filename=output_path.name,
+        )
+        rprint(f"[green]Report copied to:[/green] {output_path}")
 
     # ── 7. Cache results ──
     if not no_cache:
