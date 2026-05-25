@@ -305,6 +305,24 @@ def _get_llm(model: str | None = None, manuscript_path: Path | None = None) -> "
             return ChatAnthropic(model=model_name)
         except Exception:
             pass
+    elif model_name.startswith("grok-"):
+        try:
+            from langchain_xai import ChatXAI
+            return ChatXAI(model=model_name)
+        except Exception:
+            pass
+    elif model_name.startswith("ollama:"):
+        try:
+            from langchain_ollama import ChatOllama
+            return ChatOllama(model=model_name.removeprefix("ollama:"))
+        except Exception:
+            pass
+    elif model_name.startswith("gemini-"):
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            return ChatGoogleGenerativeAI(model=model_name)
+        except Exception:
+            pass
 
     # Stub model for pipeline testing without API keys
     class _StubChatModel(BaseChatModel):
