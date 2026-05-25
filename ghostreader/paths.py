@@ -32,10 +32,19 @@ def find_project_root(start: Path | None = None) -> Path | None:
 
 
 def config_path(start: Path | None = None) -> Path | None:
-    """Return the path to ``config.yaml``, or ``None`` if not found."""
+    """Return the path to ``config.yaml``, or ``None`` if not found.
+
+    Searches from *start* first (e.g. manuscript path), then falls back
+    to CWD so the config is found even when analyzing external manuscripts.
+    """
     root = find_project_root(start)
     if root is not None:
         return root / "config.yaml"
+    # Fallback: try CWD if start was something else
+    if start is not None:
+        root = find_project_root(Path.cwd())
+        if root is not None:
+            return root / "config.yaml"
     return None
 
 
@@ -50,7 +59,11 @@ def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Pa
     which manuscript a state dir belongs to.
     """
     if project_root is None:
-        project_root = find_project_root(manuscript_path) or manuscript_path.parent
+        project_root = (
+            find_project_root(manuscript_path)
+            or find_project_root(Path.cwd())
+            or manuscript_path.parent
+        )
 
     resolved = str(manuscript_path.resolve())
     path_hash = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]

@@ -14,7 +14,8 @@ class TestResolveModelName:
     def test_explicit_model_wins(self) -> None:
         assert _resolve_model_name("gpt-4o") == "gpt-4o"
 
-    def test_returns_none_when_no_config(self, tmp_path: Path) -> None:
+    def test_returns_none_when_no_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
         # No config.yaml anywhere → model should be None
         result = _resolve_model_name(None, manuscript_path=tmp_path / "nonexistent.md")
         assert result is None

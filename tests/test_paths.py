@@ -38,7 +38,8 @@ class TestConfigPath:
         assert result is not None
         assert result.name == "config.yaml"
 
-    def test_returns_none_when_absent(self, tmp_path: Path) -> None:
+    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
         assert config_path(tmp_path) is None
 
 

@@ -1,11 +1,11 @@
 # LLM model (required). e.g. gpt-4o, claude-sonnet-4-20250514, grok-beta, ollama:llama3, gemini-2.5-pro
-model: null
+model: claude-sonnet-4-20250514
 
 # Embedding model for vector search. Default: all-MiniLM-L6-v2 (local, no API key)
 embedding_model: all-MiniLM-L6-v2
 
 # Temperature for LLM generation. null = provider default (typically 0.7-1.0)
-temperature: null
+temperature: 0.3
 
 # Max tokens for LLM responses. null = provider default
 max_tokens: null

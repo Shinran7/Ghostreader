@@ -26,7 +26,8 @@ class TestGhostreaderConfig:
         assert loaded.depth == "deep"
         assert loaded.temperature == 0.7
 
-    def test_load_no_config_returns_defaults(self, tmp_path: Path) -> None:
+    def test_load_no_config_returns_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
         cfg = GhostreaderConfig.load(tmp_path)
         assert cfg.model is None
         assert cfg.depth == "standard"
