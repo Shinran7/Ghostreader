@@ -4,16 +4,14 @@ Config:
     config.yaml in the project root (found by walking up from CWD or
     the manuscript path).
 
-Per-manuscript state (cache, LanceDB index, checkpoints):
-    <project_root>/.ghostreader/cache/<sha256(resolved_path)[:16]>/
-
-A ``source.txt`` breadcrumb inside each state dir records the original
-manuscript path for discoverability.
+Per-manuscript state (LanceDB index, cache, reports):
+    <project_root>/.ghostreader/<manuscript-name>/
 """
 
 from __future__ import annotations
 
-import hashlib
+import datetime
+import re
 from pathlib import Path
 
 
@@ -48,15 +46,19 @@ def config_path(start: Path | None = None) -> Path | None:
     return None
 
 
+def _manuscript_slug(manuscript_path: Path) -> str:
+    """Derive a human-readable directory name from the manuscript path."""
+    name = manuscript_path.stem if manuscript_path.is_file() else manuscript_path.name
+    # Sanitize to filesystem-safe slug
+    slug = re.sub(r"[^\w\-]", "-", name.lower()).strip("-")
+    return slug or "manuscript"
+
+
 def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Path:
     """Return the per-manuscript state directory, creating it if needed.
 
-    The directory lives under ``<project_root>/.ghostreader/cache/<hash>/``.
-    If *project_root* is not given, it is discovered via ``find_project_root``
-    (falling back to the manuscript's parent directory).
-
-    A ``source.txt`` breadcrumb is written so the user can discover
-    which manuscript a state dir belongs to.
+    The directory lives under ``<project_root>/.ghostreader/<name>/``
+    using the manuscript's human-readable name.
     """
     if project_root is None:
         project_root = (
@@ -65,16 +67,38 @@ def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Pa
             or manuscript_path.parent
         )
 
-    resolved = str(manuscript_path.resolve())
-    path_hash = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
-    state = project_root / ".ghostreader" / "cache" / path_hash
+    slug = _manuscript_slug(manuscript_path)
+    state = project_root / ".ghostreader" / slug
     state.mkdir(parents=True, exist_ok=True)
 
+    # Breadcrumb so we can trace slug back to the original path
     breadcrumb = state / "source.txt"
     if not breadcrumb.exists():
-        breadcrumb.write_text(resolved, encoding="utf-8")
+        breadcrumb.write_text(str(manuscript_path.resolve()), encoding="utf-8")
 
     return state
+
+
+def next_report_path(state: Path) -> Path:
+    """Return the next available report path in ``<state>/reports/``.
+
+    Naming: ``report-YYYY-MM-DD.md``, ``report-YYYY-MM-DD-2.md``, etc.
+    """
+    reports_dir = state / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    today = datetime.date.today().isoformat()
+    base = f"report-{today}"
+    candidate = reports_dir / f"{base}.md"
+    if not candidate.exists():
+        return candidate
+
+    n = 2
+    while True:
+        candidate = reports_dir / f"{base}-{n}.md"
+        if not candidate.exists():
+            return candidate
+        n += 1
 
 
 def find_secrets_env(start: Path | None = None) -> Path | None:
@@ -93,5 +117,6 @@ __all__ = [
     "config_path",
     "find_project_root",
     "find_secrets_env",
+    "next_report_path",
     "state_dir_for",
 ]

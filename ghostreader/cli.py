@@ -217,16 +217,19 @@ async def _run_analyze(
     # ── 6. Render output ──
     if fmt == "json":
         export_json(report)
-    elif fmt == "markdown":
-        report_dir = path.parent if path.is_file() else path
-        md_path = write_markdown_report(
-            report,
-            output_dir=report_dir / "reports",
-            show_rewrites=show_rewrites,
-        )
-        rprint(f"[green]Report written to:[/green] {md_path}")
     else:
         render_report(report, show_rewrites=show_rewrites)
+
+    # ── 6b. Always persist a markdown report ──
+    from ghostreader.paths import next_report_path
+    md_path = next_report_path(state)
+    write_markdown_report(
+        report,
+        output_dir=md_path.parent,
+        show_rewrites=show_rewrites,
+        filename=md_path.name,
+    )
+    rprint(f"[green]Report saved:[/green] {md_path}")
 
     # ── 7. Cache results ──
     if not no_cache:

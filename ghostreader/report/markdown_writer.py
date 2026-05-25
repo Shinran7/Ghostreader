@@ -37,6 +37,7 @@ def write_markdown_report(
     *,
     output_dir: Path | None = None,
     show_rewrites: bool = False,
+    filename: str | None = None,
 ) -> Path:
     """Write the report as a markdown file and return the output path.
 
@@ -44,6 +45,7 @@ def write_markdown_report(
         report: The typed report to render.
         output_dir: Directory to write into; defaults to ``./reports``.
         show_rewrites: Whether to include rewrite suggestions.
+        filename: Explicit filename to use; auto-generated if ``None``.
 
     Returns:
         Path to the written markdown file.
@@ -51,9 +53,10 @@ def write_markdown_report(
     out = output_dir or Path("reports")
     out.mkdir(parents=True, exist_ok=True)
 
-    slug = _slugify(report.manuscript_name) if report.manuscript_name else "manuscript"
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    filename = f"{slug}_{date_str}.md"
+    if filename is None:
+        slug = _slugify(report.manuscript_name) if report.manuscript_name else "manuscript"
+        filename = f"{slug}_{date_str}.md"
     filepath = out / filename
 
     sections: list[str] = []

@@ -10,6 +10,7 @@ from ghostreader.paths import (
     config_path,
     find_project_root,
     find_secrets_env,
+    next_report_path,
     state_dir_for,
 )
 
@@ -51,7 +52,7 @@ class TestStateDirFor:
 
         state = state_dir_for(manuscript, project_root=tmp_path)
         assert state.is_dir()
-        assert state.parent.name == "cache"
+        assert state.name == "novel"
         assert ".ghostreader" in str(state)
 
     def test_writes_breadcrumb(self, tmp_path: Path) -> None:
@@ -74,6 +75,34 @@ class TestStateDirFor:
         a.write_text("a", encoding="utf-8")
         b.write_text("b", encoding="utf-8")
         assert state_dir_for(a, project_root=tmp_path) != state_dir_for(b, project_root=tmp_path)
+
+    def test_uses_directory_name_for_dirs(self, tmp_path: Path) -> None:
+        ms_dir = tmp_path / "bay-four" / "chapters"
+        ms_dir.mkdir(parents=True)
+        state = state_dir_for(ms_dir, project_root=tmp_path)
+        assert state.name == "chapters"
+
+
+class TestNextReportPath:
+    def test_first_report(self, tmp_path: Path) -> None:
+        result = next_report_path(tmp_path)
+        assert result.parent == tmp_path / "reports"
+        assert result.name.startswith("report-")
+        assert result.suffix == ".md"
+
+    def test_increments_on_same_day(self, tmp_path: Path) -> None:
+        first = next_report_path(tmp_path)
+        first.write_text("first", encoding="utf-8")
+        second = next_report_path(tmp_path)
+        assert second != first
+        assert "-2.md" in second.name
+
+    def test_increments_further(self, tmp_path: Path) -> None:
+        for _ in range(3):
+            p = next_report_path(tmp_path)
+            p.write_text("x", encoding="utf-8")
+        fourth = next_report_path(tmp_path)
+        assert "-4.md" in fourth.name
 
 
 class TestFindSecretsEnv:
