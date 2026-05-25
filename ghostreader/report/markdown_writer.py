@@ -146,6 +146,8 @@ def _findings(report: ReportOutput) -> str:
             )
             if f.evidence:
                 parts.append(f"> {f.evidence}\n")
+            if f.counter_evidence:
+                parts.append(f"> **vs.** {f.counter_evidence}\n")
 
     return "\n".join(parts)
 

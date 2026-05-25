@@ -20,9 +20,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.agents.genre_prompts import get_genre_preamble
 from ghostreader.graph import AgentFinding, AgentOutput, AnalysisState
+from ghostreader.seed import build_author_intent_block
 
 _SYSTEM_PROMPT_TEMPLATE = """{genre_preamble}
-
+{author_intent}
 You are the Prose Analyst in a multi-agent literary analysis pipeline.
 Your job is to evaluate the prose craft of a fiction manuscript.
 
@@ -46,7 +47,9 @@ Return a JSON array of findings. Each finding must have:
   "prose.dialogue", "prose.vocabulary"
 - "severity": one of "strength", "neutral", "concern"
 - "summary": one-line description of the finding
-- "evidence": a direct quote or specific reference from the text
+- "evidence": one or more DIRECT QUOTES from the manuscript text, each prefixed
+  with the chapter number, e.g. "Ch 3: 'The rain tracked downward in slow paths.'"
+  Do not paraphrase — quote the actual words from the text.
 - "chapter_ref": chapter number(s) where this applies, e.g. "3" or "5-7"
 
 Return ONLY the JSON array, no markdown fencing or commentary.
@@ -75,7 +78,7 @@ def _format_repetition_data(repetition_data: list[dict[str, Any]]) -> str:
 def _format_chapter_excerpts(
     chapters: list[dict[str, Any]], *, max_chars_per_chapter: int = 4000
 ) -> str:
-    """Build a text block with truncated chapter content for analysis."""
+    """Build truncated chapter excerpts for prose analysis."""
     parts: list[str] = []
     for ch in chapters:
         title = ch.get("title", f"Chapter {ch.get('chapter_number', '?')}")
@@ -136,8 +139,12 @@ async def prose_analyst_node(
     chapters = state.get("chapters", [])
     repetition_data = state.get("repetition_data", [])
 
+    seed_meta = config.get("seed_meta", {})
+    author_intent = build_author_intent_block(seed_meta)
+
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         genre_preamble=get_genre_preamble(genre),
+        author_intent=author_intent,
     )
 
     repetition_block = _format_repetition_data(repetition_data)

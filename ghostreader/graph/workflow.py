@@ -17,7 +17,10 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, StateGraph
 
-from ghostreader.agents.consistency_checker import consistency_checker_node
+from ghostreader.agents.consistency_checker import (
+    consistency_checker_node,
+    scene_consistency_checker_node,
+)
 from ghostreader.agents.narrative_analyst import narrative_analyst_node
 from ghostreader.agents.prose_analyst import prose_analyst_node
 from ghostreader.agents.synthesis import synthesis_node
@@ -41,6 +44,11 @@ async def repetition_node(state: AnalysisState) -> dict[str, Any]:
     return {}
 
 
+async def fact_extraction_node(state: AnalysisState) -> dict[str, Any]:
+    """Pass-through: scene facts are pre-extracted and loaded into state."""
+    return {}
+
+
 # ── Node wrappers that close over the LLM ───────────────────────────
 # LangGraph nodes receive only state. We use partial application to
 # bind the LLM instance at graph-build time.
@@ -60,7 +68,7 @@ def _make_narrative_node(llm: BaseChatModel):  # noqa: ANN202
 
 def _make_consistency_node(llm: BaseChatModel):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
-        return await consistency_checker_node(state, llm)
+        return await scene_consistency_checker_node(state, llm)
     return _node
 
 
@@ -111,6 +119,7 @@ def build_analysis_graph(llm: BaseChatModel) -> Any:
 
     # ── Add nodes ──
     graph.add_node("ingestion", ingestion_node)
+    graph.add_node("fact_extraction", fact_extraction_node)
     graph.add_node("repetition", repetition_node)
     graph.add_node("prose_analyst", _make_prose_node(llm))
     graph.add_node("narrative_analyst", _make_narrative_node(llm))
@@ -118,9 +127,10 @@ def build_analysis_graph(llm: BaseChatModel) -> Any:
     graph.add_node("synthesis", _make_synthesis_node(llm))
 
     # ── Define edges ──
-    # Linear: ingestion → repetition
+    # Linear: ingestion → fact_extraction → repetition
     graph.set_entry_point("ingestion")
-    graph.add_edge("ingestion", "repetition")
+    graph.add_edge("ingestion", "fact_extraction")
+    graph.add_edge("fact_extraction", "repetition")
 
     # Conditional fan-out: repetition → [prose, narrative, consistency]
     graph.add_conditional_edges(

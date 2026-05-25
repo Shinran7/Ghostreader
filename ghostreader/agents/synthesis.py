@@ -39,8 +39,10 @@ YOUR TASKS:
      consistency.unresolved, consistency.character
 
 3. **Prioritized feedback** — Rank the top findings by impact. Lead with the
-   most actionable concerns, then note key strengths. Each item should cite
-   specific evidence.
+   most actionable concerns, then note key strengths. PRESERVE the original
+   direct quotes from each agent's evidence — do not paraphrase or summarize
+   the quoted passages. For consistency findings that include counter_evidence,
+   include both quotes so the reader sees both sides of the contradiction.
 
 OUTPUT FORMAT:
 Return a JSON object with:
@@ -49,7 +51,8 @@ Return a JSON object with:
   {"severity": "strength"|"neutral"|"concern", "note": "brief explanation"}
 - "prioritized_findings": array of the top findings, each with:
   {"rank": int, "dimension": str, "severity": str, "summary": str,
-   "evidence": str, "chapter_ref": str}
+   "evidence": str, "counter_evidence": str, "chapter_ref": str}
+  ("counter_evidence" may be empty string when not applicable)
 - "strengths_count": int (number of findings rated "strength")
 - "concerns_count": int (number of findings rated "concern")
 
@@ -70,10 +73,13 @@ def _format_agent_findings(output: AgentOutput | None) -> str:
 
     lines = [f"### {agent} ({len(findings)} findings)"]
     for i, f in enumerate(findings, 1):
+        counter = f.get("counter_evidence", "")
+        counter_line = f"\n   Counter-evidence: {counter}" if counter else ""
         lines.append(
             f"{i}. [{f.get('severity', '?')}] {f.get('dimension', '?')}: "
             f"{f.get('summary', '')}\n"
-            f"   Evidence: {f.get('evidence', 'N/A')}\n"
+            f"   Evidence: {f.get('evidence', 'N/A')}"
+            f"{counter_line}\n"
             f"   Chapters: {f.get('chapter_ref', '?')}"
         )
     return "\n".join(lines)

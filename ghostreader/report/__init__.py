@@ -37,6 +37,7 @@ class PrioritizedFinding:
     summary: str
     evidence: str
     chapter_ref: str
+    counter_evidence: str = ""
 
 
 @dataclass
@@ -92,6 +93,7 @@ class ReportOutput:
                 summary=f.get("summary", ""),
                 evidence=f.get("evidence", ""),
                 chapter_ref=f.get("chapter_ref", ""),
+                counter_evidence=f.get("counter_evidence", ""),
             )
             for i, f in enumerate(report.get("prioritized_findings", []))
         ]

@@ -20,15 +20,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.agents.genre_prompts import get_genre_preamble
 from ghostreader.graph import AgentFinding, AgentOutput, AnalysisState
+from ghostreader.seed import build_author_intent_block
 
 _SYSTEM_PROMPT_TEMPLATE = """{genre_preamble}
-
+{author_intent}
 You are the Consistency Checker in a multi-agent literary analysis pipeline.
 Your job is to detect internal contradictions, continuity errors, and
 unresolved narrative elements across a fiction manuscript.
 
 You have access to the full summary hierarchy (global → act → chapter) and
 chapter text excerpts. Use these to cross-reference facts across the manuscript.
+
+GROUNDING RULE:
+Every finding MUST be grounded in direct quotes from the manuscript text.
+Do NOT infer facts that are not explicitly stated. If you cannot produce a
+direct quote from the text to support both sides of a contradiction, do not
+report it. Absence of information is not the same as a contradiction.
 
 EVALUATION DIMENSIONS:
 1. **Plot holes** — Logical contradictions in the story's events. Things that
@@ -52,7 +59,14 @@ Return a JSON array of findings. Each finding must have:
   "consistency.foreshadowing", "consistency.unresolved", "consistency.character"
 - "severity": one of "strength", "neutral", "concern"
 - "summary": one-line description of the finding
-- "evidence": specific quotes or references showing the contradiction
+- "evidence": a DIRECT QUOTE from the manuscript showing one side of the issue,
+  prefixed with the chapter number, e.g. "Ch 2: 'Clio's voice crackled through
+  the earpiece'"
+- "counter_evidence": a DIRECT QUOTE from a different passage showing the
+  contradicting fact, prefixed with the chapter number, e.g. "Ch 6: 'Clio stood
+  opposite, projector steady, its casing cool under the fluorescent glare'"
+  (use empty string "" for foreshadowing/unresolved findings where only one
+  side exists)
 - "chapter_ref": chapter number(s) where this applies, e.g. "3 vs 8"
 
 Return ONLY the JSON array, no markdown fencing or commentary.
@@ -120,6 +134,7 @@ def _parse_findings(raw: str) -> list[AgentFinding]:
                     severity=f.get("severity", "neutral"),
                     summary=f.get("summary", ""),
                     evidence=f.get("evidence", ""),
+                    counter_evidence=f.get("counter_evidence", ""),
                     chapter_ref=str(f.get("chapter_ref", "")),
                 )
                 for f in data
@@ -152,8 +167,12 @@ async def consistency_checker_node(
     chapters = state.get("chapters", [])
     hierarchy = state.get("summary_hierarchy", {})
 
+    seed_meta = config.get("seed_meta", {})
+    author_intent = build_author_intent_block(seed_meta)
+
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         genre_preamble=get_genre_preamble(genre),
+        author_intent=author_intent,
     )
 
     hierarchy_block = _format_summary_hierarchy(hierarchy)
@@ -184,4 +203,97 @@ async def consistency_checker_node(
     return {"consistency_output": output}
 
 
-__all__ = ["consistency_checker_node"]
+# ── Scene-level consistency checking ─────────────────────────────────
+
+_SCENE_CONSISTENCY_PROMPT = """{genre_preamble}
+{author_intent}
+You are the Consistency Checker in a multi-agent literary analysis pipeline.
+You have been given structured FACT SHEETS extracted from every scene in the
+manuscript. Each fact sheet lists characters, locations, timeline markers,
+established facts, and key objects for one scene.
+
+Your job is to compare fact sheets across chapters and find CONTRADICTIONS —
+places where two chapters state incompatible facts about the same entity.
+
+GROUNDING RULE:
+Only report contradictions where two fact sheets explicitly state conflicting
+details about the same character, object, location, or timeline. Do NOT report
+missing information as a contradiction. Absence is not inconsistency.
+
+Look for:
+- Character details that change (gender, eye color, scars, age, relationships)
+- Objects that change description (color, condition, location)
+- Timeline contradictions (events in impossible order, conflicting time references)
+- Location contradictions (character in two places at once)
+- Knowledge contradictions (character knows something before they could)
+
+OUTPUT FORMAT:
+Return a JSON array of findings. Each finding must have:
+- "dimension": one of "consistency.plot_holes", "consistency.timeline",
+  "consistency.character", "consistency.unresolved", "consistency.foreshadowing"
+- "severity": one of "strength", "neutral", "concern"
+- "summary": one-line description of the contradiction
+- "evidence": the specific fact from one chapter, prefixed with chapter number,
+  e.g. "Ch 1: Jordan's cousin referred to as 'he'"
+- "counter_evidence": the conflicting fact from another chapter, prefixed with
+  chapter number, e.g. "Ch 13: Jordan's cousin referred to as 'she'"
+- "chapter_ref": chapter numbers, e.g. "1 vs 13"
+
+If no contradictions are found, return an empty array [].
+Return ONLY the JSON array, no markdown fencing or commentary.
+"""
+
+
+async def scene_consistency_checker_node(
+    state: AnalysisState, llm: BaseChatModel
+) -> dict[str, Any]:
+    """LangGraph node: check consistency using scene-level fact sheets.
+
+    When ``scene_facts`` are available in state, uses the structured
+    fact-sheet comparison path. Otherwise falls back to the truncation-
+    based ``consistency_checker_node``.
+    """
+    scene_facts = state.get("scene_facts", [])  # type: ignore[literal-required]
+
+    if not scene_facts:
+        return await consistency_checker_node(state, llm)
+
+    from ghostreader.agents.fact_extractor import format_fact_sheets
+
+    config = state.get("config", {})
+    genre = config.get("genre")
+    seed_meta = config.get("seed_meta", {})
+    author_intent = build_author_intent_block(seed_meta)
+
+    system_prompt = _SCENE_CONSISTENCY_PROMPT.format(
+        genre_preamble=get_genre_preamble(genre),
+        author_intent=author_intent,
+    )
+
+    facts_block = format_fact_sheets(scene_facts)
+
+    user_message = (
+        f"Compare these scene fact sheets for internal contradictions.\n\n"
+        f"## Scene Fact Sheets\n{facts_block}"
+    )
+
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_message),
+        ]
+    )
+
+    raw_text = str(response.content).strip()
+    findings = _parse_findings(raw_text)
+
+    output: AgentOutput = {
+        "agent": "consistency_checker",
+        "findings": findings,
+        "raw_response": raw_text,
+    }
+
+    return {"consistency_output": output}
+
+
+__all__ = ["consistency_checker_node", "scene_consistency_checker_node"]

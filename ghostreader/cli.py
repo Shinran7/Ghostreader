@@ -160,6 +160,15 @@ async def _run_analyze(
     analysis_depth = depth or "standard"
     llm = _get_llm(model, manuscript_path=path)
 
+    # ── Seed.yaml: author-stated intent ──
+    from ghostreader.seed import load_seed_meta
+
+    seed_meta = load_seed_meta(path)
+    # Precedence: CLI --genre > seed.yaml genre > config.yaml genre > None
+    effective_genre = genre or seed_meta.get("genre") or cfg.genre
+    if seed_meta:
+        rprint(f"[cyan]Loaded seed.yaml metadata[/cyan] ({len(seed_meta)} field(s))")
+
     # ── Cache check ──
     cache = CacheManager(state)
     cache.load_cache()
@@ -171,6 +180,13 @@ async def _run_analyze(
     else:
         chapters = load_markdown(path)
     rprint(f"  Found [green]{len(chapters)}[/green] chapter(s)")
+
+    # ── 1b. Chapter-level fact extraction for consistency checking ──
+    from ghostreader.agents.fact_extractor import extract_all_facts
+
+    rprint(f"[cyan]Extracting chapter facts ({len(chapters)} chapters, 10 concurrent)...[/cyan]")
+    chapter_facts: list[dict] = list(await extract_all_facts(chapters, llm))
+    rprint(f"  Extracted [green]{len(chapter_facts)}[/green] fact sheet(s)")
 
     rprint("[cyan]Building summary hierarchy...[/cyan]")
     hierarchy = await build_summary_hierarchy(chapters, llm)
@@ -200,18 +216,21 @@ async def _run_analyze(
     # ── 3. Build initial graph state ──
     config: AnalysisConfig = {
         "depth": analysis_depth,
-        "genre": genre,
+        "genre": effective_genre,
         "model": model,
         "format": fmt,
         "db_path": str(db_path),
+        "seed_meta": seed_meta,
     }
-    initial_state = {
+    initial_state: dict = {
         "chapters": chapters_to_dicts(chapters),
         "chunk_count": chunk_count,
         "summary_hierarchy": hierarchy_to_dict(hierarchy),
         "repetition_data": repetition_report_to_dicts(rep_report),
         "config": config,
     }
+    if chapter_facts:
+        initial_state["scene_facts"] = chapter_facts
 
     # ── 4. Run LangGraph analysis workflow ──
     rprint("[cyan]Running analysis agents...[/cyan]")

@@ -16,9 +16,10 @@ class AnalysisConfig(TypedDict, total=False):
     model: str | None
     format: str  # "markdown" | "json"
     db_path: str  # path to LanceDB directory
+    seed_meta: dict[str, Any]  # author-stated intent from seed.yaml
 
 
-class AgentFinding(TypedDict):
+class AgentFinding(TypedDict, total=False):
     """A single diagnostic finding from an analysis agent."""
 
     dimension: str  # e.g. "prose.repetition", "narrative.pacing"
@@ -26,6 +27,7 @@ class AgentFinding(TypedDict):
     summary: str  # one-line description
     evidence: str  # quoted or cited passage(s)
     chapter_ref: str  # chapter number or range, e.g. "3" or "7-9"
+    counter_evidence: str  # (consistency only) quote from the contradicting passage
 
 
 class AgentOutput(TypedDict):
@@ -61,6 +63,10 @@ class AnalysisState(TypedDict, total=False):
     chunk_count: int
     summary_hierarchy: dict[str, Any]  # serialized SummaryHierarchy
     config: AnalysisConfig
+
+    # ── Scene segmentation ──
+    scenes: list[dict[str, Any]]  # serialized Scene data
+    scene_facts: list[dict[str, Any]]  # SceneFact dicts from fact extraction
 
     # ── Repetition detection ──
     repetition_data: list[dict[str, Any]]  # serialized RepetitionEntry list
