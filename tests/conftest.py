@@ -94,28 +94,38 @@ def stub_llm() -> BaseChatModel:
     return StubChatModel()
 
 
-# ── Temp project directory ────────────────────────────────────────────
+# ── Temp project / state directories ─────────────────────────────
 
 
 @pytest.fixture()
-def tmp_project(tmp_path: Path) -> Path:
-    """Create a temporary project directory with .ghostreader/ and config.yaml."""
-    project = tmp_path / "test-project"
-    project.mkdir()
-    (project / ".ghostreader").mkdir()
-    (project / "config.yaml").write_text(
-        "default_model: stub\ndepth: standard\n",
-        encoding="utf-8",
-    )
-    return project
+def tmp_state_dir(tmp_path: Path) -> Path:
+    """Create a temporary per-manuscript state directory."""
+    state = tmp_path / "state"
+    state.mkdir()
+    return state
 
 
 @pytest.fixture()
-def tmp_manuscript_dir(tmp_path: Path) -> Path:
-    """Create a temp dir with chapter markdown files."""
+def tmp_project(tmp_state_dir: Path) -> Path:
+    """Alias for tmp_state_dir (backwards compat for cache tests)."""
+    return tmp_state_dir
+
+
+@pytest.fixture()
+def tmp_manuscript_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Create a temp dir with chapter markdown files.
+
+    Patches ``ghostreader.paths.global_config_dir`` so state goes under
+    ``tmp_path`` instead of the real user config directory.
+    """
     ms_dir = tmp_path / "manuscript"
     ms_dir.mkdir()
-    (ms_dir / ".ghostreader").mkdir()
+
+    fake_config = tmp_path / "ghostreader-config"
+    fake_config.mkdir()
+    monkeypatch.setattr(
+        "ghostreader.paths.global_config_dir", lambda: fake_config
+    )
 
     for i in range(1, 4):
         (ms_dir / f"chapter-{i:03d}.md").write_text(

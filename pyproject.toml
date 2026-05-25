@@ -20,6 +20,7 @@ dependencies = [
     "lancedb>=0.9",
     "ebooklib>=0.18",
     "scikit-learn>=1.4",
+    "sentence-transformers>=3.0",
 ]
 
 [project.optional-dependencies]

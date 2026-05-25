@@ -1,7 +1,7 @@
 """Compare command — cross-manuscript side-by-side quality scorecard.
 
 Loads cached analysis results for two manuscripts (from their
-.ghostreader/cache.json files) and produces a Rich table showing
+per-manuscript state directories) and produces a Rich table showing
 per-dimension severity ratings with deltas. Supports --format json
 for scripted consumption.
 """
@@ -93,13 +93,11 @@ def run_compare(
 
 
 def _load_report(path: Path) -> dict[str, Any] | None:
-    """Load final_report from a manuscript's .ghostreader/cache.json."""
-    path = path.resolve()
+    """Load final_report from a manuscript's state directory."""
+    from ghostreader.paths import state_dir_for
 
-    # Determine project directory: if path is a file, its parent is
-    # the project dir; if a directory, it IS the project dir.
-    project_dir = path.parent if path.is_file() else path
-    cache_path = project_dir / ".ghostreader" / "cache.json"
+    state = state_dir_for(path)
+    cache_path = state / "cache.json"
 
     if not cache_path.exists():
         return None

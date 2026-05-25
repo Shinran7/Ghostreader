@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ghostreader.config import GhostreaderConfig
+from ghostreader.paths import state_dir_for
 
 app = typer.Typer(
     name="ghostreader",
@@ -19,7 +20,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-config_app = typer.Typer(help="View or edit project configuration.")
+config_app = typer.Typer(help="View or edit configuration.")
 app.add_typer(config_app, name="config")
 
 # ── Common option types ──────────────────────────────────────────────
@@ -49,30 +50,29 @@ NoCacheOption = Annotated[
 ]
 
 
-# ── Commands ─────────────────────────────────────────────────────────
+# ── Commands ─────────────────────────────────────────────────────
 
 
 @app.command()
 def init(
-    project_name: Annotated[str, typer.Argument(help="Name for the new project.")],
+    directory: Annotated[
+        Path, typer.Argument(help="Directory in which to create a ghostreader.yaml override.")
+    ] = Path("."),
 ) -> None:
-    """Create a new Ghostreader project folder with config and state directory."""
-    project_dir = Path.cwd() / project_name
+    """Create a project-level config override (ghostreader.yaml) in the given directory."""
+    directory = directory.resolve()
+    override_path = directory / "ghostreader.yaml"
 
-    if project_dir.exists():
-        rprint(f"[red]Error:[/red] Directory '{project_name}' already exists.")
+    if override_path.exists():
+        rprint(f"[yellow]ghostreader.yaml already exists at:[/yellow] {override_path}")
         raise typer.Exit(code=1)
 
-    project_dir.mkdir(parents=True)
-    state_dir = project_dir / ".ghostreader"
-    state_dir.mkdir()
-
+    directory.mkdir(parents=True, exist_ok=True)
     cfg = GhostreaderConfig()
-    config_path = cfg.save(project_dir)
+    config_path = cfg.save_project(directory)
 
-    rprint(Panel(f"[green]Project created:[/green] {project_dir}\n"
-                 f"  Config: {config_path}\n"
-                 f"  State:  {state_dir}",
+    rprint(Panel(f"[green]Project override created:[/green] {config_path}\n"
+                 "  Edit this file to override global defaults for manuscripts in this tree.",
                  title="ghostreader init"))
 
 
@@ -134,13 +134,14 @@ async def _run_analyze(
     from ghostreader.report.terminal_output import render_report
 
     path = path.resolve()
-    project_dir = path.parent if path.is_file() else path
+    state = state_dir_for(path)
+    cfg = GhostreaderConfig.load(path)
     fmt = output_format or "terminal"
     analysis_depth = depth or "standard"
-    llm = _get_llm(model)
+    llm = _get_llm(model, manuscript_path=path)
 
     # ── Cache check ──
-    cache = CacheManager(project_dir)
+    cache = CacheManager(state)
     cache.load_cache()
 
     # ── 1. Ingestion: load → summarize → index ──
@@ -159,8 +160,10 @@ async def _run_analyze(
         f"[green]1[/green] global"
     )
 
-    rprint("[cyan]Indexing into LanceDB...[/cyan]")
-    chunk_count, db_path = index_manuscript(chapters, hierarchy, project_dir)
+    rprint(f"[cyan]Indexing into LanceDB (embeddings: {cfg.embedding_model})...[/cyan]")
+    chunk_count, db_path = index_manuscript(
+        chapters, hierarchy, state, embedding_model=cfg.embedding_model,
+    )
     rprint(f"  Indexed [green]{chunk_count}[/green] chunks → {db_path}")
 
     # ── 2. Repetition detection (algorithmic, no LLM) ──
@@ -215,9 +218,10 @@ async def _run_analyze(
     if fmt == "json":
         export_json(report)
     elif fmt == "markdown":
+        report_dir = path.parent if path.is_file() else path
         md_path = write_markdown_report(
             report,
-            output_dir=project_dir / "reports",
+            output_dir=report_dir / "reports",
             show_rewrites=show_rewrites,
         )
         rprint(f"[green]Report written to:[/green] {md_path}")
@@ -262,24 +266,21 @@ def _load_secrets() -> None:
             os.environ[key] = value
 
 
-def _resolve_model_name(model: str | None = None) -> str:
-    """Determine which model to use: --model flag > config.yaml > stub."""
+def _resolve_model_name(model: str | None = None, manuscript_path: Path | None = None) -> str:
+    """Determine which model to use: --model flag > config > stub."""
     if model:
         return model
 
-    project_dir = _find_project_dir()
-    if project_dir:
-        cfg = GhostreaderConfig.load(project_dir)
-        # Try default_model first, then preference order
-        candidates = [cfg.default_model, *cfg.model_preference_order]
-        for name in candidates:
-            if name and name != "stub":
-                return name
+    cfg = GhostreaderConfig.load(manuscript_path)
+    candidates = [cfg.default_model, *cfg.model_preference_order]
+    for name in candidates:
+        if name and name != "stub":
+            return name
 
     return "stub"
 
 
-def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
+def _get_llm(model: str | None = None, manuscript_path: Path | None = None) -> "BaseChatModel":  # noqa: F821
     """Create a langchain ChatModel from config or --model override.
 
     Resolution order: --model flag > config.yaml default_model > stub.
@@ -289,7 +290,7 @@ def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
     from langchain_core.messages import AIMessage, BaseMessage
 
     _load_secrets()
-    model_name = _resolve_model_name(model)
+    model_name = _resolve_model_name(model, manuscript_path=manuscript_path)
 
     # Try real backends when a model name looks like a known provider
     if model_name.startswith("gpt-") or model_name.startswith("o"):
@@ -333,18 +334,23 @@ def _get_llm(model: str | None = None) -> "BaseChatModel":  # noqa: F821
 
 @app.command()
 def chat(
-    project: Annotated[str, typer.Argument(help="Project name to chat about.")],
+    path: Annotated[Path, typer.Argument(help="Path to the previously-analyzed manuscript.")],
     model: ModelOption = None,
 ) -> None:
     """Interactive follow-up chat with a previous analysis."""
     from ghostreader.commands.chat import run_chat
 
-    project_dir = Path.cwd() / project
-    if not (project_dir / ".ghostreader").is_dir():
-        rprint(f"[red]Error:[/red] No Ghostreader project found at '{project_dir}'.")
+    path = path.resolve()
+    state = state_dir_for(path)
+    db_path = state / "lancedb"
+    if not db_path.exists():
+        rprint(f"[red]Error:[/red] No analysis found for '{path}'.")
+        rprint("  Run [cyan]ghostreader analyze[/cyan] on it first.")
         raise typer.Exit(code=1)
 
-    run_chat(project_dir, model=model)
+    cfg = GhostreaderConfig.load(path)
+    label = path.stem if path.is_file() else path.name
+    run_chat(state, model=model, label=label, embedding_model=cfg.embedding_model)
 
 
 @app.command()
@@ -368,23 +374,34 @@ def compare(
     )
 
 
-# ── Config sub-commands ──────────────────────────────────────────────
+# ── Config sub-commands ──────────────────────────────────────────
 
 
 @config_app.callback(invoke_without_command=True)
-def config_show(ctx: typer.Context) -> None:
-    """View current project configuration."""
+def config_show(
+    ctx: typer.Context,
+    project: Annotated[
+        bool, typer.Option("--project", help="Show project-level override instead of global.")
+    ] = False,
+) -> None:
+    """View current configuration (global by default)."""
     if ctx.invoked_subcommand is not None:
         return
 
-    project_dir = _find_project_dir()
-    if project_dir is None:
-        rprint("[red]Error:[/red] No Ghostreader project found in current directory tree.")
-        raise typer.Exit(code=1)
+    from ghostreader.paths import find_project_override, global_config_path
 
-    cfg = GhostreaderConfig.load(project_dir)
+    if project:
+        override = find_project_override(Path.cwd())
+        if override is None:
+            rprint("[red]Error:[/red] No ghostreader.yaml found in current directory tree.")
+            raise typer.Exit(code=1)
+        cfg = GhostreaderConfig.load(Path.cwd())
+        label = str(override)
+    else:
+        cfg = GhostreaderConfig.load()
+        label = str(global_config_path())
 
-    table = Table(title=f"Config — {project_dir.name}")
+    table = Table(title=f"Config — {label}")
     table.add_column("Key", style="cyan")
     table.add_column("Value", style="green")
 
@@ -398,14 +415,14 @@ def config_show(ctx: typer.Context) -> None:
 def config_set(
     key: Annotated[str, typer.Argument(help="Config key to set.")],
     value: Annotated[str, typer.Argument(help="New value.")],
+    project: Annotated[
+        bool, typer.Option("--project", help="Write to project-level override instead of global.")
+    ] = False,
 ) -> None:
-    """Set a configuration value."""
-    project_dir = _find_project_dir()
-    if project_dir is None:
-        rprint("[red]Error:[/red] No Ghostreader project found in current directory tree.")
-        raise typer.Exit(code=1)
+    """Set a configuration value (global by default)."""
+    from ghostreader.paths import find_project_override
 
-    cfg = GhostreaderConfig.load(project_dir)
+    cfg = GhostreaderConfig.load()
     data = cfg.model_dump()
 
     if key not in data:
@@ -424,17 +441,14 @@ def config_set(
 
     data[key] = coerced
     updated = GhostreaderConfig(**data)
-    updated.save(project_dir)
+
+    if project:
+        override = find_project_override(Path.cwd())
+        if override is None:
+            rprint("[red]Error:[/red] No ghostreader.yaml found. Run [cyan]ghostreader init[/cyan] first.")
+            raise typer.Exit(code=1)
+        updated.save_project(override.parent)
+    else:
+        updated.save_global()
+
     rprint(f"[green]Set[/green] {key} = {coerced}")
-
-
-# ── Helpers ──────────────────────────────────────────────────────────
-
-
-def _find_project_dir() -> Path | None:
-    """Walk up from cwd looking for a directory containing config.yaml and .ghostreader/."""
-    current = Path.cwd()
-    for directory in [current, *current.parents]:
-        if (directory / "config.yaml").exists() and (directory / ".ghostreader").is_dir():
-            return directory
-    return None

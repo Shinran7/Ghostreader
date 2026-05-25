@@ -7,13 +7,9 @@ from pathlib import Path
 import lancedb
 import pyarrow as pa
 
+from ghostreader.embed import Embedder, StubEmbedder, get_embedder
 from ghostreader.ingestion import Chapter, SummaryHierarchy
 from ghostreader.ingestion.chunking import TextChunk, chunk_text
-
-# Default embedding dimension — placeholder for when a real embedding model
-# is wired in. For now we use a simple hash-based stub so the pipeline is
-# end-to-end testable without an API key.
-_EMBED_DIM = 384
 
 _CHUNKS_TABLE = "chunks"
 _SUMMARIES_TABLE = "summaries"
@@ -22,28 +18,30 @@ _SUMMARIES_TABLE = "summaries"
 def index_manuscript(
     chapters: list[Chapter],
     hierarchy: SummaryHierarchy,
-    project_dir: Path,
+    state_dir: Path,
     *,
     chunk_size: int = 1500,
     overlap: int = 200,
+    embedding_model: str = "stub",
 ) -> tuple[int, Path]:
     """Chunk chapters, embed, and write to LanceDB.
 
     Returns (total_chunk_count, db_path).
     """
-    db_path = project_dir / ".ghostreader" / "lancedb"
+    db_path = state_dir / "lancedb"
     db_path.mkdir(parents=True, exist_ok=True)
 
     db = lancedb.connect(str(db_path))
+    embedder = get_embedder(embedding_model)
 
     # ── Chunk all chapters ──
     all_chunks = _build_chunks(chapters, chunk_size=chunk_size, overlap=overlap)
 
     # ── Write chunks table ──
-    _write_chunks_table(db, all_chunks)
+    _write_chunks_table(db, all_chunks, embedder)
 
     # ── Write summaries table ──
-    _write_summaries_table(db, hierarchy)
+    _write_summaries_table(db, hierarchy, embedder)
 
     return len(all_chunks), db_path
 
@@ -72,20 +70,25 @@ def _build_chunks(
     return all_chunks
 
 
-def _write_chunks_table(db: lancedb.DBConnection, chunks: list[TextChunk]) -> None:
+def _write_chunks_table(
+    db: lancedb.DBConnection, chunks: list[TextChunk], embedder: Embedder
+) -> None:
     """Create or overwrite the chunks table in LanceDB."""
     if not chunks:
         return
 
+    texts = [chunk.text for chunk in chunks]
+    vectors = embedder.embed(texts)
+
     records = []
-    for chunk in chunks:
+    for chunk, vec in zip(chunks, vectors):
         records.append(
             {
                 "text": chunk.text,
                 "chapter_number": chunk.chapter_number,
                 "chunk_index": chunk.chunk_index,
                 "source_path": chunk.source_path,
-                "vector": _stub_embed(chunk.text),
+                "vector": vec,
             }
         )
 
@@ -95,56 +98,54 @@ def _write_chunks_table(db: lancedb.DBConnection, chunks: list[TextChunk]) -> No
             pa.field("chapter_number", pa.int32()),
             pa.field("chunk_index", pa.int32()),
             pa.field("source_path", pa.utf8()),
-            pa.field("vector", pa.list_(pa.float32(), _EMBED_DIM)),
+            pa.field("vector", pa.list_(pa.float32(), embedder.dimension)),
         ]
     )
 
-    if _CHUNKS_TABLE in db.table_names():
+    if _CHUNKS_TABLE in db.list_tables():
         db.drop_table(_CHUNKS_TABLE)
     db.create_table(_CHUNKS_TABLE, data=records, schema=schema)
 
 
 def _write_summaries_table(
-    db: lancedb.DBConnection, hierarchy: SummaryHierarchy
+    db: lancedb.DBConnection, hierarchy: SummaryHierarchy, embedder: Embedder
 ) -> None:
     """Create or overwrite the summaries table in LanceDB."""
-    records = []
+    summary_texts: list[str] = []
+    meta: list[dict] = []
 
     for cs in hierarchy.chapter_summaries:
-        records.append(
-            {
-                "level": "chapter",
-                "identifier": f"chapter-{cs.chapter_number}",
-                "title": cs.title,
-                "summary": cs.summary,
-                "vector": _stub_embed(cs.summary),
-            }
-        )
+        summary_texts.append(cs.summary)
+        meta.append({
+            "level": "chapter",
+            "identifier": f"chapter-{cs.chapter_number}",
+            "title": cs.title,
+            "summary": cs.summary,
+        })
 
     for act in hierarchy.act_summaries:
-        records.append(
-            {
-                "level": "act",
-                "identifier": f"act-{act.act_number}",
-                "title": f"Act {act.act_number} (ch {act.chapter_range[0]}-{act.chapter_range[1]})",
-                "summary": act.summary,
-                "vector": _stub_embed(act.summary),
-            }
-        )
+        summary_texts.append(act.summary)
+        meta.append({
+            "level": "act",
+            "identifier": f"act-{act.act_number}",
+            "title": f"Act {act.act_number} (ch {act.chapter_range[0]}-{act.chapter_range[1]})",
+            "summary": act.summary,
+        })
 
     if hierarchy.global_summary:
-        records.append(
-            {
-                "level": "global",
-                "identifier": "global",
-                "title": "Manuscript Summary",
-                "summary": hierarchy.global_summary,
-                "vector": _stub_embed(hierarchy.global_summary),
-            }
-        )
+        summary_texts.append(hierarchy.global_summary)
+        meta.append({
+            "level": "global",
+            "identifier": "global",
+            "title": "Manuscript Summary",
+            "summary": hierarchy.global_summary,
+        })
 
-    if not records:
+    if not meta:
         return
+
+    vectors = embedder.embed(summary_texts)
+    records = [{**m, "vector": v} for m, v in zip(meta, vectors)]
 
     schema = pa.schema(
         [
@@ -152,27 +153,10 @@ def _write_summaries_table(
             pa.field("identifier", pa.utf8()),
             pa.field("title", pa.utf8()),
             pa.field("summary", pa.utf8()),
-            pa.field("vector", pa.list_(pa.float32(), _EMBED_DIM)),
+            pa.field("vector", pa.list_(pa.float32(), embedder.dimension)),
         ]
     )
 
-    if _SUMMARIES_TABLE in db.table_names():
+    if _SUMMARIES_TABLE in db.list_tables():
         db.drop_table(_SUMMARIES_TABLE)
     db.create_table(_SUMMARIES_TABLE, data=records, schema=schema)
-
-
-def _stub_embed(text: str) -> list[float]:
-    """Deterministic stub embedding for pipeline testing.
-
-    Will be replaced with a real embedding model (e.g. sentence-transformers
-    or OpenAI embeddings) when the embedding configuration is wired in.
-    """
-    import hashlib
-
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    # Expand the 32-byte hash to fill _EMBED_DIM floats
-    values: list[float] = []
-    for i in range(_EMBED_DIM):
-        byte_val = digest[i % len(digest)]
-        values.append((byte_val / 255.0) * 2.0 - 1.0)  # normalize to [-1, 1]
-    return values

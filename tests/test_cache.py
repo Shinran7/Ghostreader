@@ -13,7 +13,7 @@ from ghostreader.cache import CacheManager
 class TestCacheManager:
     def test_init_creates_no_files(self, tmp_project: Path) -> None:
         cache = CacheManager(tmp_project)
-        assert not (tmp_project / ".ghostreader" / "cache.json").exists()
+        assert not (tmp_project / "cache.json").exists()
 
     def test_save_and_load_cache(self, tmp_project: Path) -> None:
         cache = CacheManager(tmp_project)
@@ -81,7 +81,7 @@ class TestCheckpoint:
         assert cache.load_checkpoint() is None
 
     def test_corrupt_cache_file(self, tmp_project: Path) -> None:
-        cache_file = tmp_project / ".ghostreader" / "cache.json"
+        cache_file = tmp_project / "cache.json"
         cache_file.write_text("not valid json{{{", encoding="utf-8")
         cache = CacheManager(tmp_project)
         loaded = cache.load_cache()

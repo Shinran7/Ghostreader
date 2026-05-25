@@ -1,8 +1,8 @@
 """Chat command — conversational RAG over stored analysis results.
 
 Rehydrates the LanceDB index and cached analysis report from the
-.ghostreader/ directory, then enters an interactive loop where the
-user asks questions and gets LLM-generated answers grounded in
+per-manuscript state directory, then enters an interactive loop where
+the user asks questions and gets LLM-generated answers grounded in
 manuscript chunks and prior analysis findings.
 """
 
@@ -37,15 +37,20 @@ Do not invent facts about the manuscript."""
 # ── Public entry point ───────────────────────────────────────────────
 
 
-def run_chat(project_dir: Path, *, model: str | None = None) -> None:
-    """Launch interactive chat session over a previously-analyzed project."""
-    state_dir = project_dir / ".ghostreader"
+def run_chat(
+    state_dir: Path,
+    *,
+    model: str | None = None,
+    label: str = "manuscript",
+    embedding_model: str = "stub",
+) -> None:
+    """Launch interactive chat session over a previously-analyzed manuscript."""
     db_path = state_dir / "lancedb"
 
     if not db_path.exists():
         _CONSOLE.print(
             "[red]Error:[/red] No LanceDB index found. "
-            f"Run [cyan]ghostreader analyze[/cyan] on this project first.\n"
+            "Run [cyan]ghostreader analyze[/cyan] on this manuscript first.\n"
             f"  Expected: {db_path}"
         )
         raise SystemExit(1)
@@ -55,7 +60,7 @@ def run_chat(project_dir: Path, *, model: str | None = None) -> None:
 
     # Connect to LanceDB
     db = lancedb.connect(str(db_path))
-    available_tables = db.table_names()
+    available_tables = db.list_tables()
 
     if _CHUNKS_TABLE not in available_tables:
         _CONSOLE.print(
@@ -76,7 +81,7 @@ def run_chat(project_dir: Path, *, model: str | None = None) -> None:
     _CONSOLE.print(
         Panel(
             "[green]Ghostreader Chat[/green]\n"
-            f"Project: {project_dir.name}\n"
+            f"Manuscript: {label}\n"
             "Type your question, or [yellow]quit[/yellow] / [yellow]exit[/yellow] to leave.",
             title="📖 Chat",
         )
@@ -95,7 +100,7 @@ def run_chat(project_dir: Path, *, model: str | None = None) -> None:
                 )
             )
 
-    _chat_loop(llm, history, chunks_table, summaries_table, report)
+    _chat_loop(llm, history, chunks_table, summaries_table, report, embedding_model)
 
 
 # ── Interactive loop ─────────────────────────────────────────────────
@@ -107,6 +112,7 @@ def _chat_loop(
     chunks_table: lancedb.table.Table,
     summaries_table: lancedb.table.Table | None,
     report: dict[str, Any] | None,
+    embedding_model: str = "stub",
 ) -> None:
     """Read-eval-print loop for the chat session."""
     while True:
@@ -124,7 +130,8 @@ def _chat_loop(
 
         # Retrieve relevant context
         context = _retrieve_context(
-            question, chunks_table, summaries_table, report
+            question, chunks_table, summaries_table, report,
+            embedding_model=embedding_model,
         )
 
         # Build augmented message with retrieved context
@@ -160,12 +167,15 @@ def _retrieve_context(
     report: dict[str, Any] | None,
     *,
     top_k: int = 5,
+    embedding_model: str = "stub",
 ) -> str:
     """Build a context string from vector search + cached analysis data."""
     sections: list[str] = []
 
     # Vector search over manuscript chunks
-    query_vec = _stub_embed(query)
+    from ghostreader.embed import get_embedder
+    _embedder = get_embedder(embedding_model)
+    query_vec = _embedder.embed([query])[0]
     try:
         chunk_results = (
             chunks_table.search(query_vec).limit(top_k).to_list()
@@ -222,23 +232,6 @@ def _findings_for_query(query: str, report: dict[str, Any]) -> str:
             f"#{rank} [{sev}] {dim}: {summary} (ch {ch})\n  Evidence: {evidence}"
         )
     return "\n".join(lines)
-
-
-# ── LanceDB embedding (mirrors indexer stub) ─────────────────────────
-
-_EMBED_DIM = 384
-
-
-def _stub_embed(text: str) -> list[float]:
-    """Deterministic stub embedding — must match indexer._stub_embed."""
-    import hashlib
-
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    values: list[float] = []
-    for i in range(_EMBED_DIM):
-        byte_val = digest[i % len(digest)]
-        values.append((byte_val / 255.0) * 2.0 - 1.0)
-    return values
 
 
 # ── Cache loading ────────────────────────────────────────────────────

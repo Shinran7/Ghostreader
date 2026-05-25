@@ -11,7 +11,8 @@ completes, results are written to ``.ghostreader/checkpoint.json``.  On API
 failure the caller saves progress; the next ``analyze`` run detects the partial
 checkpoint and resumes from the first incomplete chapter.
 
-Both files live under ``<manuscript-dir>/.ghostreader/``.
+Both files live under the per-manuscript state directory
+(see ``ghostreader.paths.state_dir_for``).
 """
 
 from __future__ import annotations
@@ -26,7 +27,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_CACHE_DIR = ".ghostreader"
 _CACHE_FILE = "cache.json"
 _CHECKPOINT_FILE = "checkpoint.json"
 
@@ -74,16 +74,14 @@ class CacheManager:
 
     Parameters
     ----------
-    project_dir:
-        Root directory of the manuscript project.  The ``.ghostreader/``
-        subdirectory is created here automatically.
+    state_dir:
+        Per-manuscript state directory (from ``paths.state_dir_for``).
     """
 
-    def __init__(self, project_dir: Path) -> None:
-        self._project_dir = Path(project_dir)
-        self._cache_dir = self._project_dir / _CACHE_DIR
-        self._cache_path = self._cache_dir / _CACHE_FILE
-        self._checkpoint_path = self._cache_dir / _CHECKPOINT_FILE
+    def __init__(self, state_dir: Path) -> None:
+        self._state_dir = Path(state_dir)
+        self._cache_path = self._state_dir / _CACHE_FILE
+        self._checkpoint_path = self._state_dir / _CHECKPOINT_FILE
 
         # In-memory mirrors — populated by load_*() calls.
         self._cache: dict[int, CacheEntry] = {}
@@ -92,7 +90,7 @@ class CacheManager:
     # -- directory bootstrap ------------------------------------------------
 
     def _ensure_dir(self) -> None:
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        self._state_dir.mkdir(parents=True, exist_ok=True)
 
     # ======================================================================
     # Cache (hash-based skip)
