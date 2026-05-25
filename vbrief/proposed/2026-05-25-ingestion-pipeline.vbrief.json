@@ -1,0 +1,31 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Ingestion pipeline: file loading, chapter detection, summarization, vector indexing",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Ingestion Pipeline",
+    "status": "proposed",
+    "narrative": "Implement the Ingestion Node: load .md files (primary) and .epub files (secondary), detect chapters via chapter-NNN.md naming convention, build hierarchical summaries (chapter > act > global), chunk text, and index into LanceDB. Auto-detect file vs. directory input. Epub conversion uses ebooklib + stdlib xml.etree.ElementTree. Traces: FR-2, FR-6, FR-7, FR-13, NFR-1, NFR-3.",
+    "items": [
+      {
+        "title": "Markdown loader",
+        "narrative": "Load .md files, detect chapter boundaries from chapter-NNN.md filenames. Sort by filename. Handle single file and directory inputs. FR-2, FR-6."
+      },
+      {
+        "title": "Epub loader",
+        "narrative": "Load .epub via ebooklib, extract XHTML content, convert to plain text via stdlib xml.etree.ElementTree. Secondary priority. FR-7."
+      },
+      {
+        "title": "Hierarchical summarizer",
+        "narrative": "Two-pass architecture Pass 1: build chapter summaries, group into act summaries, produce global summary. Store in LangGraph shared state. FR-6, NFR-1."
+      },
+      {
+        "title": "LanceDB indexing",
+        "narrative": "Chunk text, generate embeddings, index chunks + summaries into LanceDB under .ghostreader/. FR-13."
+      }
+    ]
+  }
+}

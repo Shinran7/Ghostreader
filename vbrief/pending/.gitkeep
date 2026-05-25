@@ -1,0 +1,4 @@
+# This file keeps the lifecycle directory present in version control and
+# survives installer packaging so the deft-directive-setup pre-cutover guard
+# (condition 3, see skills/deft-directive-setup/SKILL.md:32 and main.md:159)
+# does not fire on a fresh install. See #1179.

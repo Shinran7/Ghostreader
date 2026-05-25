@@ -1,0 +1,39 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "LangGraph analysis agents: Prose, Narrative, Consistency, Synthesis",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Analysis Agents",
+    "status": "proposed",
+    "narrative": "Implement the four LangGraph agent nodes: Prose Analyst, Narrative Analyst, Consistency Checker, and Synthesis Agent. The first three run in parallel per-chunk with retrieval context + summary hierarchy. The Synthesis Agent aggregates outputs and produces the final diagnostic report with severity ratings (strength/neutral/concern) per dimension. Genre-aware prompt framing modifies system prompts based on --genre flag. Conditional routing via --depth flag controls thoroughness. Traces: FR-8, FR-9, FR-10, FR-11, FR-16, FR-21, NFR-5.",
+    "items": [
+      {
+        "title": "LangGraph workflow definition",
+        "narrative": "Define the stateful graph: ingestion -> repetition detection -> [prose + narrative + consistency] (parallel) -> synthesis. Shared state schema. Conditional edges for --depth."
+      },
+      {
+        "title": "Prose Analyst node",
+        "narrative": "Evaluates repetition data (from pre-processing), sentence rhythm, show-vs-tell, dialogue naturalness, vocabulary richness. Genre-aware system prompt. FR-8."
+      },
+      {
+        "title": "Narrative Analyst node",
+        "narrative": "Evaluates character arcs, pacing/tension curves, theme/motif usage, structural patterns, world-building coherence. Uses summary hierarchy for cross-chapter awareness. FR-9."
+      },
+      {
+        "title": "Consistency Checker node",
+        "narrative": "Detects plot holes, timeline errors, foreshadowing issues, unresolved threads. Uses retrieval context to cross-reference across chapters. FR-10."
+      },
+      {
+        "title": "Synthesis Agent node",
+        "narrative": "Combines all agent outputs. Assigns severity ratings per dimension. Generates executive summary and prioritized diagnostic feedback with cited evidence. FR-11, NFR-5."
+      },
+      {
+        "title": "Genre prompt framing",
+        "narrative": "Genre-specific system prompt preambles loaded based on --genre flag. Modifies evaluation criteria without changing agent structure. FR-16."
+      }
+    ]
+  }
+}

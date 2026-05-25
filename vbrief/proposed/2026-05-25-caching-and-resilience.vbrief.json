@@ -1,0 +1,27 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Analysis caching and checkpoint-and-resume on API failure",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Caching and Resilience",
+    "status": "proposed",
+    "narrative": "Implement analysis caching to avoid re-processing unchanged chapters (hash-based change detection) and checkpoint-and-resume for API failures. On failure, save completed chapter results and resume from the last incomplete chapter on next run. Surface clear error with what was completed and what remains. Traces: FR-14, FR-15.",
+    "items": [
+      {
+        "title": "Chapter hash cache",
+        "narrative": "Hash each chapter file. On re-analysis, skip chapters whose hash matches cached results. Store hashes in .ghostreader/cache.json. FR-14."
+      },
+      {
+        "title": "Checkpoint on failure",
+        "narrative": "After each chapter's agents complete, persist results immediately. On API failure, save progress and exit with a clear message listing completed vs. remaining chapters. FR-15."
+      },
+      {
+        "title": "Resume from checkpoint",
+        "narrative": "On next analyze run, detect partial results from prior run and resume from the first incomplete chapter. Combine with cache hash check. FR-15."
+      }
+    ]
+  }
+}

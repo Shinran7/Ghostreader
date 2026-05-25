@@ -1,0 +1,3 @@
+# Deft framework: ignore local-only caches and scratch directories
+.deft-cache/
+vbrief/.eval/

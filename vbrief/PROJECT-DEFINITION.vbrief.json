@@ -1,0 +1,24 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Project identity gestalt",
+    "created": "2026-05-25T14:38:33Z"
+  },
+  "plan": {
+    "title": "Ghostreader",
+    "status": "running",
+    "policy": {
+      "allowDirectCommitsToMaster": true
+    },
+    "narratives": {
+      "Overview": "Ghostreader is a CLI-based AI literary analysis tool that functions as an intelligent, agentic beta reader and editorial ghost. It reads fiction manuscripts (chapters or full novels) and delivers high-quality, structured feedback on literary craft including prose quality, repetitive writing habits, narrative strengths/weaknesses, character arcs, pacing, and overall literary effectiveness.",
+      "TechStack": "CLI using Python 3.12+ — Typer (CLI framework), Rich (terminal UI), LangGraph + LangChain (agent orchestration with openai/anthropic/ollama backends), LanceDB (local vector store for manuscript retrieval), pydantic + PyYAML (config), ebooklib + markdown (input format handling)",
+      "Strategy": "Use probe for this project",
+      "Quality": "Run task check before every commit. Achieve >= 85% coverage overall + per-module. Store secrets in secrets/ dir.",
+      "ProjectRules": "No project-specific rules defined.",
+      "DeftVersion": "0.33.0"
+    },
+    "items": []
+  }
+}

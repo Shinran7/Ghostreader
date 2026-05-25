@@ -1,0 +1,31 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Report generation: terminal output, markdown reports, JSON export",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Report Generation",
+    "status": "proposed",
+    "narrative": "Implement output formatting: Rich terminal display with color-coded severity sections, full markdown report saved to reports/manuscript_name_YYYY-MM-DD.md with inline chapter/line references, and JSON output via --format json for scripting and Autonomicon integration. Optional example rewrites via --show-rewrites. Traces: FR-18, FR-19, FR-20, FR-22.",
+    "items": [
+      {
+        "title": "Rich terminal output",
+        "narrative": "Color-coded display with collapsible sections per dimension. Severity-based coloring (green=strength, yellow=neutral, red=concern). FR-18."
+      },
+      {
+        "title": "Markdown report writer",
+        "narrative": "Full report saved as markdown with inline chapter/line references, executive summary at top, per-dimension sections. FR-19."
+      },
+      {
+        "title": "JSON export",
+        "narrative": "Structured JSON output matching the internal analysis model for scripting and Autonomicon integration. FR-20."
+      },
+      {
+        "title": "Optional rewrites",
+        "narrative": "When --show-rewrites is passed, include 'one possible alternative' passages. Framed as suggestions, not corrections. FR-22."
+      }
+    ]
+  }
+}

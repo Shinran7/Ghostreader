@@ -1,0 +1,135 @@
+Ghostreader – Complete Specification
+
+1. Project Overview
+Ghostreader is a CLI-based AI literary analysis tool that functions as an intelligent, agentic beta reader / editorial ghost. It reads fiction manuscripts (chapters or full novels) and delivers high-quality, structured feedback on literary craft.
+Core Purpose:
+Evaluate prose quality, repetitive writing habits, narrative strengths/weaknesses, overused motifs, missing elements, logical inconsistencies, character arcs, pacing, and overall literary effectiveness.
+Target Users: Novelists, short story writers, and serious self-publishers seeking deeper critique than generic writing tools.
+2. Constraints & Design Decisions (MVP)
+
+Interface: Pure CLI (no frontend/UI).
+Input Formats:
+Primary: .md (Markdown)
+Secondary: .epub (converted internally to markdown)
+
+Agent Framework: LangGraph (stateful multi-agent workflow).
+LLM Backend: LiteLLM connecting to Grok or Gemini (via OpenAI-compatible API). Local Ollama is deprioritized due to past performance issues.
+Philosophy: Local-first, privacy-focused, extensible, and highly controllable.
+
+3. Core Features (MVP)
+Commands
+ghostreader init <project_name>              # Create project folder + config
+ghostreader analyze <path>                       # Analyze single .md/.epub or folder of .md files
+ghostreader analyze-dir <directory>              # Explicit multi-chapter directory mode
+ghostreader chat <project>                       # Interactive follow-up chat with previous analysis
+ghostreader compare <file1> <file2>              # Draft comparison
+ghostreader config                               # View/edit configuration
+Analysis Options (Flags)
+
+--depth: quick | standard | deep (default: standard)
+--genre: e.g., literary, fantasy, thriller, romance, scifi (influences critique lens)
+--style-guide: Path to a markdown file containing example "good" prose for voice comparison
+--model: Override default LLM (e.g., grok-beta, gemini-2.5-pro)
+--format: markdown (default) | json
+--no-cache: Force fresh analysis
+
+Output
+
+Rich, color-coded terminal summary with collapsible sections.
+Full detailed report saved as Markdown: reports/manuscript_name_YYYY-MM-DD.md
+Inline references to line numbers / chapter titles.
+Prioritized revision recommendations with example rewrites.
+JSON output option for scripting.
+
+4. Analysis Agents (LangGraph Workflow)
+The system uses a stateful LangGraph with the following specialized agents:
+
+Ingestion Node
+Loads .md or .epub
+Detects chapters/sections via markdown headers
+Creates hierarchical summaries (chapter → global context)
+Builds vector store (Chroma) for retrieval
+
+Prose Analyst
+Repetition detection (words, phrases, sentence structures, author tics)
+Sentence rhythm, variety, and musicality
+Show-vs-tell ratio with examples
+Dialogue naturalness
+Vocabulary richness vs. purple prose
+Style guide comparison (if provided)
+
+Narrative Analyst
+Character arcs and consistency
+Pacing and tension curves
+Theme and motif detection (over/under-use)
+Structural observations (three-act, hero’s journey, etc.)
+World-building coherence
+
+Consistency Checker
+Logical inconsistencies and plot holes
+Timeline / continuity errors
+Foreshadowing effectiveness
+Unresolved threads or deus ex machina
+
+Synthesis Agent
+Combines all agent outputs
+Generates executive summary
+Prioritizes feedback (High/Medium/Low impact)
+Produces actionable revision suggestions
+
+
+Graph Features:
+
+Conditional routing (deeper analysis in “deep” mode)
+Shared state with original text chunks and summaries
+Visible chain-of-thought in terminal during processing
+
+5. Technical Architecture
+Tech Stack:
+
+Python 3.11+
+CLI: Typer
+Terminal UI: Rich
+Agents: LangGraph + LangChain
+LLM: Grok, Gemini, Openai
+Markdown/Epub: markdown, ebooklib, beautifulsoup4
+Repetition: Custom (tf-idf + fuzzy matching)
+Vector Store: Chroma (local)
+Config: pydantic-settings + YAML
+Caching: Analysis chunks (to speed up re-runs)
+
+Project Structure:
+
+ghostreader/
+├── ghostreader/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── core.py
+│   ├── graph/                  # LangGraph definition
+│   ├── agents/                 # Individual agent nodes
+│   ├── ingestion/              # text_loader.py, epub_converter.py
+│   ├── analyzers/              # prose.py, narrative.py, consistency.py
+│   ├── utils/                  # repetition_detector.py, chunking.py, etc.
+│   └── report/                 # report_generator.py
+├── projects/                   # User project folders
+├── reports/
+├── config.yaml
+├── pyproject.toml
+└── README.md
+6. Non-Functional Requirements
+
+Privacy: All processing happens locally or via user-provided API keys.
+Performance: Reasonable speed for full novels (~100k words) using API models.
+Extensibility: Easy to add new agents or critique lenses.
+Caching: Avoid re-analyzing unchanged sections.
+Token Management: Optional tracking and cost estimation.
+
+7. Future Enhancements (Post-MVP)
+
+Version/delta comparison across drafts
+More input formats
+Plugin system for custom agents
+HTML report export
+Local model fine-tuning support
+Multi-perspective critiques (Harsh Editor, Genre Expert, etc.)

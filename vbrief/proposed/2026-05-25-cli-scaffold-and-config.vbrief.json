@@ -1,0 +1,31 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "CLI scaffolding, init command, and config system",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "CLI Scaffold and Config",
+    "status": "proposed",
+    "narrative": "Set up the project structure (pyproject.toml, Typer CLI entrypoint, pydantic-settings config model) and implement the 'init' and 'config' commands. The init command creates a project folder with config.yaml and .ghostreader/ state directory. The config command views and edits settings (default model, genre, depth). Traces: FR-1, FR-5, FR-17, FR-21.",
+    "items": [
+      {
+        "title": "Project skeleton",
+        "narrative": "pyproject.toml with dependencies, ghostreader/ package, cli.py with Typer app, __init__.py. Matches the project structure from the specification."
+      },
+      {
+        "title": "Config model",
+        "narrative": "pydantic-settings model for config.yaml: default_model, genre, depth, model_preference_order, api_keys references. FR-5, FR-17."
+      },
+      {
+        "title": "Init command",
+        "narrative": "'ghostreader init <project_name>' creates project folder, config.yaml from defaults, .ghostreader/ state directory. FR-1."
+      },
+      {
+        "title": "Config command",
+        "narrative": "'ghostreader config' views current config; 'ghostreader config set <key> <value>' edits. FR-5."
+      }
+    ]
+  }
+}

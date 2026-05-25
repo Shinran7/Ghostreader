@@ -1,0 +1,23 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Chat command (RAG over results) and Compare command (cross-manuscript scorecard)",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Chat and Compare Commands",
+    "status": "proposed",
+    "narrative": "Implement the chat and compare commands. Chat rehydrates stored analysis from .ghostreader/ and provides conversational RAG over results — no agent re-invocation for MVP. Compare runs analyze on two inputs (or reuses cached results) and produces a side-by-side scorecard with per-dimension severity ratings and deltas. Traces: FR-3, FR-4.",
+    "items": [
+      {
+        "title": "Chat command",
+        "narrative": "Rehydrate LanceDB index + analysis results from .ghostreader/. Conversational loop: user asks question, retrieve relevant chunks from analysis + manuscript, LLM answers with citations. FR-3."
+      },
+      {
+        "title": "Compare command",
+        "narrative": "Accept two paths, run analyze on each (or reuse cache), extract per-dimension severity counts, produce side-by-side table with deltas. FR-4."
+      }
+    ]
+  }
+}

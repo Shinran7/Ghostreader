@@ -1,0 +1,27 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:deft-directive-setup",
+    "description": "Algorithmic repetition detection pre-processing",
+    "created": "2026-05-25T15:04:46Z"
+  },
+  "plan": {
+    "title": "Repetition Detector",
+    "status": "proposed",
+    "narrative": "Implement algorithmic repetition detection as a pre-processing step during ingestion. Uses tf-idf for term frequency analysis and fuzzy matching for phrase/structure reuse detection. Outputs structured data (word frequencies, repeated phrases, sentence structure patterns, dialogue tag distribution) stored in LangGraph state for consumption by the Prose Analyst. This runs outside the LLM — deterministic and reliable. Traces: FR-12.",
+    "items": [
+      {
+        "title": "Word and phrase frequency analysis",
+        "narrative": "tf-idf based detection of overused words and phrases across the manuscript. Output: ranked list with counts and locations."
+      },
+      {
+        "title": "Sentence structure patterns",
+        "narrative": "Detect repeated sentence openings, similar sentence lengths, and structural monotony. Fuzzy matching for near-duplicate constructions."
+      },
+      {
+        "title": "Dialogue tag analysis",
+        "narrative": "Count and categorize dialogue tags (said, whispered, exclaimed, etc.). Flag over-reliance on specific tags or adverb-heavy tags."
+      }
+    ]
+  }
+}
