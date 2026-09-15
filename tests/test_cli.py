@@ -20,6 +20,10 @@ class TestInit:
         result = runner.invoke(app, ["init", str(target)])
         assert result.exit_code == 0
         assert (target / "config.yaml").exists()
+        text = (target / "config.yaml").read_text(encoding="utf-8")
+        assert "model: gemini-3.8-flash" in text
+        assert "gemini-3.8-flash" in result.output
+        assert "claude-sonnet" not in result.output
 
     def test_init_duplicate_fails(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)

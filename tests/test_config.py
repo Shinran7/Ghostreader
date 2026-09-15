@@ -12,11 +12,19 @@ from ghostreader.config import GhostreaderConfig
 class TestGhostreaderConfig:
     def test_defaults(self) -> None:
         cfg = GhostreaderConfig()
-        assert cfg.model is None
+        assert cfg.model == "gemini-3.8-flash"
         assert cfg.depth == "standard"
         assert cfg.format == "markdown"
         assert cfg.temperature is None
         assert cfg.max_tokens is None
+
+    def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
+        cfg = GhostreaderConfig()
+        path = cfg.save(tmp_path)
+        text = path.read_text(encoding="utf-8")
+        assert "model: gemini-3.8-flash" in text
+        assert "gemini" in text.lower() or "fireworks" in text.lower()
+        assert "accounts/fireworks" in text or "gemini-3.8-flash" in text
 
     def test_save_and_load(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(model="gpt-4o", depth="deep", temperature=0.7)
@@ -26,10 +34,12 @@ class TestGhostreaderConfig:
         assert loaded.depth == "deep"
         assert loaded.temperature == 0.7
 
-    def test_load_no_config_returns_defaults(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_load_no_config_returns_defaults(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         cfg = GhostreaderConfig.load(tmp_path)
-        assert cfg.model is None
+        assert cfg.model == "gemini-3.8-flash"
         assert cfg.depth == "standard"
 
     def test_load_from_child_dir(self, tmp_path: Path) -> None:

@@ -5,15 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
 from ghostreader.commands.chat import (
     _findings_for_query,
     _load_cached_report,
+    run_chat,
 )
-
 
 # ── _load_cached_report ──────────────────────────────────────────────
 
@@ -93,7 +92,43 @@ class TestFindingsForQuery:
 class TestRunChat:
     def test_missing_db_exits(self, tmp_path: Path) -> None:
         """run_chat should exit with error when no LanceDB index exists."""
-        from ghostreader.commands.chat import run_chat
-
         with pytest.raises(SystemExit):
             run_chat(tmp_path, model="stub", label="test")
+
+    def test_uses_shared_get_llm_with_manuscript_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Omitted --model resolves via shared factory + manuscript_path."""
+        (tmp_path / "lancedb").mkdir()
+        called: dict[str, object] = {}
+
+        class _FakeDb:
+            def list_tables(self) -> list[str]:
+                return ["chunks"]
+
+            def open_table(self, name: str) -> object:
+                return object()
+
+        def fake_get_llm(model: str | None = None, manuscript_path=None):  # type: ignore[no-untyped-def]
+            called["model"] = model
+            called["manuscript_path"] = manuscript_path
+
+            class _Stub:
+                @property
+                def _llm_type(self) -> str:
+                    return "stub"
+
+            return _Stub()
+
+        monkeypatch.setattr(
+            "ghostreader.commands.chat.lancedb.connect", lambda *_a, **_k: _FakeDb()
+        )
+        monkeypatch.setattr("ghostreader.llm.get_llm", fake_get_llm)
+        monkeypatch.setattr(
+            "ghostreader.commands.chat._chat_loop", lambda *a, **k: None
+        )
+        manuscript = tmp_path / "novel.md"
+        manuscript.write_text("# x", encoding="utf-8")
+        run_chat(tmp_path, model=None, manuscript_path=manuscript, label="novel")
+        assert called["model"] is None
+        assert called["manuscript_path"] == manuscript

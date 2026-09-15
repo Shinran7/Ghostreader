@@ -41,10 +41,13 @@ def run_chat(
     state_dir: Path,
     *,
     model: str | None = None,
+    manuscript_path: Path | None = None,
     label: str = "manuscript",
     embedding_model: str = "stub",
 ) -> None:
     """Launch interactive chat session over a previously-analyzed manuscript."""
+    from ghostreader.llm import get_llm
+
     db_path = state_dir / "lancedb"
 
     if not db_path.exists():
@@ -76,7 +79,8 @@ def run_chat(
         else None
     )
 
-    llm = _get_chat_llm(model)
+    llm = get_llm(model, manuscript_path=manuscript_path)
+
 
     _CONSOLE.print(
         Panel(
@@ -251,62 +255,6 @@ def _load_cached_report(state_dir: Path) -> dict[str, Any] | None:
     except (json.JSONDecodeError, OSError):
         return None
     return None
-
-
-# ── LLM construction ────────────────────────────────────────────────
-
-
-def _get_chat_llm(model: str | None = None) -> BaseChatModel:
-    """Create a langchain ChatModel for the chat session.
-
-    Mirrors the approach in cli._get_llm but with a fallback stub
-    so the chat loop is testable without API keys.
-    """
-    from langchain_core.messages import BaseMessage
-    from langchain_core.outputs import ChatGeneration, ChatResult
-
-    model_name = model or "stub"
-
-    if model_name.startswith("gpt-") or model_name.startswith("o"):
-        try:
-            from langchain_openai import ChatOpenAI
-
-            return ChatOpenAI(model=model_name)
-        except Exception:
-            pass
-    elif model_name.startswith("claude-"):
-        try:
-            from langchain_anthropic import ChatAnthropic
-
-            return ChatAnthropic(model=model_name)
-        except Exception:
-            pass
-
-    class _StubChatModel(BaseChatModel):
-        """Stub that echoes context snippets for pipeline testing."""
-
-        @property
-        def _llm_type(self) -> str:
-            return "stub-chat"
-
-        def _generate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> ChatResult:
-            last = messages[-1].content if messages else ""
-            text = (
-                f"[stub] I found relevant context about your question. "
-                f"(Input length: {len(str(last))} chars)"
-            )
-            return ChatResult(
-                generations=[ChatGeneration(message=AIMessage(content=text))]
-            )
-
-        async def _agenerate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> ChatResult:
-            return self._generate(messages, **kwargs)
-
-    return _StubChatModel()
 
 
 __all__ = ["run_chat"]

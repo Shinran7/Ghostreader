@@ -12,7 +12,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ghostreader.config import GhostreaderConfig
+from ghostreader.llm import get_llm as _get_llm
+from ghostreader.llm import resolve_model_name as _resolve_model_name
 from ghostreader.paths import state_dir_for
+
+# Re-exports for tests / older imports.
+__all__ = ["app", "_get_llm", "_resolve_model_name"]
+
 
 app = typer.Typer(
     name="ghostreader",
@@ -85,7 +91,8 @@ def init(
     written = cfg.save(directory)
 
     rprint(Panel(f"[green]Config created:[/green] {written}\n"
-                 "  Set 'model' to your preferred LLM (e.g. gpt-4o, claude-sonnet-4-20250514).",
+                 "  Default model is gemini-3.8-flash. Override with --model or edit config.yaml\n"
+                 "  (e.g. accounts/fireworks/models/minimax-m3, gpt-4o, ollama:llama3).",
                  title="ghostreader init"))
 
 
@@ -294,126 +301,6 @@ async def _run_analyze(
         rprint("[dim]Results cached.[/dim]")
 
 
-def _load_secrets() -> None:
-    """Load API keys from secrets/llm.env if it exists.
-
-    Environment variables already set take precedence over file values.
-    """
-    import os
-
-    from ghostreader.paths import find_secrets_env
-
-    secrets_path = find_secrets_env()
-    if secrets_path is None:
-        return
-
-    for line in secrets_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip()
-        if value and key not in os.environ:
-            os.environ[key] = value
-
-
-def _resolve_model_name(model: str | None = None, manuscript_path: Path | None = None) -> str | None:
-    """Determine which model to use: --model flag > config.yaml > None."""
-    if model:
-        return model
-
-    cfg = GhostreaderConfig.load(manuscript_path)
-    return cfg.model
-
-
-def _get_llm(model: str | None = None, manuscript_path: Path | None = None) -> "BaseChatModel":  # noqa: F821
-    """Create a langchain ChatModel from config or --model override.
-
-    Resolution order: --model flag > config.yaml model field.
-    Loads API keys from secrets/llm.env automatically.
-
-    Raises typer.Exit if no model is configured and --model is not given
-    (unless model is explicitly 'stub' for testing).
-    """
-    from langchain_core.language_models import BaseChatModel
-    from langchain_core.messages import AIMessage, BaseMessage
-
-    _load_secrets()
-    model_name = _resolve_model_name(model, manuscript_path=manuscript_path)
-    cfg = GhostreaderConfig.load(manuscript_path)
-
-    if not model_name:
-        rprint(
-            "[red]Error:[/red] No model specified. "
-            "Use [cyan]--model[/cyan] or set 'model' in config.yaml."
-        )
-        raise typer.Exit(code=1)
-
-    # Build kwargs for temperature / max_tokens when configured
-    extra_kwargs: dict[str, object] = {}
-    if cfg.temperature is not None:
-        extra_kwargs["temperature"] = cfg.temperature
-    if cfg.max_tokens is not None:
-        extra_kwargs["max_tokens"] = cfg.max_tokens
-
-    # Try real backends when a model name looks like a known provider
-    if model_name.startswith("gpt-") or model_name.startswith("o"):
-        try:
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
-        except Exception:
-            pass
-    elif model_name.startswith("claude-"):
-        try:
-            from langchain_anthropic import ChatAnthropic
-            return ChatAnthropic(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
-        except Exception:
-            pass
-    elif model_name.startswith("grok-"):
-        try:
-            from langchain_xai import ChatXAI
-            return ChatXAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
-        except Exception:
-            pass
-    elif model_name.startswith("ollama:"):
-        try:
-            from langchain_ollama import ChatOllama
-            return ChatOllama(model=model_name.removeprefix("ollama:"), **extra_kwargs)  # type: ignore[arg-type]
-        except Exception:
-            pass
-    elif model_name.startswith("gemini-"):
-        try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
-        except Exception:
-            pass
-
-    # Stub model for pipeline testing without API keys
-    class _StubChatModel(BaseChatModel):
-        """Returns placeholder summaries so the pipeline runs end-to-end."""
-
-        @property
-        def _llm_type(self) -> str:
-            return "stub"
-
-        def _generate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> object:
-            from langchain_core.outputs import ChatGeneration, ChatResult
-            text = f"[stub summary of {len(messages[-1].content)} chars]"
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])
-
-        async def _agenerate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> object:
-            return self._generate(messages, **kwargs)
-
-    if model_name != "stub":
-        rprint(f"[yellow]Warning:[/yellow] Could not initialize '{model_name}', falling back to stub LLM.")
-
-    return _StubChatModel()
-
-
 @app.command()
 def chat(
     path: Annotated[Path, typer.Argument(help="Path to the previously-analyzed manuscript.")],
@@ -432,7 +319,13 @@ def chat(
 
     cfg = GhostreaderConfig.load(path)
     label = path.stem if path.is_file() else path.name
-    run_chat(state, model=model, label=label, embedding_model=cfg.embedding_model)
+    run_chat(
+        state,
+        model=model,
+        manuscript_path=path,
+        label=label,
+        embedding_model=cfg.embedding_model,
+    )
 
 
 @app.command()

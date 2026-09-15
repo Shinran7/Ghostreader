@@ -20,7 +20,7 @@ from ghostreader.paths import config_path as _find_config_path
 class GhostreaderConfig(BaseModel):
     """Ghostreader configuration."""
 
-    model: str | None = None
+    model: str | None = "gemini-3.8-flash"
     embedding_model: str = "all-MiniLM-L6-v2"
     temperature: float | None = None
     max_tokens: int | None = None
@@ -55,7 +55,10 @@ class GhostreaderConfig(BaseModel):
             return str(val)
 
         lines = [
-            f"# LLM model (required). e.g. gpt-4o, claude-sonnet-4-20250514, grok-beta, ollama:llama3, gemini-2.5-pro",
+            # LLM model (required). Examples: gemini-3.8-flash,
+            # accounts/fireworks/models/minimax-m3, gpt-4o, ollama:llama3
+            "# LLM model (required). e.g. gemini-3.8-flash, "
+            "accounts/fireworks/models/minimax-m3, gpt-4o, ollama:llama3",
             f"model: {_fmt(self.model)}",
             f"",
             f"# Embedding model for vector search. Default: all-MiniLM-L6-v2 (local, no API key)",

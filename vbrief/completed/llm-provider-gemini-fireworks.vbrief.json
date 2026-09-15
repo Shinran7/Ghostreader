@@ -1,0 +1,33 @@
+{
+  "vBRIEFInfo": {
+    "version": "0.6",
+    "author": "agent:implement",
+    "description": "Align Ghostreader LLM providers with Ghostwriter/Autonomicon: Gemini native semantics + Fireworks, default gemini-3.8-flash",
+    "created": "2026-09-15T12:00:00Z",
+    "updated": "2026-09-15T20:46:39Z"
+  },
+  "plan": {
+    "title": "LLM Provider Alignment (Gemini + Fireworks)",
+    "status": "completed",
+    "narrative": "Extract shared LLM factory; add Fireworks; align Gemini keys/thinking/retries; fix OpenAI/ollama collision; unify chat; flip default to gemini-3.8-flash. Design: grok-design-doc-ec0ee903.md. Traces sister provider stack.",
+    "items": [
+      {
+        "title": "Shared LLM factory",
+        "narrative": "Move load_secrets/resolve_model_name/get_llm into ghostreader/llm.py; cli re-exports."
+      },
+      {
+        "title": "Gemini + Fireworks + routing fix",
+        "narrative": "Fireworks ChatOpenAI path; Gemini api_key preference + thinking_level; ollama before OpenAI; pin langchain-google-genai>=4.2.6."
+      },
+      {
+        "title": "Unify chat",
+        "narrative": "Remove _get_chat_llm; chat uses get_llm with manuscript_path."
+      },
+      {
+        "title": "Default + secrets example",
+        "narrative": "config.yaml and GhostreaderConfig default gemini-3.8-flash; update llm.example; copy keys from Ghostwriter."
+      }
+    ],
+    "updated": "2026-09-15T20:53:04Z"
+  }
+}
