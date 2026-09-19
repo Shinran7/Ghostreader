@@ -18,6 +18,34 @@ FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
 DEFAULT_MODEL = "gemini-3.8-flash"
 
 
+def message_text(content: object) -> str:
+    """Normalize chat-model ``response.content`` to plain text.
+
+    Some providers (notably Gemini via langchain) return a list of content
+    parts instead of a bare string. ``str(list)`` dumps a Python repr and
+    breaks JSON/summary parsing downstream.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if text:
+                    parts.append(str(text))
+            else:
+                text = getattr(item, "text", None)
+                if text:
+                    parts.append(str(text))
+        return "\n".join(parts).strip()
+    return str(content).strip()
+
+
 def load_secrets() -> None:
     """Load API keys from secrets/llm.env if it exists.
 

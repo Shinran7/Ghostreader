@@ -16,6 +16,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.graph import AgentFinding, AgentOutput, AnalysisState
+from ghostreader.llm import message_text
 
 _SYSTEM_PROMPT = """You are the Synthesis Agent in a multi-agent literary analysis pipeline.
 Your job is to combine findings from three specialist agents (Prose Analyst,
@@ -241,7 +242,7 @@ async def _synthesis_typesafe_path(
             HumanMessage(content=user_message),
         ]
     )
-    executive_summary = str(response.content).strip()
+    executive_summary = message_text(response.content)
 
     report: dict[str, Any] = {
         "executive_summary": executive_summary,
@@ -287,7 +288,7 @@ async def _synthesis_llm_path(
         ]
     )
 
-    raw_text = str(response.content).strip()
+    raw_text = message_text(response.content)
     report = _parse_report(raw_text)
 
     all_findings = _collect_all_findings(state)

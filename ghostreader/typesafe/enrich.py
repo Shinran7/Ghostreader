@@ -9,6 +9,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.graph import AgentFinding
+from ghostreader.llm import message_text
 
 _ENRICH_SYSTEM = """You enrich literary-analysis findings with grounded quotes.
 Severity for each dimension is FIXED and must not be changed.
@@ -81,7 +82,7 @@ async def enrich_findings_batch(
     response = await llm.ainvoke(
         [SystemMessage(content=_ENRICH_SYSTEM), HumanMessage(content=user)]
     )
-    raw_text = str(response.content).strip()
+    raw_text = message_text(response.content)
     parsed = _parse_enrich_map(raw_text)
     enrich_raw: dict[str, str | None] = {d: None for d in dimensions}
     failures = 0
@@ -154,7 +155,7 @@ async def consistency_tiebreak_batch(
     response = await llm.ainvoke(
         [SystemMessage(content=_TIEBREAK_SYSTEM), HumanMessage(content=user)]
     )
-    raw_text = str(response.content).strip()
+    raw_text = message_text(response.content)
     parsed = _parse_enrich_map(raw_text)
 
     for dim in dimensions:
