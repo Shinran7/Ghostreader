@@ -145,14 +145,10 @@ def _parse_findings(raw: str) -> list[AgentFinding]:
     ]
 
 
-async def narrative_analyst_node(
+async def _narrative_llm_path(
     state: AnalysisState, llm: BaseChatModel
 ) -> dict[str, Any]:
-    """LangGraph node: analyze narrative structure across the manuscript.
-
-    Reads chapters, summary_hierarchy, and config from state.
-    Returns narrative_output to be merged into state.
-    """
+    """Original chat-LLM JSON judgment path."""
     config = state.get("config", {})
     genre = config.get("genre")
     chapters = state.get("chapters", [])
@@ -192,6 +188,105 @@ async def narrative_analyst_node(
     }
 
     return {"narrative_output": output}
+
+
+async def _narrative_typesafe_path(
+    state: AnalysisState, llm: BaseChatModel, typesafe_client: Any
+) -> dict[str, Any]:
+    """TypeSafe Choice judgments + narrow LLM enrich for concern/low-conf."""
+    from ghostreader.typesafe.adapters import (
+        build_typesafe_raw_response,
+        choices_to_findings,
+        serialize_choice_answers,
+    )
+    from ghostreader.typesafe.client import ask
+    from ghostreader.typesafe.enrich import enrich_findings_batch
+    from ghostreader.typesafe.questions import NARRATIVE_DIMENSIONS, narrative_questions
+    from ghostreader.typesafe.routing import needs_choice_enrich
+    from ghostreader.typesafe.state_builders import build_narrative_state
+
+    config = state.get("config", {})
+    floor = float(config.get("typesafe_confidence_floor", 0.55))
+
+    ts_state = build_narrative_state(state)
+    response = await ask(
+        typesafe_client, state=ts_state, questions=narrative_questions()
+    )
+    findings, ratings = choices_to_findings(
+        response, NARRATIVE_DIMENSIONS, confidence_floor=floor
+    )
+
+    enrich_dims = [
+        f["dimension"]
+        for f in findings
+        if needs_choice_enrich(
+            str(f.get("severity", "neutral")),
+            float(f.get("_certainty", 0.0) or 0.0),  # type: ignore[arg-type]
+            confidence_floor=floor,
+        )
+    ]
+
+    chapters = state.get("chapters", [])
+    hierarchy = state.get("summary_hierarchy", {})
+    context = (
+        f"## Summary Hierarchy\n{_format_summary_hierarchy(hierarchy)}\n\n"
+        f"## Manuscript Text\n{_format_chapter_excerpts(chapters)}"
+    )
+
+    enrich_raw: dict[str, Any] = {}
+    parse_failures = 0
+    llm_enrichments = 0
+    low_conf = sum(
+        1
+        for f in findings
+        if float(f.get("_certainty", 1.0) or 1.0) < floor  # type: ignore[arg-type]
+    )
+    if enrich_dims:
+        findings, enrich_raw, parse_failures = await enrich_findings_batch(
+            llm, findings, enrich_dims, context_block=context
+        )
+        llm_enrichments = len(enrich_dims)
+        by_dim = {f.get("dimension"): f for f in findings}
+        for dim in enrich_dims:
+            f = by_dim.get(dim)
+            if f and dim in ratings:
+                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
+
+    stats = {
+        "judgments": len(NARRATIVE_DIMENSIONS),
+        "llm_enrichments": llm_enrichments,
+        "low_confidence_enriches": low_conf,
+        "enrich_parse_failures": parse_failures,
+    }
+    raw = build_typesafe_raw_response(
+        answers=serialize_choice_answers(response),
+        dimension_ratings=ratings,
+        enrich_raw=enrich_raw,
+        stats=stats,
+    )
+    output: AgentOutput = {
+        "agent": "narrative_analyst",
+        "findings": findings,
+        "raw_response": raw,
+    }
+    return {"narrative_output": output}
+
+
+async def narrative_analyst_node(
+    state: AnalysisState,
+    llm: BaseChatModel,
+    typesafe_client: Any | None = None,
+) -> dict[str, Any]:
+    """LangGraph node: analyze narrative structure across the manuscript.
+
+    Reads chapters, summary_hierarchy, and config from state.
+    Returns narrative_output to be merged into state.
+    """
+    config = state.get("config", {})
+    if config.get("typesafe_enabled"):
+        assert typesafe_client is not None
+        return await _narrative_typesafe_path(state, llm, typesafe_client)
+    return await _narrative_llm_path(state, llm)
 
 
 __all__ = ["narrative_analyst_node"]

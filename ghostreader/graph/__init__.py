@@ -17,6 +17,9 @@ class AnalysisConfig(TypedDict, total=False):
     format: str  # "markdown" | "json"
     db_path: str  # path to LanceDB directory
     seed_meta: dict[str, Any]  # author-stated intent from seed.yaml
+    typesafe_enabled: bool
+    typesafe_confidence_floor: float
+    typesafe_noul_positive_threshold: float
 
 
 class AgentFinding(TypedDict, total=False):

@@ -17,6 +17,19 @@ class TestGhostreaderConfig:
         assert cfg.format == "markdown"
         assert cfg.temperature is None
         assert cfg.max_tokens is None
+        assert cfg.typesafe_enabled is False
+        assert cfg.typesafe_confidence_floor == 0.55
+        assert cfg.typesafe_noul_positive_threshold == 0.65
+
+    def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
+        cfg = GhostreaderConfig(typesafe_enabled=True)
+        path = cfg.save(tmp_path)
+        text = path.read_text(encoding="utf-8")
+        assert "typesafe_enabled: true" in text
+        assert "typesafe_confidence_floor: 0.55" in text
+        assert "typesafe_noul_positive_threshold: 0.65" in text
+        loaded = GhostreaderConfig.load(tmp_path)
+        assert loaded.typesafe_enabled is True
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

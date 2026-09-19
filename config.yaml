@@ -19,3 +19,12 @@ depth: standard
 
 # Output format: markdown or json
 format: markdown
+
+# Use TypeSafe.ai (Jev) for judgment severities/gates. Needs TYPESAFE_API_KEY.
+typesafe_enabled: true
+
+# Below this Choice confidence, enrich with LLM quotes (severity stays TypeSafe).
+typesafe_confidence_floor: 0.55
+
+# Consistency Noul at or above this → concern + enrich. Mid-band always LLM tie-break.
+typesafe_noul_positive_threshold: 0.65

@@ -64,6 +64,16 @@ class TestAnalyzeSmoke:
     ) -> None:
         """Smoke test: analyze runs end-to-end with the stub LLM."""
         monkeypatch.chdir(tmp_manuscript_dir)
-        result = runner.invoke(app, ["analyze", str(tmp_manuscript_dir), "--model", "stub", "--no-cache"])
+        result = runner.invoke(
+            app,
+            [
+                "analyze",
+                str(tmp_manuscript_dir),
+                "--model",
+                "stub",
+                "--no-cache",
+                "--no-typesafe",
+            ],
+        )
         assert result.exit_code == 0
         assert "Analysis complete" in result.output

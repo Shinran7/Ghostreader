@@ -54,21 +54,23 @@ async def fact_extraction_node(state: AnalysisState) -> dict[str, Any]:
 # bind the LLM instance at graph-build time.
 
 
-def _make_prose_node(llm: BaseChatModel):  # noqa: ANN202
+def _make_prose_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
-        return await prose_analyst_node(state, llm)
+        return await prose_analyst_node(state, llm, typesafe_client=typesafe_client)
     return _node
 
 
-def _make_narrative_node(llm: BaseChatModel):  # noqa: ANN202
+def _make_narrative_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
-        return await narrative_analyst_node(state, llm)
+        return await narrative_analyst_node(state, llm, typesafe_client=typesafe_client)
     return _node
 
 
-def _make_consistency_node(llm: BaseChatModel):  # noqa: ANN202
+def _make_consistency_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
-        return await scene_consistency_checker_node(state, llm)
+        return await scene_consistency_checker_node(
+            state, llm, typesafe_client=typesafe_client
+        )
     return _node
 
 
@@ -106,11 +108,17 @@ def _route_to_synthesis(state: AnalysisState) -> str:
 # ── Graph builder ────────────────────────────────────────────────────
 
 
-def build_analysis_graph(llm: BaseChatModel) -> Any:
+def build_analysis_graph(
+    llm: BaseChatModel,
+    *,
+    typesafe_client: Any | None = None,
+) -> Any:
     """Build and compile the LangGraph analysis workflow.
 
     Args:
         llm: The langchain BaseChatModel to use for all agent LLM calls.
+        typesafe_client: Optional live AsyncTypeSafeClient closed over by
+            analyst nodes. Never stored in AnalysisState.
 
     Returns:
         A compiled LangGraph that can be invoked with AnalysisState.
@@ -121,9 +129,11 @@ def build_analysis_graph(llm: BaseChatModel) -> Any:
     graph.add_node("ingestion", ingestion_node)
     graph.add_node("fact_extraction", fact_extraction_node)
     graph.add_node("repetition", repetition_node)
-    graph.add_node("prose_analyst", _make_prose_node(llm))
-    graph.add_node("narrative_analyst", _make_narrative_node(llm))
-    graph.add_node("consistency_checker", _make_consistency_node(llm))
+    graph.add_node("prose_analyst", _make_prose_node(llm, typesafe_client))
+    graph.add_node("narrative_analyst", _make_narrative_node(llm, typesafe_client))
+    graph.add_node(
+        "consistency_checker", _make_consistency_node(llm, typesafe_client)
+    )
     graph.add_node("synthesis", _make_synthesis_node(llm))
 
     # ── Define edges ──

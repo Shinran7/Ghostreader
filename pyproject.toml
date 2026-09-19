@@ -23,6 +23,7 @@ dependencies = [
     "ebooklib>=0.18",
     "scikit-learn>=1.4",
     "sentence-transformers>=3.0",
+    "typesafe-sdk>=0.7.0",
 ]
 
 [project.optional-dependencies]
@@ -57,3 +58,8 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.4.0",
+]

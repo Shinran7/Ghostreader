@@ -27,6 +27,9 @@ class GhostreaderConfig(BaseModel):
     genre: str | None = None
     depth: Literal["quick", "standard", "deep"] = "standard"
     format: Literal["markdown", "json"] = "markdown"
+    typesafe_enabled: bool = False
+    typesafe_confidence_floor: float = 0.55
+    typesafe_noul_positive_threshold: float = 0.65
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -79,6 +82,15 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Output format: markdown or json",
             f"format: {_fmt(self.format)}",
+            f"",
+            f"# Use TypeSafe.ai (Jev) for judgment severities/gates. Needs TYPESAFE_API_KEY.",
+            f"typesafe_enabled: {_fmt(self.typesafe_enabled)}",
+            f"",
+            f"# Below this Choice confidence, enrich with LLM quotes (severity stays TypeSafe).",
+            f"typesafe_confidence_floor: {_fmt(self.typesafe_confidence_floor)}",
+            f"",
+            f"# Consistency Noul at or above this → concern + enrich. Mid-band always LLM tie-break.",
+            f"typesafe_noul_positive_threshold: {_fmt(self.typesafe_noul_positive_threshold)}",
             f"",
         ]
 

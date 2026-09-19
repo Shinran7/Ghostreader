@@ -67,6 +67,13 @@ OutputOption = Annotated[
     Optional[Path],
     typer.Option("--output", "-o", help="Write an additional copy of the report to this path."),
 ]
+TypesafeOption = Annotated[
+    Optional[bool],
+    typer.Option(
+        "--typesafe/--no-typesafe",
+        help="Use TypeSafe for judgments (overrides config.yaml). Default: config or off.",
+    ),
+]
 
 
 # ── Commands ─────────────────────────────────────────────────────
@@ -109,6 +116,7 @@ def analyze(
         typer.Option("--show-rewrites", help="Include rewrite suggestions in the report."),
     ] = False,
     output: OutputOption = None,
+    typesafe: TypesafeOption = None,
 ) -> None:
     """Analyze a manuscript and produce a literary diagnostic report.
 
@@ -125,6 +133,7 @@ def analyze(
             no_cache=no_cache,
             show_rewrites=show_rewrites,
             output_path=output,
+            typesafe=typesafe,
         )
     )
 
@@ -139,6 +148,7 @@ async def _run_analyze(
     no_cache: bool = False,
     show_rewrites: bool = False,
     output_path: Path | None = None,
+    typesafe: bool | None = None,
 ) -> None:
     """Execute the full analysis pipeline: ingest → detect → analyze → report."""
     from ghostreader.analyzers.repetition_detector import RepetitionDetector
@@ -154,18 +164,47 @@ async def _run_analyze(
     from ghostreader.ingestion.indexer import index_manuscript
     from ghostreader.ingestion.markdown_loader import load_markdown
     from ghostreader.ingestion.summarizer import build_summary_hierarchy
+    from ghostreader.llm import load_secrets
     from ghostreader.report import ReportOutput
     from ghostreader.report.json_export import export_json
     from ghostreader.report.markdown_writer import write_markdown_report
     from ghostreader.report.rewrites import generate_rewrites
     from ghostreader.report.terminal_output import render_report
+    from ghostreader.typesafe import ensure_typesafe_api_key, resolve_typesafe_enabled
+    from ghostreader.typesafe.client import TypesafeConfigError
 
     path = path.resolve()
     state = state_dir_for(path)
     cfg = GhostreaderConfig.load(path)
     fmt = output_format or "terminal"
     analysis_depth = depth or "standard"
+
+    typesafe_on = resolve_typesafe_enabled(typesafe, cfg)
+    load_secrets()
+    if typesafe_on:
+        try:
+            ensure_typesafe_api_key()
+        except TypesafeConfigError as exc:
+            rprint(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
+
     llm = _get_llm(model, manuscript_path=path)
+
+    if typesafe_on:
+        llm_type = getattr(llm, "_llm_type", None)
+        if llm_type == "stub" and (model or "").strip().lower() != "stub":
+            rprint(
+                "[red]Error:[/red] TypeSafe mode still needs a real chat-model API key "
+                "for facts, summaries, enrich, and the executive summary.\n"
+                "  Set the provider key in secrets/llm.env, or pass --no-typesafe / "
+                "--model stub (tests only)."
+            )
+            raise typer.Exit(code=1)
+        floor = cfg.typesafe_confidence_floor
+        rprint(
+            f"[cyan]TypeSafe judgments: on[/cyan] "
+            f"(jev-latest, confidence floor {floor})"
+        )
 
     # ── Seed.yaml: author-stated intent ──
     from ghostreader.seed import load_seed_meta
@@ -228,6 +267,9 @@ async def _run_analyze(
         "format": fmt,
         "db_path": str(db_path),
         "seed_meta": seed_meta,
+        "typesafe_enabled": typesafe_on,
+        "typesafe_confidence_floor": cfg.typesafe_confidence_floor,
+        "typesafe_noul_positive_threshold": cfg.typesafe_noul_positive_threshold,
     }
     initial_state: dict = {
         "chapters": chapters_to_dicts(chapters),
@@ -241,8 +283,15 @@ async def _run_analyze(
 
     # ── 4. Run LangGraph analysis workflow ──
     rprint("[cyan]Running analysis agents...[/cyan]")
-    graph = build_analysis_graph(llm)
-    result = await graph.ainvoke(initial_state)
+    if typesafe_on:
+        from typesafe_sdk import AsyncTypeSafeClient
+
+        async with AsyncTypeSafeClient() as typesafe_client:
+            graph = build_analysis_graph(llm, typesafe_client=typesafe_client)
+            result = await graph.ainvoke(initial_state)
+    else:
+        graph = build_analysis_graph(llm, typesafe_client=None)
+        result = await graph.ainvoke(initial_state)
 
     final_report = result.get("final_report", {})
     rprint("[green]Analysis complete.[/green]")

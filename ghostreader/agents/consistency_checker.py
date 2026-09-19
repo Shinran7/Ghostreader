@@ -244,15 +244,111 @@ Return ONLY the JSON array, no markdown fencing or commentary.
 """
 
 
+async def _consistency_typesafe_path(
+    state: AnalysisState, llm: BaseChatModel, typesafe_client: Any
+) -> dict[str, Any]:
+    """TypeSafe Noul gates + enrich/tie-break. Live graph entry uses this."""
+    from ghostreader.typesafe.adapters import (
+        build_typesafe_raw_response,
+        consistency_from_nouls,
+        serialize_noul_answers,
+    )
+    from ghostreader.typesafe.client import ask
+    from ghostreader.typesafe.enrich import (
+        consistency_tiebreak_batch,
+        enrich_findings_batch,
+    )
+    from ghostreader.typesafe.questions import CONSISTENCY_DIMENSIONS, consistency_questions
+    from ghostreader.typesafe.state_builders import build_consistency_state
+
+    config = state.get("config", {})
+    positive = float(config.get("typesafe_noul_positive_threshold", 0.65))
+
+    ts_state = build_consistency_state(state)
+    response = await ask(
+        typesafe_client, state=ts_state, questions=consistency_questions()
+    )
+    findings, ratings, enrich_dims, mid_dims = consistency_from_nouls(
+        response, positive_threshold=positive
+    )
+
+    # Context for enrich / tie-break mirrors TypeSafe state preference.
+    if "fact_sheets" in ts_state:
+        context = f"## Scene Fact Sheets\n{ts_state['fact_sheets']}"
+    else:
+        context = (
+            f"## Summary Hierarchy\n{ts_state.get('summary_hierarchy', '')}\n\n"
+            f"## Manuscript Text\n{ts_state.get('manuscript', '')}"
+        )
+
+    enrich_raw: dict[str, Any] = {}
+    parse_failures = 0
+    llm_enrichments = 0
+    noul_tie_breaks = 0
+
+    if enrich_dims:
+        findings, enrich_raw, parse_failures = await enrich_findings_batch(
+            llm,
+            findings,
+            enrich_dims,
+            context_block=context,
+            include_counter_evidence=True,
+        )
+        llm_enrichments = len(enrich_dims)
+        by_dim = {f.get("dimension"): f for f in findings}
+        for dim in enrich_dims:
+            f = by_dim.get(dim)
+            if f and dim in ratings:
+                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
+
+    if mid_dims:
+        mid_findings, mid_ratings, mid_raw, mid_failures = await consistency_tiebreak_batch(
+            llm, mid_dims, context_block=context
+        )
+        findings.extend(mid_findings)
+        ratings.update(mid_ratings)
+        enrich_raw.update(mid_raw)
+        parse_failures += mid_failures
+        noul_tie_breaks = len(mid_dims)
+        llm_enrichments += len(mid_dims)
+
+    stats = {
+        "judgments": len(CONSISTENCY_DIMENSIONS),
+        "llm_enrichments": llm_enrichments,
+        "enrich_parse_failures": parse_failures,
+        "noul_tie_breaks": noul_tie_breaks,
+    }
+    raw = build_typesafe_raw_response(
+        answers=serialize_noul_answers(response),
+        dimension_ratings=ratings,
+        enrich_raw=enrich_raw,
+        stats=stats,
+    )
+    output: AgentOutput = {
+        "agent": "consistency_checker",
+        "findings": findings,
+        "raw_response": raw,
+    }
+    return {"consistency_output": output}
+
+
 async def scene_consistency_checker_node(
-    state: AnalysisState, llm: BaseChatModel
+    state: AnalysisState,
+    llm: BaseChatModel,
+    typesafe_client: Any | None = None,
 ) -> dict[str, Any]:
     """LangGraph node: check consistency using scene-level fact sheets.
 
-    When ``scene_facts`` are available in state, uses the structured
+    When TypeSafe is enabled, runs Noul gates (fact sheets preferred).
+    When off and ``scene_facts`` are available, uses the structured
     fact-sheet comparison path. Otherwise falls back to the truncation-
     based ``consistency_checker_node``.
     """
+    config = state.get("config", {})
+    if config.get("typesafe_enabled"):
+        assert typesafe_client is not None
+        return await _consistency_typesafe_path(state, llm, typesafe_client)
+
     scene_facts = state.get("scene_facts", [])  # type: ignore[literal-required]
 
     if not scene_facts:
@@ -260,7 +356,6 @@ async def scene_consistency_checker_node(
 
     from ghostreader.agents.fact_extractor import format_fact_sheets
 
-    config = state.get("config", {})
     genre = config.get("genre")
     seed_meta = config.get("seed_meta", {})
     author_intent = build_author_intent_block(seed_meta)
