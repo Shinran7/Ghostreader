@@ -14,7 +14,7 @@ from rich.table import Table
 from ghostreader.config import GhostreaderConfig
 from ghostreader.llm import get_llm as _get_llm
 from ghostreader.llm import resolve_model_name as _resolve_model_name
-from ghostreader.paths import state_dir_for
+from ghostreader.paths import manuscript_display_name, state_dir_for
 
 # Re-exports for tests / older imports.
 __all__ = ["app", "_get_llm", "_resolve_model_name"]
@@ -297,7 +297,7 @@ async def _run_analyze(
     rprint("[green]Analysis complete.[/green]")
 
     # ── 5. Build typed report ──
-    manuscript_name = path.stem if path.is_file() else path.name
+    manuscript_name = manuscript_display_name(path)
     report = ReportOutput.from_final_report(
         final_report, manuscript_name=manuscript_name
     )
@@ -367,7 +367,7 @@ def chat(
         raise typer.Exit(code=1)
 
     cfg = GhostreaderConfig.load(path)
-    label = path.stem if path.is_file() else path.name
+    label = manuscript_display_name(path)
     run_chat(
         state,
         model=model,

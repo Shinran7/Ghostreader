@@ -17,6 +17,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from ghostreader.paths import manuscript_display_name
+
 _CONSOLE = Console()
 
 # Canonical analysis dimensions (from synthesis agent prompt)
@@ -207,8 +209,8 @@ def _render_table(
         show_lines=True,
     )
 
-    label_a = path_a.stem or path_a.name
-    label_b = path_b.stem or path_b.name
+    label_a = manuscript_display_name(path_a)
+    label_b = manuscript_display_name(path_b)
 
     table.add_column("Dimension", style="cyan", min_width=28)
     table.add_column(label_a, justify="center", min_width=12)
@@ -261,8 +263,8 @@ def _render_summary(
     a = summary["manuscript_a"]
     b = summary["manuscript_b"]
 
-    label_a = path_a.stem or path_a.name
-    label_b = path_b.stem or path_b.name
+    label_a = manuscript_display_name(path_a)
+    label_b = manuscript_display_name(path_b)
 
     text = (
         f"[cyan]{label_a}:[/cyan] "

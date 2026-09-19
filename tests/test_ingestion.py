@@ -23,6 +23,15 @@ class TestLoadMarkdown:
         assert chapters[0].title == "My Story"
         assert chapters[0].chapter_number == 1
 
+    def test_load_single_chapter_file_uses_filename_number(self, tmp_path: Path) -> None:
+        md = tmp_path / "chapters" / "chapter-018.md"
+        md.parent.mkdir(parents=True)
+        md.write_text("# Dark Watch\n\nThe roll ran itself.", encoding="utf-8")
+        chapters = load_markdown(md)
+        assert len(chapters) == 1
+        assert chapters[0].chapter_number == 18
+        assert chapters[0].title == "Dark Watch"
+
     def test_load_directory_numbered(self, tmp_manuscript_dir: Path) -> None:
         chapters = load_markdown(tmp_manuscript_dir)
         assert len(chapters) == 3

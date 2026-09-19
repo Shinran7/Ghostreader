@@ -10,6 +10,7 @@ from ghostreader.paths import (
     config_path,
     find_project_root,
     find_secrets_env,
+    manuscript_display_name,
     next_report_path,
     state_dir_for,
 )
@@ -87,6 +88,43 @@ class TestStateDirFor:
         ms_dir.mkdir(parents=True)
         state = state_dir_for(ms_dir, project_root=tmp_path)
         assert state.name == "my-novel"
+
+    def test_nests_numbered_chapter_under_story(self, tmp_path: Path) -> None:
+        chapter = (
+            tmp_path / "stories" / "the-jailer-s-wound" / "chapters" / "chapter-018.md"
+        )
+        chapter.parent.mkdir(parents=True)
+        chapter.write_text("# Eighteen\n\ntext", encoding="utf-8")
+        state = state_dir_for(chapter, project_root=tmp_path)
+        assert state == tmp_path / ".ghostreader" / "the-jailer-s-wound" / "chapter-018"
+        assert state.is_dir()
+
+    def test_plain_md_file_still_uses_stem(self, tmp_path: Path) -> None:
+        md = tmp_path / "oneshot.md"
+        md.write_text("# Hi\n", encoding="utf-8")
+        state = state_dir_for(md, project_root=tmp_path)
+        assert state.name == "oneshot"
+
+
+class TestManuscriptDisplayName:
+    def test_numbered_chapter_file(self, tmp_path: Path) -> None:
+        chapter = tmp_path / "the-jailer-s-wound" / "chapters" / "chapter-018.md"
+        chapter.parent.mkdir(parents=True)
+        chapter.write_text("x", encoding="utf-8")
+        assert (
+            manuscript_display_name(chapter)
+            == "the-jailer-s-wound · Chapter 18"
+        )
+
+    def test_plain_file(self, tmp_path: Path) -> None:
+        md = tmp_path / "oneshot.md"
+        md.write_text("x", encoding="utf-8")
+        assert manuscript_display_name(md) == "oneshot"
+
+    def test_generic_chapters_dir(self, tmp_path: Path) -> None:
+        ms_dir = tmp_path / "bay-four" / "chapters"
+        ms_dir.mkdir(parents=True)
+        assert manuscript_display_name(ms_dir) == "bay-four"
 
 
 class TestNextReportPath:

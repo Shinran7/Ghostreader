@@ -49,30 +49,84 @@ def config_path(start: Path | None = None) -> Path | None:
 # Directory names that are too generic to use as a manuscript identifier.
 _GENERIC_DIR_NAMES = {"chapters", "src", "manuscript", "manuscripts", "content", "text", "docs"}
 
+# Matches chapter-001.md / chapter-18.md (same convention as markdown_loader).
+_CHAPTER_FILE_RE = re.compile(r"^chapter-(\d+)\.md$", re.IGNORECASE)
+
+
+def _slug_token(name: str) -> str:
+    """Sanitize one path segment to a filesystem-safe slug token."""
+    slug = re.sub(r"[^\w\-]", "-", name.lower()).strip("-")
+    return slug or "manuscript"
+
+
+def _skip_generic_parents(directory: Path) -> Path:
+    """Walk up past generic folder names like ``chapters``."""
+    current = directory
+    while current.name.lower() in _GENERIC_DIR_NAMES and current.parent != current:
+        current = current.parent
+    return current
+
+
+def _manuscript_slug_parts(manuscript_path: Path) -> list[str]:
+    """Derive state-dir path parts under ``.ghostreader/``.
+
+    Examples:
+        ``novel.epub`` → ``[novel]``
+        ``my-novel/`` (dir) → ``[my-novel]``
+        ``bay-four/chapters/`` → ``[bay-four]``
+        ``the-jailer-s-wound/chapters/chapter-018.md``
+            → ``[the-jailer-s-wound, chapter-018]``
+        ``standalone.md`` → ``[standalone]``
+    """
+    resolved = manuscript_path.resolve()
+
+    if resolved.is_file():
+        chapter_match = _CHAPTER_FILE_RE.match(resolved.name)
+        if chapter_match:
+            story_dir = _skip_generic_parents(resolved.parent)
+            story = _slug_token(story_dir.name)
+            chapter = f"chapter-{int(chapter_match.group(1)):03d}"
+            # Avoid story/story when the file sits directly under a non-generic dir
+            # named like the chapter; still nest under the story folder.
+            if story_dir == resolved.parent and story == _slug_token(resolved.stem):
+                return [chapter]
+            return [story, chapter]
+        return [_slug_token(resolved.stem)]
+
+    # Directory manuscript
+    target = _skip_generic_parents(resolved)
+    return [_slug_token(target.name)]
+
 
 def _manuscript_slug(manuscript_path: Path) -> str:
-    """Derive a human-readable directory name from the manuscript path.
+    """Flat slug for display/compat (joins nested parts with ``/``)."""
+    return "/".join(_manuscript_slug_parts(manuscript_path))
 
-    When the immediate name is generic (e.g. 'chapters'), uses the parent
-    directory name instead.
+
+def manuscript_display_name(manuscript_path: Path) -> str:
+    """Human label for reports and terminal headers.
+
+    ``.../the-jailer-s-wound/chapters/chapter-018.md``
+        → ``the-jailer-s-wound · Chapter 18``
     """
     resolved = manuscript_path.resolve()
     if resolved.is_file():
-        name = resolved.stem
-    else:
-        name = resolved.name
-        if name.lower() in _GENERIC_DIR_NAMES and resolved.parent.name:
-            name = resolved.parent.name
-    # Sanitize to filesystem-safe slug
-    slug = re.sub(r"[^\w\-]", "-", name.lower()).strip("-")
-    return slug or "manuscript"
+        chapter_match = _CHAPTER_FILE_RE.match(resolved.name)
+        if chapter_match:
+            story_dir = _skip_generic_parents(resolved.parent)
+            return f"{story_dir.name} · Chapter {int(chapter_match.group(1))}"
+        return resolved.stem
+    target = _skip_generic_parents(resolved)
+    return target.name
 
 
 def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Path:
     """Return the per-manuscript state directory, creating it if needed.
 
-    The directory lives under ``<project_root>/.ghostreader/<name>/``
-    using the manuscript's human-readable name.
+    The directory lives under ``<project_root>/.ghostreader/<slug>/``.
+    Single ``chapter-NNN.md`` files nest as
+    ``.ghostreader/<story>/chapter-NNN/`` so Autonomicon-style per-chapter
+    calls group under the story without colliding.
     """
     if project_root is None:
         project_root = (
@@ -81,8 +135,10 @@ def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Pa
             or manuscript_path.parent
         )
 
-    slug = _manuscript_slug(manuscript_path)
-    state = project_root / ".ghostreader" / slug
+    parts = _manuscript_slug_parts(manuscript_path)
+    state = project_root / ".ghostreader"
+    for part in parts:
+        state = state / part
     state.mkdir(parents=True, exist_ok=True)
 
     # Breadcrumb so we can trace slug back to the original path
@@ -131,6 +187,7 @@ __all__ = [
     "config_path",
     "find_project_root",
     "find_secrets_env",
+    "manuscript_display_name",
     "next_report_path",
     "state_dir_for",
 ]

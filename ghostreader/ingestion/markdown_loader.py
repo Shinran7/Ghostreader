@@ -29,15 +29,34 @@ def load_markdown(path: Path) -> list[Chapter]:
     raise FileNotFoundError(msg)
 
 
+def _chapter_number_from_filename(path: Path) -> int | None:
+    """Return N from ``chapter-NNN.md``, or None if the name does not match."""
+    match = _CHAPTER_RE.match(path.name)
+    return int(match.group(1)) if match else None
+
+
 def _load_single_file(path: Path) -> list[Chapter]:
-    """Treat a single .md file as one chapter (chapter 1)."""
+    """Treat a single .md file as one chapter.
+
+    If the filename is ``chapter-NNN.md``, use N as the chapter number so
+    quotes and reports say \"Ch 18\" instead of always \"Ch 1\".
+    Otherwise default to chapter 1 (standalone story file).
+    """
     if path.suffix.lower() != ".md":
         msg = f"Expected a .md file, got: {path.name}"
         raise ValueError(msg)
 
     content = path.read_text(encoding="utf-8")
     title = _extract_title(content, fallback=path.stem)
-    return [Chapter(title=title, content=content, chapter_number=1, source_path=path)]
+    chapter_number = _chapter_number_from_filename(path) or 1
+    return [
+        Chapter(
+            title=title,
+            content=content,
+            chapter_number=chapter_number,
+            source_path=path,
+        )
+    ]
 
 
 def _load_directory(directory: Path) -> list[Chapter]:
