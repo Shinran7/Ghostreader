@@ -30,6 +30,9 @@ class GhostreaderConfig(BaseModel):
     typesafe_enabled: bool = False
     typesafe_confidence_floor: float = 0.55
     typesafe_noul_positive_threshold: float = 0.65
+    companion_prior: Literal["full", "rolling"] = "full"
+    companion_rolling_min_chapters: int = 15
+    companion_fact_chars_budget: int = 48000
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -91,6 +94,15 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Consistency Noul at or above this → concern + enrich. Mid-band always LLM tie-break.",
             f"typesafe_noul_positive_threshold: {_fmt(self.typesafe_noul_positive_threshold)}",
+            f"",
+            f"# Companion prior facts: full (1…N) or rolling (last K on budget/config).",
+            f"companion_prior: {_fmt(self.companion_prior)}",
+            f"",
+            f"# When rolling engages, keep at least this many recent chapters.",
+            f"companion_rolling_min_chapters: {_fmt(self.companion_rolling_min_chapters)}",
+            f"",
+            f"# Auto-roll when formatted fact sheets exceed this many characters.",
+            f"companion_fact_chars_budget: {_fmt(self.companion_fact_chars_budget)}",
             f"",
         ]
 

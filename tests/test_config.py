@@ -20,6 +20,9 @@ class TestGhostreaderConfig:
         assert cfg.typesafe_enabled is False
         assert cfg.typesafe_confidence_floor == 0.55
         assert cfg.typesafe_noul_positive_threshold == 0.65
+        assert cfg.companion_prior == "full"
+        assert cfg.companion_rolling_min_chapters == 15
+        assert cfg.companion_fact_chars_budget == 48000
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -28,8 +31,11 @@ class TestGhostreaderConfig:
         assert "typesafe_enabled: true" in text
         assert "typesafe_confidence_floor: 0.55" in text
         assert "typesafe_noul_positive_threshold: 0.65" in text
+        assert "companion_prior: full" in text
+        assert "companion_rolling_min_chapters: 15" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
+        assert loaded.companion_prior == "full"
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

@@ -29,6 +29,7 @@ app = typer.Typer(
         "Quick start:\n\n"
         "  ghostreader init              Create config.yaml\n"
         "  ghostreader analyze ./novel    Analyze a manuscript\n"
+        "  ghostreader companion ./chapters/chapter-018.md   Progressive chapter check\n"
         "  ghostreader chat ./novel       Chat about a previous analysis\n"
         "  ghostreader compare a/ b/      Side-by-side scorecard\n"
     ),
@@ -348,6 +349,76 @@ async def _run_analyze(
         cache.save_cache()
         cache.clear_checkpoint()
         rprint("[dim]Results cached.[/dim]")
+
+
+@app.command()
+def companion(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help=(
+                "chapter-NNN.md for progressive N-scoped check, "
+                "or a chapters directory for end-of-story sweep."
+            ),
+        ),
+    ],
+    chapter: Annotated[
+        Optional[int],
+        typer.Option(
+            "--chapter",
+            help="When PATH is a chapters directory, craft focus chapter (sweep continuity still uses full set).",
+        ),
+    ] = None,
+    format: FormatOption = None,
+    output: OutputOption = None,
+    no_cache: NoCacheOption = False,
+    typesafe: TypesafeOption = None,
+    continuity_only: Annotated[
+        bool,
+        typer.Option("--continuity-only", help="Skip craft; facts + continuity only."),
+    ] = False,
+    craft_only: Annotated[
+        bool,
+        typer.Option("--craft-only", help="Skip continuity (debug)."),
+    ] = False,
+    fail_on_continuity: Annotated[
+        bool,
+        typer.Option(
+            "--fail-on-continuity",
+            help="Exit 2 when gate-list grounded continuity concerns exist (optional hard gate).",
+        ),
+    ] = False,
+    model: ModelOption = None,
+    genre: GenreOption = None,
+) -> None:
+    """Progressive chapter companion (continuity-first) for Autonomicon hooks.
+
+    Rich CompanionBrief is the primary signal. Soft default: parse JSON and
+    decide. Use --fail-on-continuity only when you want exit 2 on gate concerns.
+    With --format json, stdout is one JSON document; progress goes to stderr.
+    """
+    from ghostreader.commands.companion import run_companion
+
+    if continuity_only and craft_only:
+        rprint("[red]Error:[/red] Use only one of --continuity-only / --craft-only.")
+        raise typer.Exit(code=1)
+
+    code = asyncio.run(
+        run_companion(
+            path,
+            chapter=chapter,
+            output_format=format or "terminal",
+            output_path=output,
+            no_cache=no_cache,
+            typesafe=typesafe,
+            continuity_only=continuity_only,
+            craft_only=craft_only,
+            fail_on_continuity=fail_on_continuity,
+            model=model,
+            genre=genre,
+        )
+    )
+    raise typer.Exit(code=code)
 
 
 @app.command()
