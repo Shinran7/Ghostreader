@@ -120,6 +120,53 @@ def manuscript_display_name(manuscript_path: Path) -> str:
     return target.name
 
 
+def _resolve_project_root(
+    manuscript_path: Path, project_root: Path | None = None
+) -> Path:
+    """Resolve project root for state dirs (config walk → CWD → parent)."""
+    if project_root is not None:
+        return project_root
+    return (
+        find_project_root(manuscript_path)
+        or find_project_root(Path.cwd())
+        or manuscript_path.parent
+    )
+
+
+def story_slug_for(manuscript_path: Path) -> str:
+    """Return the story slug token under ``.ghostreader/<story>/``.
+
+    For numbered chapter files this is the story folder (skipping generic
+    parents like ``chapters``). For directories it matches the analyze slug.
+    """
+    parts = _manuscript_slug_parts(manuscript_path)
+    return parts[0] if parts else "manuscript"
+
+
+def story_state_dir_for(
+    manuscript_path: Path, project_root: Path | None = None
+) -> Path:
+    """Return ``.ghostreader/<story>/``, creating it if needed.
+
+    Unlike ``state_dir_for``, this never nests under ``chapter-NNN/``.
+    Companion facts and progress live here.
+    """
+    root = _resolve_project_root(manuscript_path, project_root)
+    state = root / ".ghostreader" / story_slug_for(manuscript_path)
+    state.mkdir(parents=True, exist_ok=True)
+    return state
+
+
+def story_facts_dir(story_state_dir: Path) -> Path:
+    """Return ``<story_state>/facts/`` (does not create)."""
+    return story_state_dir / "facts"
+
+
+def companion_reports_dir(story_state_dir: Path) -> Path:
+    """Return ``<story_state>/companion/reports/`` (does not create)."""
+    return story_state_dir / "companion" / "reports"
+
+
 def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Path:
     """Return the per-manuscript state directory, creating it if needed.
 
@@ -128,12 +175,7 @@ def state_dir_for(manuscript_path: Path, project_root: Path | None = None) -> Pa
     ``.ghostreader/<story>/chapter-NNN/`` so Autonomicon-style per-chapter
     calls group under the story without colliding.
     """
-    if project_root is None:
-        project_root = (
-            find_project_root(manuscript_path)
-            or find_project_root(Path.cwd())
-            or manuscript_path.parent
-        )
+    project_root = _resolve_project_root(manuscript_path, project_root)
 
     parts = _manuscript_slug_parts(manuscript_path)
     state = project_root / ".ghostreader"
@@ -184,10 +226,14 @@ def find_secrets_env(start: Path | None = None) -> Path | None:
 
 
 __all__ = [
+    "companion_reports_dir",
     "config_path",
     "find_project_root",
     "find_secrets_env",
     "manuscript_display_name",
     "next_report_path",
     "state_dir_for",
+    "story_facts_dir",
+    "story_slug_for",
+    "story_state_dir_for",
 ]

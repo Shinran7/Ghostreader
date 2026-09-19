@@ -35,9 +35,13 @@ _CHECKPOINT_FILE = "checkpoint.json"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _chapter_content_hash(content: str) -> str:
-    """Return the SHA-256 hex digest of *content*."""
+def chapter_content_hash(content: str) -> str:
+    """SHA-256 hex digest of chapter text (shared by CacheManager and FactMemoryStore)."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+# Back-compat alias for older internal callers.
+_chapter_content_hash = chapter_content_hash
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +147,7 @@ class CacheManager:
 
     def get_chapter_hash(self, content: str) -> str:
         """Compute the SHA-256 hash for chapter *content*."""
-        return _chapter_content_hash(content)
+        return chapter_content_hash(content)
 
     def is_chapter_cached(self, chapter_number: int, content: str) -> bool:
         """Return ``True`` if *chapter_number* is cached **and** its hash matches *content*."""
@@ -344,4 +348,5 @@ __all__ = [
     "CacheEntry",
     "CacheManager",
     "CheckpointData",
+    "chapter_content_hash",
 ]
