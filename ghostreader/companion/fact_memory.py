@@ -61,6 +61,8 @@ class FactRecord:
             established_facts=list(fact_raw.get("established_facts") or []),
             key_objects=list(fact_raw.get("key_objects") or []),
         )
+        if fact_raw.get("parse_failed"):
+            fact["parse_failed"] = True
         return cls(
             chapter_number=int(data["chapter_number"]),
             content_hash=str(data.get("content_hash") or ""),

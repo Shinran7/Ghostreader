@@ -8,6 +8,7 @@ import pytest
 
 from ghostreader.agents.fact_extractor import (
     ChapterFact,
+    _parse_fact_response,
     extract_chapter_facts,
     format_fact_sheets,
 )
@@ -23,6 +24,21 @@ def _ch(number: int = 1, content: str = "Test chapter.") -> Chapter:
     )
 
 
+class TestParseFactResponse:
+    def test_parse_failure_marks_parse_failed(self) -> None:
+        chapter = _ch(number=4)
+        result = _parse_fact_response("not json at all", chapter)
+        assert result["parse_failed"] is True
+        assert result["characters"] == []
+
+    def test_valid_json_omits_parse_failed(self) -> None:
+        chapter = _ch(number=4)
+        raw = '{"characters": [], "location": "Tavern", "timeline_markers": [], "established_facts": [], "key_objects": []}'
+        result = _parse_fact_response(raw, chapter)
+        assert result.get("parse_failed") is not True
+        assert result["location"] == "Tavern"
+
+
 class TestExtractChapterFacts:
     @pytest.mark.asyncio()
     async def test_returns_chapter_fact_with_stub(self, stub_llm: object) -> None:
@@ -34,6 +50,7 @@ class TestExtractChapterFacts:
         assert isinstance(result["timeline_markers"], list)
         assert isinstance(result["established_facts"], list)
         assert isinstance(result["key_objects"], list)
+        assert result.get("parse_failed") is True
 
     @pytest.mark.asyncio()
     async def test_preserves_chapter_number(self, stub_llm: object) -> None:
@@ -77,6 +94,21 @@ class TestFormatFactSheets:
         assert "Chapter 2" in result
         assert "Character:" not in result
         assert "Location:" not in result
+
+    def test_formats_parse_failed_marker(self) -> None:
+        facts: list[ChapterFact] = [
+            ChapterFact(
+                chapter_number=2,
+                characters=[],
+                location="",
+                timeline_markers=[],
+                established_facts=[],
+                key_objects=[],
+                parse_failed=True,
+            ),
+        ]
+        result = format_fact_sheets(facts)
+        assert "PARSE_FAILED" in result
 
     def test_multiple_facts_separated(self) -> None:
         facts: list[ChapterFact] = [

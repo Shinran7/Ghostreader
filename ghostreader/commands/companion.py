@@ -130,15 +130,19 @@ async def run_companion(
         _ERR.print(f"[red]Error:[/red] Companion failed: {exc}")
         return 1
 
-    reports_dir = companion_reports_dir(story_state)
-    md_path = write_brief_files(brief, reports_dir, also_path=output_path)
-    _ERR.print(f"[green]Brief saved:[/green] {md_path}")
+    try:
+        reports_dir = companion_reports_dir(story_state)
+        md_path = write_brief_files(brief, reports_dir, also_path=output_path)
+        _ERR.print(f"[green]Brief saved:[/green] {md_path}")
 
-    if json_mode:
-        # Stdout = JSON only
-        export_brief_json(brief, output=sys.stdout)
-    else:
-        render_brief_terminal(brief)
+        if json_mode:
+            # Stdout = JSON only
+            export_brief_json(brief, output=sys.stdout)
+        else:
+            render_brief_terminal(brief)
+    except Exception as exc:  # noqa: BLE001
+        _ERR.print(f"[red]Error:[/red] Failed to write companion brief: {exc}")
+        return 1
 
     if fail_on_continuity and any(
         f.severity == "concern" for f in brief.continuity_findings

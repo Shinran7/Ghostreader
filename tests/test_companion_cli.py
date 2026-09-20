@@ -92,3 +92,52 @@ class TestCompanionJsonSmoke:
         assert payload["verdict"] == "ship"
         assert payload["mode"] == "progressive"
         assert payload["warnings"] == ["test-warning"]
+
+    def test_brief_export_failure_returns_1(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        target = _write_series(tmp_path)
+        monkeypatch.chdir(tmp_path)
+
+        brief = CompanionBrief(
+            manuscript_name="story · Chapter 2",
+            story_slug="story",
+            mode="progressive",
+            chapter_number=2,
+            chapters_considered=[1, 2],
+            facts_reused=0,
+            facts_extracted=2,
+            verdict="ship",
+            chapter_note="fine",
+            warnings=[],
+            ungrounded_count=0,
+            typesafe_enabled=False,
+            generated_at="2026-09-19T00:00:00+00:00",
+        )
+
+        async def _fake_run(*_a: Any, **_k: Any) -> CompanionBrief:
+            return brief
+
+        with (
+            patch(
+                "ghostreader.commands.companion.run_companion_pipeline",
+                new=AsyncMock(side_effect=_fake_run),
+            ),
+            patch(
+                "ghostreader.commands.companion.write_brief_files",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "companion",
+                    str(target),
+                    "--model",
+                    "stub",
+                    "--no-typesafe",
+                ],
+            )
+
+        assert result.exit_code == 1
+        assert "Failed to write companion brief" in (result.stdout + result.stderr)

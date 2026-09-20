@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TypedDict
+import logging
+from typing import NotRequired, TypedDict
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.ingestion import Chapter
+
+logger = logging.getLogger(__name__)
 
 _EXTRACTION_PROMPT = """\
 You are a fact-extraction assistant for a fiction manuscript consistency checker.
@@ -56,6 +59,7 @@ class ChapterFact(TypedDict):
     timeline_markers: list[str]
     established_facts: list[str]
     key_objects: list[dict[str, str]]  # [{"name": ..., "description": ...}]
+    parse_failed: NotRequired[bool]
 
 
 def _parse_fact_response(raw: str, chapter: Chapter) -> ChapterFact:
@@ -80,7 +84,11 @@ def _parse_fact_response(raw: str, chapter: Chapter) -> ChapterFact:
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # Fallback: empty fact sheet so the pipeline continues
+    logger.warning(
+        "Fact extraction JSON parse failed for chapter %s; marking parse_failed",
+        chapter.chapter_number,
+    )
+    # Empty sheet so the pipeline continues, but flag so consistency can tell.
     return ChapterFact(
         chapter_number=chapter.chapter_number,
         characters=[],
@@ -88,6 +96,7 @@ def _parse_fact_response(raw: str, chapter: Chapter) -> ChapterFact:
         timeline_markers=[],
         established_facts=[],
         key_objects=[],
+        parse_failed=True,
     )
 
 
@@ -139,6 +148,10 @@ def format_fact_sheets(facts: list[ChapterFact]) -> str:
     parts: list[str] = []
     for f in facts:
         lines: list[str] = [f"### Chapter {f['chapter_number']}"]
+        if f.get("parse_failed"):
+            lines.append(
+                "PARSE_FAILED: fact sheet empty — do not treat as contradiction-free"
+            )
 
         if f["location"]:
             lines.append(f"Location: {f['location']}")
