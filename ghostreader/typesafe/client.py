@@ -23,11 +23,17 @@ def ensure_typesafe_sdk() -> None:
     try:
         import typesafe_sdk  # noqa: F401
     except ImportError as exc:
+        from ghostreader.paths import package_project_root
+
+        root = package_project_root()
+        if root is not None:
+            editable = f'python -m pip install -e "{root}"'
+        else:
+            editable = "python -m pip install -e ."
         raise TypesafeConfigError(
             "TypeSafe is enabled but the typesafe_sdk package is not installed.\n"
             "  Fix (project venv): uv sync   or   uv add typesafe-sdk\n"
-            "  Fix (user/store install): python -m pip install -e "
-            "\"C:\\Users\\shinr\\Projects\\Ghostreader\"\n"
+            f"  Fix (user/store install): {editable}\n"
             "  Or pass --no-typesafe to use the chat LLM only."
         ) from exc
 

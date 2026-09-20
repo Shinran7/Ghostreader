@@ -101,3 +101,38 @@ class TestSynthesis:
         state = _make_state()
         result = await synthesis_node(state, stub_llm)
         assert "final_report" in result
+
+    @pytest.mark.asyncio()
+    async def test_recomputes_counts_after_parse_fallback(
+        self, stub_llm: object
+    ) -> None:
+        """Non-JSON LLM output must not leave strengths/concerns at zero."""
+        from ghostreader.agents.synthesis import synthesis_node
+
+        state = _make_state(
+            prose_output={
+                "agent": "prose_analyst",
+                "findings": [
+                    {
+                        "dimension": "prose.repetition",
+                        "severity": "concern",
+                        "summary": "Word overuse",
+                        "evidence": "the the the",
+                        "chapter_ref": "1",
+                    },
+                    {
+                        "dimension": "prose.rhythm",
+                        "severity": "strength",
+                        "summary": "Good cadence",
+                        "evidence": "varied sentences",
+                        "chapter_ref": "1",
+                    },
+                ],
+                "raw_response": "test",
+            },
+        )
+        result = await synthesis_node(state, stub_llm)
+        report = result["final_report"]
+        assert report["concerns_count"] == 1
+        assert report["strengths_count"] == 1
+        assert report["total_findings"] == 2

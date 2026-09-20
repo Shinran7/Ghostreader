@@ -28,6 +28,28 @@ class TestRepetitionDetector:
         detector = RepetitionDetector()
         assert detector.analyze_word_frequency([]) == []
 
+    def test_word_frequency_stopword_only_docs(self) -> None:
+        """Stopword-only text must not raise ValueError from TfidfVectorizer."""
+        from pathlib import Path
+
+        chapters = [
+            Chapter(
+                title="Emptyish",
+                content="the and or but to of in for on with at by",
+                chapter_number=1,
+                source_path=Path("/fake/ch1.md"),
+            ),
+            Chapter(
+                title="Also emptyish",
+                content="a an is was were are be been being",
+                chapter_number=2,
+                source_path=Path("/fake/ch2.md"),
+            ),
+        ]
+        detector = RepetitionDetector()
+        assert detector.analyze_word_frequency(chapters) == []
+        assert detector._analyze_phrase_frequency(chapters) == []
+
     def test_sentence_patterns_detects_structures(
         self, sample_chapters: list[Chapter]
     ) -> None:

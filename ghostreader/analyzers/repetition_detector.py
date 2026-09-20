@@ -202,14 +202,23 @@ class RepetitionDetector:
             return []
 
         docs = [ch.content for ch in chapters]
+        if not any(doc.strip() for doc in docs):
+            return []
+
         vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 1),
             max_features=5000,
             token_pattern=r"(?u)\b[a-zA-Z]{2,}\b",
         )
-        tfidf_matrix = vectorizer.fit_transform(docs)
+        try:
+            tfidf_matrix = vectorizer.fit_transform(docs)
+        except ValueError:
+            # Empty vocabulary (stopword-only / no alphanumeric tokens).
+            return []
         feature_names = vectorizer.get_feature_names_out()
+        if len(feature_names) == 0:
+            return []
 
         # Aggregate tf-idf across chapters (mean score).
         mean_scores: dict[str, float] = {}
@@ -247,14 +256,22 @@ class RepetitionDetector:
             return []
 
         docs = [ch.content for ch in chapters]
+        if not any(doc.strip() for doc in docs):
+            return []
+
         vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(2, self.ngram_range[1]),
             max_features=5000,
             token_pattern=r"(?u)\b[a-zA-Z]{2,}\b",
         )
-        tfidf_matrix = vectorizer.fit_transform(docs)
+        try:
+            tfidf_matrix = vectorizer.fit_transform(docs)
+        except ValueError:
+            return []
         feature_names = vectorizer.get_feature_names_out()
+        if len(feature_names) == 0:
+            return []
 
         # Raw count across all chapters for each n-gram.
         phrase_counts: Counter[str] = Counter()

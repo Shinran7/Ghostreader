@@ -133,3 +133,14 @@ class TestRunCompare:
                 tmp_path / "novel_a",
                 tmp_path / "novel_b",
             )
+
+    def test_no_cache_exits_with_clear_error(self, tmp_path: Path) -> None:
+        from ghostreader.commands.compare import run_compare
+
+        with pytest.raises(SystemExit) as exc_info:
+            run_compare(
+                tmp_path / "novel_a",
+                tmp_path / "novel_b",
+                no_cache=True,
+            )
+        assert exc_info.value.code == 1

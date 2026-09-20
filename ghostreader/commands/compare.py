@@ -65,6 +65,15 @@ def run_compare(
     no_cache: bool = False,
 ) -> None:
     """Compare two manuscripts and display a side-by-side scorecard."""
+    if no_cache:
+        _CONSOLE.print(
+            "[red]Error:[/red] --no-cache is not supported for compare.\n"
+            "  Compare always reads cached analysis reports from disk.\n"
+            "  Re-run [cyan]ghostreader analyze[/cyan] on each manuscript to refresh "
+            "caches, then compare again."
+        )
+        raise SystemExit(1)
+
     report_a = _load_report(path1)
     report_b = _load_report(path2)
 

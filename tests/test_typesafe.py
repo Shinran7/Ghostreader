@@ -77,8 +77,15 @@ class TestEnsureSdk:
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", _fake_import)
-        with pytest.raises(TypesafeConfigError, match="typesafe_sdk package"):
+        monkeypatch.setattr(
+            "ghostreader.paths.package_project_root", lambda: None
+        )
+        with pytest.raises(TypesafeConfigError, match="typesafe_sdk package") as exc_info:
             ensure_typesafe_sdk()
+        msg = str(exc_info.value)
+        assert "uv add typesafe-sdk" in msg
+        assert "pip install -e ." in msg
+        assert "C:\\Users\\shinr\\Projects\\Ghostreader" not in msg
 
     def test_sdk_present_ok(self) -> None:
         ensure_typesafe_sdk()

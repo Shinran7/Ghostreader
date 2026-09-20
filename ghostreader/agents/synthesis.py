@@ -292,13 +292,13 @@ async def _synthesis_llm_path(
     report = _parse_report(raw_text)
 
     all_findings = _collect_all_findings(state)
-    report.setdefault(
-        "strengths_count",
-        sum(1 for f in all_findings if f.get("severity") == "strength"),
+    # Always recompute from findings: _parse_report fallback sets zeros, and
+    # setdefault would leave those zeros in place when the key already exists.
+    report["strengths_count"] = sum(
+        1 for f in all_findings if f.get("severity") == "strength"
     )
-    report.setdefault(
-        "concerns_count",
-        sum(1 for f in all_findings if f.get("severity") == "concern"),
+    report["concerns_count"] = sum(
+        1 for f in all_findings if f.get("severity") == "concern"
     )
     report["total_findings"] = len(all_findings)
     report["raw_response"] = raw_text

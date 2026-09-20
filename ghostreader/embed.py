@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 _STUB_DIM = 384
 
+# Known OpenAI embedding dimensions (model id without openai: prefix).
+_OPENAI_DIMS: dict[str, int] = {
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+    "text-embedding-ada-002": 1536,
+}
+
 
 class Embedder(Protocol):
     """Minimal embedding interface."""
@@ -93,16 +100,23 @@ class OpenAIEmbedder:
     def __init__(self, model_name: str) -> None:
         from langchain_openai import OpenAIEmbeddings
 
+        self._model_name = model_name
         self._model = OpenAIEmbeddings(model=model_name)
-        # OpenAI text-embedding-3-small produces 1536-dim by default.
-        self._dimension = 1536
+        self._dimension: int | None = _OPENAI_DIMS.get(model_name)
 
     @property
     def dimension(self) -> int:
+        if self._dimension is None:
+            # Unknown model: derive from a single probe embed.
+            probe = self._model.embed_documents(["dimension probe"])
+            self._dimension = len(probe[0])
         return self._dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return self._model.embed_documents(texts)
+        vectors = self._model.embed_documents(texts)
+        if self._dimension is None and vectors:
+            self._dimension = len(vectors[0])
+        return vectors
 
 
 def _make_openai_embedder(model_name: str) -> Embedder:

@@ -15,7 +15,7 @@ def wave_for(item: dict) -> int:
     ev = (item.get("evidence") or "").lower()
     cat = item.get("category", "").lower()
 
-    if sev in ("P1", "P2"):
+    if sev in ("P0", "P1", "P2"):
         return 1
     if (
         fp.startswith("scripts/")
