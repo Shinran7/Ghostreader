@@ -12,6 +12,7 @@ from ghostreader.paths import (
     find_secrets_env,
     manuscript_display_name,
     next_report_path,
+    package_project_root,
     state_dir_for,
 )
 
@@ -40,9 +41,23 @@ class TestConfigPath:
         assert result is not None
         assert result.name == "config.yaml"
 
-    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_falls_back_to_package_root_when_foreign_cwd(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Autonomicon-style: no config near manuscript or CWD → install config."""
         monkeypatch.chdir(tmp_path)
-        assert config_path(tmp_path) is None
+        foreign = tmp_path / "stories" / "chapters" / "chapter-001.md"
+        foreign.parent.mkdir(parents=True)
+        foreign.write_text("# Hi\n", encoding="utf-8")
+        result = config_path(foreign)
+        pkg = package_project_root()
+        assert pkg is not None
+        assert result == pkg / "config.yaml"
+
+    def test_package_project_root_points_at_checkout(self) -> None:
+        root = package_project_root()
+        assert root is not None
+        assert (root / "pyproject.toml").is_file()
 
 
 class TestStateDirFor:
@@ -159,5 +174,13 @@ class TestFindSecretsEnv:
         assert result is not None
         assert result == env_file
 
-    def test_returns_none_when_absent(self, tmp_path: Path) -> None:
-        assert find_secrets_env(tmp_path) is None
+    def test_falls_back_to_package_secrets_when_foreign(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        pkg = package_project_root()
+        assert pkg is not None
+        expected = pkg / "secrets" / "llm.env"
+        if not expected.is_file():
+            pytest.skip("no secrets/llm.env in checkout")
+        assert find_secrets_env(tmp_path) == expected

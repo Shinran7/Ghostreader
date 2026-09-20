@@ -29,20 +29,38 @@ def find_project_root(start: Path | None = None) -> Path | None:
     return None
 
 
+def package_project_root() -> Path | None:
+    """Return the Ghostreader checkout/install root next to this package.
+
+    Editable installs live at ``<repo>/ghostreader/paths.py``, so the repo
+    root is ``parent.parent``. Used when Autonomicon (or another host) invokes
+    ``ghostreader`` with a foreign CWD and manuscript path — otherwise config
+    and secrets silently fall back to Pydantic defaults (TypeSafe off).
+    """
+    root = Path(__file__).resolve().parent.parent
+    if (root / "config.yaml").is_file() or (root / "pyproject.toml").is_file():
+        return root
+    return None
+
+
 def config_path(start: Path | None = None) -> Path | None:
     """Return the path to ``config.yaml``, or ``None`` if not found.
 
-    Searches from *start* first (e.g. manuscript path), then falls back
-    to CWD so the config is found even when analyzing external manuscripts.
+    Search order:
+      1. Walk up from *start* (manuscript path)
+      2. Walk up from CWD
+      3. Ghostreader package/checkout root (Autonomicon-hook safe)
     """
     root = find_project_root(start)
     if root is not None:
         return root / "config.yaml"
-    # Fallback: try CWD if start was something else
     if start is not None:
         root = find_project_root(Path.cwd())
         if root is not None:
             return root / "config.yaml"
+    pkg = package_project_root()
+    if pkg is not None and (pkg / "config.yaml").is_file():
+        return pkg / "config.yaml"
     return None
 
 
@@ -123,12 +141,18 @@ def manuscript_display_name(manuscript_path: Path) -> str:
 def _resolve_project_root(
     manuscript_path: Path, project_root: Path | None = None
 ) -> Path:
-    """Resolve project root for state dirs (config walk → CWD → parent)."""
+    """Resolve project root for state dirs.
+
+    Order: explicit → manuscript config walk → CWD → package root → parent.
+    Package root keeps Autonomicon hooks writing under Ghostreader's
+    ``.ghostreader/<story>/`` instead of a random foreign CWD.
+    """
     if project_root is not None:
         return project_root
     return (
         find_project_root(manuscript_path)
         or find_project_root(Path.cwd())
+        or package_project_root()
         or manuscript_path.parent
     )
 
@@ -214,12 +238,32 @@ def next_report_path(state: Path) -> Path:
 
 
 def find_secrets_env(start: Path | None = None) -> Path | None:
-    """Locate ``secrets/llm.env`` by walking up from *start* (default: CWD)."""
-    current = (start or Path.cwd()).resolve()
-    if current.is_file():
-        current = current.parent
-    for directory in [current, *current.parents]:
-        candidate = directory / "secrets" / "llm.env"
+    """Locate ``secrets/llm.env``.
+
+    Walks from *start* (default CWD), then CWD if different, then the
+    Ghostreader package/checkout ``secrets/llm.env`` (Autonomicon-hook safe).
+    """
+    starts: list[Path] = []
+    if start is not None:
+        starts.append(start.resolve())
+    cwd = Path.cwd().resolve()
+    if not starts or starts[0] != cwd:
+        starts.append(cwd)
+
+    seen: set[Path] = set()
+    for origin in starts:
+        current = origin.parent if origin.is_file() else origin
+        for directory in [current, *current.parents]:
+            if directory in seen:
+                continue
+            seen.add(directory)
+            candidate = directory / "secrets" / "llm.env"
+            if candidate.is_file():
+                return candidate
+
+    pkg = package_project_root()
+    if pkg is not None:
+        candidate = pkg / "secrets" / "llm.env"
         if candidate.is_file():
             return candidate
     return None
@@ -232,6 +276,7 @@ __all__ = [
     "find_secrets_env",
     "manuscript_display_name",
     "next_report_path",
+    "package_project_root",
     "state_dir_for",
     "story_facts_dir",
     "story_slug_for",
