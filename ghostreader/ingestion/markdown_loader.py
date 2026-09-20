@@ -60,18 +60,36 @@ def _load_single_file(path: Path) -> list[Chapter]:
 
 
 def _load_directory(directory: Path) -> list[Chapter]:
-    """Load all chapter-NNN.md files from *directory*, sorted by filename."""
+    """Load all chapter-NNN.md files from *directory*, sorted by filename.
+
+    Named ``chapter-NNN.md`` files keep N. Other ``*.md`` files get the next
+    unused positive integer so they never collide with a named chapter number.
+    """
     md_files = sorted(directory.glob("*.md"))
 
     if not md_files:
         msg = f"No .md files found in {directory}"
         raise FileNotFoundError(msg)
 
+    reserved: set[int] = set()
+    for filepath in md_files:
+        match = _CHAPTER_RE.match(filepath.name)
+        if match:
+            reserved.add(int(match.group(1)))
+
     chapters: list[Chapter] = []
+    next_free = 1
 
     for filepath in md_files:
         match = _CHAPTER_RE.match(filepath.name)
-        chapter_num = int(match.group(1)) if match else len(chapters) + 1
+        if match:
+            chapter_num = int(match.group(1))
+        else:
+            while next_free in reserved:
+                next_free += 1
+            chapter_num = next_free
+            reserved.add(chapter_num)
+            next_free += 1
         content = filepath.read_text(encoding="utf-8")
         title = _extract_title(content, fallback=filepath.stem)
         chapters.append(

@@ -97,6 +97,48 @@ class TestLoadEpub:
         with pytest.raises(ValueError, match="No readable chapters"):
             load_epub(path)
 
+    def test_follows_spine_order_not_manifest_add_order(self, tmp_path: Path) -> None:
+        """Chapters must follow spine reading order, not item add-order."""
+        book = epub.EpubBook()
+        book.set_identifier("spine-order-id")
+        book.set_title("Spine Order Novel")
+        book.set_language("en")
+        book.add_author("Test Author")
+
+        bodies = {
+            1: "<p>" + ("Alpha content. " * 20) + "</p>",
+            2: "<p>" + ("Bravo content. " * 20) + "</p>",
+            3: "<p>" + ("Charlie content. " * 20) + "</p>",
+        }
+        # Add in reverse order so manifest order != spine order.
+        items: dict[int, epub.EpubHtml] = {}
+        for i in (3, 1, 2):
+            ch = epub.EpubHtml(title=f"Chapter {i}", file_name=f"ch{i}.xhtml", lang="en")
+            ch.content = (
+                f'<?xml version="1.0" encoding="UTF-8"?>'
+                f'<html xmlns="http://www.w3.org/1999/xhtml">'
+                f"<head><title>Chapter {i}</title></head>"
+                f"<body>{bodies[i]}</body></html>"
+            ).encode("utf-8")
+            book.add_item(ch)
+            items[i] = ch
+
+        book.toc = [items[1], items[2], items[3]]
+        book.spine = ["nav", items[1], items[2], items[3]]
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+
+        path = tmp_path / "spine-order.epub"
+        epub.write_epub(str(path), book)
+
+        chapters = load_epub(path)
+        # Nav may also pass the length filter; assert reading-order of the three bodies.
+        contents = [ch.content for ch in chapters]
+        alpha = next(i for i, text in enumerate(contents) if "Alpha content" in text)
+        bravo = next(i for i, text in enumerate(contents) if "Bravo content" in text)
+        charlie = next(i for i, text in enumerate(contents) if "Charlie content" in text)
+        assert alpha < bravo < charlie
+
 
 # ── XHTML parsing helpers ────────────────────────────────────────────
 

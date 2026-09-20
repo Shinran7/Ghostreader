@@ -32,7 +32,8 @@ def load_epub(path: Path) -> list[Chapter]:
     chapters: list[Chapter] = []
     chapter_num = 0
 
-    for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+    # Spine order is reading order; get_items_of_type follows manifest add-order.
+    for item in _spine_documents(book):
         raw_html = item.get_content()
         text = _xhtml_to_text(raw_html)
 
@@ -57,6 +58,20 @@ def load_epub(path: Path) -> list[Chapter]:
         raise ValueError(msg)
 
     return chapters
+
+
+def _spine_documents(book: epub.EpubBook) -> list[epub.EpubItem]:
+    """Yield ITEM_DOCUMENT entries in EPUB spine (reading) order."""
+    docs: list[epub.EpubItem] = []
+    for entry in book.spine:
+        idref = entry[0] if isinstance(entry, (list, tuple)) else entry
+        item = book.get_item_with_id(idref)
+        if item is None:
+            continue
+        if item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+        docs.append(item)
+    return docs
 
 
 def _xhtml_to_text(raw: bytes) -> str:

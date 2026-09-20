@@ -58,6 +58,21 @@ class TestLoadMarkdown:
         with pytest.raises(FileNotFoundError, match="No .md files"):
             load_markdown(empty)
 
+    def test_unmatched_md_does_not_collide_with_named_chapter(
+        self, tmp_path: Path
+    ) -> None:
+        """appendix.md sorting before chapter-01.md must not both get number 1."""
+        d = tmp_path / "mixed"
+        d.mkdir()
+        (d / "appendix.md").write_text("# Appendix\n\nNotes.", encoding="utf-8")
+        (d / "chapter-01.md").write_text("# Chapter 1\n\nStory.", encoding="utf-8")
+        chapters = load_markdown(d)
+        numbers = {ch.chapter_number for ch in chapters}
+        assert len(numbers) == 2
+        by_name = {ch.source_path.name: ch.chapter_number for ch in chapters}
+        assert by_name["chapter-01.md"] == 1
+        assert by_name["appendix.md"] != 1
+
 
 # ── chunking ──────────────────────────────────────────────────────────
 
