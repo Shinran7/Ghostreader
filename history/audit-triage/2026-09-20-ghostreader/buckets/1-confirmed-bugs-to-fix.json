@@ -1,0 +1,98 @@
+{
+  "bucket": "1-confirmed-bugs-to-fix",
+  "count": 9,
+  "auditCommit": "981f2df9",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader",
+  "findings": [
+    {
+      "findingId": "d6b26ff3e698032d",
+      "severity": "P1",
+      "filePath": "ghostreader/ingestion/epub_loader.py",
+      "line": 36,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "Line 35 uses get_items_of_type (manifest self.items), not spine; repro with spine 1\u21922\u21923 but add-order 3,1,2 loaded chapter-3 text as Chapter 1.",
+      "message": "ghostreader/ingestion/epub_loader.py:36 \u2014 Document iteration order defect. Who is hurt: readers/analysts. Failure: book.get_items_of_type(ITEM_DOCUMENT) reads manifest items rather than spine order, causing chapters to load out of order and corrupting continuity analysis."
+    },
+    {
+      "findingId": "0dc8a8d2f5a5f537",
+      "severity": "P2",
+      "filePath": "ghostreader/typesafe/client.py",
+      "line": 29,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "ensure_typesafe_sdk ImportError text hardcodes C:\\Users\\shinr\\Projects\\Ghostreader at L29-30",
+      "message": "ghostreader/typesafe/client.py:29 \u2014 Hardcoded user environment path. Who is hurt: Non-author users encountering missing typesafe_sdk. Failure: Error message prints a broken pip install command pointing to a non-existent author-specific local directory."
+    },
+    {
+      "findingId": "251d9511b8cb2d07",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/repetition_detector.py",
+      "line": 214,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "analyze_word_frequency L205-211: TfidfVectorizer.fit_transform raises ValueError on stopword-only docs; no guard.",
+      "message": "ghostreader/analyzers/repetition_detector.py:214 \u2014 Empty vocabulary handling. Who is hurt: downstream consumers of repetition metrics. Failure: when all words match stop words or chapters are empty, empty frequency lists are returned without notification or default metrics."
+    },
+    {
+      "findingId": "bd384f6de52e7676",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/indexer.py",
+      "line": 133,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "On lancedb 0.30.2, list_tables() returns ListTablesResponse; chunks in db.list_tables() is False even when tables=[chunks], so drop is skipped and recreate raises ValueError.",
+      "message": "ghostreader/ingestion/indexer.py:133 \u2014 LanceDB table existence check incompatibility. Who is hurt: operators indexing manuscripts. Failure: querying db.list_tables() directly with 'in' fails or raises errors on differing LanceDB versions."
+    },
+    {
+      "findingId": "9b0517fadb8ffbcc",
+      "severity": "P2",
+      "filePath": "ghostreader/commands/compare.py",
+      "line": 72,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "run_compare accepts no_cache (L65) but always _load_report from cache.json; flag never consulted.",
+      "message": "ghostreader/commands/compare.py:72 \u2014 Ignored cache flag. Who is hurt: Users passing --no-cache to compare. Failure: Comparison always loads cached analysis reports from disk, ignoring the --no-cache parameter."
+    },
+    {
+      "findingId": "5015c25769ccccc8",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 232,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "LLM path: _parse_report fallback sets counts to 0 (L105-110); setdefault at L295-302 will not recompute from findings.",
+      "message": "ghostreader/agents/synthesis.py:232 \u2014 Inconsistent finding count calculation. Who is hurt: End users reading JSON report outputs in standard LLM mode. Failure: Final report can report zero or inaccurate strengths_count and concerns_count despite existing findings."
+    },
+    {
+      "findingId": "96ef90a3eefaed3f",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-split-defer-waves.py",
+      "line": 18,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "wave_for Wave 1 only checks sev in (P1, P2) at L18; P0 falls through to waves 2-4",
+      "message": "scripts/audit-triage-split-defer-waves.py:18 \u2014 Priority logic omission. Who is hurt: Reviewers triaging critical vulnerabilities. Failure: P0 findings bypass Wave 1 priority and fall into lower priority waves 2 or 4."
+    },
+    {
+      "findingId": "d5fef086cdd0105c",
+      "severity": "P2",
+      "filePath": "ghostreader/embed.py",
+      "line": 78,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "OpenAIEmbedder hardcodes self._dimension = 1536 for every model_name; text-embedding-3-large vectors are 3072 so schema/list size mismatches.",
+      "message": "ghostreader/embed.py:78 \u2014 Hardcoded embedding dimension. Who is hurt: Users using OpenAIEmbedder with 3072-dimension models like text-embedding-3-large. Failure: embedder.dimension reports 1536, causing LanceDB vector table insertion or query crashes."
+    },
+    {
+      "findingId": "e52d906b5baccb21",
+      "severity": "P3",
+      "filePath": "ghostreader/commands/chat.py",
+      "line": 69,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "LanceDB 0.30.2 list_tables() returns ListTablesResponse; 'chunks' in response is False even when response.tables contains chunks, so chat always thinks the table is missing.",
+      "message": "ghostreader/commands/chat.py:69 \u2014 Incompatible table listing API. Who is hurt: Interactive chat users. Failure: In newer LanceDB releases, db.list_tables() may return a collection object or namespaced table names, breaking string membership checks for the chunks table."
+    }
+  ]
+}

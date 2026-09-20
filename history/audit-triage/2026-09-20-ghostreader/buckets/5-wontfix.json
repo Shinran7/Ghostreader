@@ -1,0 +1,288 @@
+{
+  "bucket": "5-wontfix",
+  "count": 28,
+  "auditCommit": "981f2df9",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader",
+  "findings": [
+    {
+      "findingId": "dff375d17f9a7562",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 17,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "scripts/audit-triage-merge.py:17 json.loads can raise; operator triage script, accepted fail-loud risk.",
+      "message": "scripts/audit-triage-merge.py:17 \u2014 Unhandled JSON decode error. Who is hurt: Operators running batch merges. Failure: A single corrupted result-batch file aborts the entire merge with an unhandled JSONDecodeError."
+    },
+    {
+      "findingId": "9c2030513b534cf2",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-merge-defer-resolution.py",
+      "line": 106,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "--export-history intentionally writes only 6-defer-resolved.json for the defer-resolution step, not a full bucket export.",
+      "message": "scripts/audit-triage-merge-defer-resolution.py:106 \u2014 Partial export history emission. Who is hurt: Downstream processes expecting full bucket sets. Failure: --export-history creates the directory but writes only 6-defer-resolved.json, omitting other bucket manifests."
+    },
+    {
+      "findingId": "73b38616351077e9",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 41,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "scripts/audit-triage-merge.py:44-45 read ledger/results without exists check; diagnostic script, not product path.",
+      "message": "scripts/audit-triage-merge.py:41 \u2014 Missing file validation. Who is hurt: Operators executing merge scripts prematurely. Failure: Script raises uncaught FileNotFoundError if ledger.json or the results directory does not exist."
+    },
+    {
+      "findingId": "b28660741a0abda5",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-create-issues.py",
+      "line": 145,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "scripts/audit-triage-create-issues.py:174-175 takes the URL tail without isdigit(); operator triage helper, not product path.",
+      "message": "scripts/audit-triage-create-issues.py:145 \u2014 Missing issue ID validation. Who is hurt: Downstream automation reading issue manifests. Failure: Extracted URL tail is not validated as numeric, allowing non-issue strings into issue-ids json."
+    },
+    {
+      "findingId": "7be9ed68120b6219",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 52,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "Markdown finding_id() hashes path/line/message; self-labels keep lab IDs by design. Ghostreader ingest defaults to markdown-only.",
+      "message": "scripts/audit-triage-ingest.py:52 \u2014 ID Inconsistency. Who is hurt: Triage tracking and deduplication workflows. Failure: Markdown-parsed findings receive different IDs than identical findings loaded from self-labels.json, breaking lookups and state correlation."
+    },
+    {
+      "findingId": "07c768f89f79a448",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 20,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "FINDING_RE at line 23 (cite ~20) skips non-matching lines; accepted ingest contract for known audit markdown shape.",
+      "message": "scripts/audit-triage-ingest.py:20 \u2014 Strict pattern matching. Who is hurt: Security engineers triaging audit outputs. Failure: Findings with non-standard formatting fail FINDING_RE and are dropped silently without logging."
+    },
+    {
+      "findingId": "bc3ac91da287327e",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 85,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "L85 formats findings; _collect_all_findings aggregates agents without dedup by design.",
+      "message": "ghostreader/agents/synthesis.py:85 \u2014 Finding deduplication missing. Who is hurt: Final report readers. Failure: Strengths and concerns count inflate duplicate findings across multiple agent outputs."
+    },
+    {
+      "findingId": "5d88acdb8bc806b1",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 345,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "CLI report clock / generatedAt \u2014 accepted operational non-determinism",
+      "message": "scripts/audit-triage-ingest.py:345 \u2014 Non-deterministic fallback. Who is hurt: Automation expecting reproducible audit records. Failure: Audit commit defaults to 'unknown' when git commands fail, obscuring source revision context in outputs."
+    },
+    {
+      "findingId": "cb6ce5324de372e9",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/epub_loader.py",
+      "line": 102,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "_extract_xhtml_title prefers first title then h1/h2; heuristic nav misfires are accepted EPUB risk, not a clear defect.",
+      "message": "ghostreader/ingestion/epub_loader.py:102 \u2014 Unstable chapter title selection. Who is hurt: readers relying on chapter headings. Failure: first <title> or <h1>/<h2> tag in iteration order may match nav menus or boilerplate rather than actual chapter titles."
+    },
+    {
+      "findingId": "327463f54a68d96d",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-export-buckets.py",
+      "line": 70,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "default export_id is YYYY-MM-DD-ghostreader at L68; --id override exists; same-id overwrite is accepted CLI default",
+      "message": "scripts/audit-triage-export-buckets.py:70 \u2014 ID collision. Who is hurt: Operators running multiple exports on the same day. Failure: Default export ID based only on date causes subsequent runs to silently overwrite previous exports."
+    },
+    {
+      "findingId": "40debbf063567816",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/brief.py",
+      "line": 46,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "compute_verdict L55-63 returns ship when no concern severities; empty lists mean clean, not unanalyzed.",
+      "message": "ghostreader/companion/brief.py:46 \u2014 False ship verdict on empty findings. Who is hurt: Pipeline operators gating chapter publication. Failure: An unanalyzed or skipped chapter with empty finding lists is granted a green ship verdict."
+    },
+    {
+      "findingId": "27bf91c7752727e6",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/fact_memory.py",
+      "line": 186,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "ensure_facts L180 gather fails fast on LLM error; no partial overwrite/KeyError path without return_exceptions.",
+      "message": "ghostreader/companion/fact_memory.py:186 \u2014 Unhandled exception during fact extraction. Who is hurt: FactMemoryStore callers. Failure: Unhandled LLM failure aborts entire gather without recovery, and duplicate chapter numbers overwrite facts or cause KeyErrors."
+    },
+    {
+      "findingId": "7e058de352211337",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 132,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "progress.py:130-137 intentionally uses max so rewrites do not lower last_chapter_companioned; docstring states that contract.",
+      "message": "ghostreader/companion/progress.py:132 \u2014 Erroneous progress cursor advancement. Who is hurt: Callers analyzing chapters non-sequentially. Failure: Setting last_chapter_companioned to max suppresses subsequent skip/gap warnings, masking unanalyzed earlier chapters."
+    },
+    {
+      "findingId": "0b5848ec681a2356",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/markdown_loader.py",
+      "line": 70,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "Filename chapter-NNN numbering is intentional for companion/analyze paths; loader never reads chapter numbers from headings.",
+      "message": "ghostreader/ingestion/markdown_loader.py:70 \u2014 Filename vs content chapter number discrepancy. Who is hurt: users indexing markdown chapters. Failure: _chapter_number_from_filename overrides internal heading numbering, causing mismatched chapter metadata when filenames diverge."
+    },
+    {
+      "findingId": "12da32edaa93c062",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-create-issues.py",
+      "line": 74,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "note_file read_text(utf-8) at L94 fail-loud on bad encoding; operator script, L74 is argparse not the read",
+      "message": "scripts/audit-triage-create-issues.py:74 \u2014 Uncaught decoding exception. Who is hurt: Users providing non-UTF-8 note files. Failure: read_text(encoding='utf-8') raises unhandled UnicodeDecodeError and terminates execution."
+    },
+    {
+      "findingId": "3dfeeb30e13c5bcd",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge-defer-resolution.py",
+      "line": 55,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "exit 1 on unresolved defer (L74-78) is required fail-closed Phase 2b gate, not missing transactionality",
+      "message": "scripts/audit-triage-merge-defer-resolution.py:55 \u2014 Missing transactionality. Who is hurt: Auditors tracking deferral closure. Failure: Script aborts with exit code 1 on unresolved defer rows, halting resolution without allowing partial resolution workflows."
+    },
+    {
+      "findingId": "b5ac098cf78fbf2c",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge-defer-resolution.py",
+      "line": 48,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "no result-wave-*.json returns 1 at L62-64; correct fail-closed when merge inputs are absent",
+      "message": "scripts/audit-triage-merge-defer-resolution.py:48 \u2014 Abrupt failure exit. Who is hurt: Operators managing deferred finding workflows. Failure: Script returns exit code 1 immediately if no result-wave files exist, aborting automated pipelines."
+    },
+    {
+      "findingId": "3ae0eee28448188c",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/fact_memory.py",
+      "line": 173,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "_save_manifest L97-104 is non-atomic local state; single-operator companion, accepted race risk.",
+      "message": "ghostreader/companion/fact_memory.py:78 \u2014 Unsynchronized manifest write. Who is hurt: Concurrent companion processes on the same manuscript directory. Failure: Non-atomic writes to manifest.json risk corruption or race conditions during parallel execution."
+    },
+    {
+      "findingId": "97fa2cf6c8ae65db",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 23,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "normalize_bucket maps infra/maintainability to reporting (L21-26); defensive coerce of unknown labels",
+      "message": "scripts/audit-triage-merge.py:23 \u2014 Silent bucket normalization. Who is hurt: Triage operators. Failure: Categories like 'infra' and 'maintainability' are silently coerced into reporting debt instead of triggering explicit classification."
+    },
+    {
+      "findingId": "fe12195b8f00ff09",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 93,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "fact_extractor.py:130 gather fails fast on task error; does not silently drop facts.",
+      "message": "ghostreader/agents/fact_extractor.py:93 \u2014 Uncaught task exceptions. Who is hurt: Fact extraction consumers. Failure: asyncio.gather does not catch or handle individual chapter task failures, potentially failing the entire batch or dropping facts."
+    },
+    {
+      "findingId": "e1f36552bc5aa724",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 130,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "CLI report clock / generatedAt \u2014 accepted operational non-determinism",
+      "message": "scripts/audit-triage-export-buckets.py:100 \u2014 Unsorted JSON output. Who is hurt: Automated CI diffing across runs. Failure: json.dumps without sort_keys=True can produce non-deterministic key order, resulting in spurious git diffs."
+    },
+    {
+      "findingId": "c23e6558e0845d08",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-split-defer-waves.py",
+      "line": 39,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "return 2 at L46 is intentional catch-all default wave for leftovers after P1/P2/scripts/heuristic rules",
+      "message": "scripts/audit-triage-split-defer-waves.py:39 \u2014 Hardcoded wave fallback. Who is hurt: Triage reviewers managing deferred items. Failure: wave_for silently dumps all unclassified findings into Wave 2, grouping unrelated findings together."
+    },
+    {
+      "findingId": "3c670a0eef04cf8b",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/brief.py",
+      "line": 188,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "Markdown writer always appends the Ship checklist (212-218) after verdict text; checklist wording covers address-or-accept for watch runs by design.",
+      "message": "ghostreader/companion/brief.py:188 \u2014 Unconditional ship checklist. Who is hurt: Scripts and users reviewing watch reports. Failure: Renders a ship checklist even on watch verdicts, risking false gating decisions."
+    },
+    {
+      "findingId": "75bd54636a265622",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/discovery.py",
+      "line": 120,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "Sweep focus defaults to max(files) with gap warnings (127-137); chapter_override can retarget \u2014 intentional latest-chapter sweep behavior.",
+      "message": "ghostreader/companion/discovery.py:120 \u2014 Suboptimal focus chapter selection on gaps. Who is hurt: Users executing companion sweep mode. Failure: Defaulting focus chapter to max(files) when large gaps exist causes the sweep to run on unintended distant chapters."
+    },
+    {
+      "findingId": "de939a4090e33a33",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 428,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "_run_llm_consistency builds ratings only for COMPANION_GATE_DIMS (153-161) while returning full findings; non-gate dims are intentionally excluded from ratings.",
+      "message": "ghostreader/companion/pipeline.py:140 \u2014 Dimension drop in consistency ratings. Who is hurt: Downstream consumers of CompanionBrief.continuity_ratings. Failure: Any continuity dimension outside COMPANION_GATE_DIMS returned by _parse_findings is silently omitted from ratings."
+    },
+    {
+      "findingId": "fa16fa90a3a84d27",
+      "severity": "P3",
+      "filePath": "ghostreader/llm.py",
+      "line": 215,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "get_llm prints a yellow warning then returns _stub_chat_model() (265-271); TypeSafe analyze/companion CLI paths reject stub unless --model stub.",
+      "message": "ghostreader/llm.py:215 \u2014 Silent fallback to stub chat model. Who is hurt: Users and automated agents expecting real LLM execution. Failure: Provider initialization failures silently fall back to a stub model, producing placeholder summaries instead of stopping."
+    },
+    {
+      "findingId": "0aeb4eab4991d6de",
+      "severity": "P3",
+      "filePath": "ghostreader/report/rewrites.py",
+      "line": 84,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "rewrites.py:87-89 intentionally continues on LLM Exception; tests/test_rewrites.py asserts [] on broken LLM.",
+      "message": "ghostreader/report/rewrites.py:84 \u2014 Undiagnosed empty rewrites. Who is hurt: Users requesting rewrite suggestions. Failure: Returns an empty list without logging or error details when all LLM calls fail, giving no indication of failure."
+    },
+    {
+      "findingId": "c4eb37bbbeddbe06",
+      "severity": "P3",
+      "filePath": "ghostreader/report/markdown_writer.py",
+      "line": 92,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "group_findings_by_dimension splits on first dot by design so consistency.* maps to the Consistency label; markdown_writer:92 is _slugify, not the splitter.",
+      "message": "ghostreader/report/markdown_writer.py:92 \u2014 Nested dimension prefix truncation. Who is hurt: report viewers. Failure: splitting dimensions on the first dot groups nested identifiers under top-level keys while failing specific label lookups."
+    }
+  ]
+}

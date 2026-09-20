@@ -1,0 +1,698 @@
+{
+  "bucket": "3-reporting-debt",
+  "count": 69,
+  "auditCommit": "981f2df9",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader",
+  "findings": [
+    {
+      "findingId": "7daaa64c1659a62f",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 220,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 220 is grounding text inside _SCENE_CONSISTENCY_PROMPT; ask() runs later at 268 after build_consistency_state().",
+      "message": "ghostreader/agents/consistency_checker.py:220 \u2014 State accessed before validation. Who is hurt: Consistency checker execution. Failure: Calls ask() before verifying presence of scene facts or hierarchy, passing incomplete state to TypeSafe."
+    },
+    {
+      "findingId": "fe1c5e7c04f26a9c",
+      "severity": "P2",
+      "filePath": "ghostreader/cache.py",
+      "line": 228,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 228 is load_checkpoint; save keeps prior started_at (or now). Empty started_at only if old/corrupt file lacked it \u2014 metadata niggle, not a security failure.",
+      "message": "ghostreader/cache.py:228 \u2014 Stale started_at timestamp in checkpoint. Who is hurt: Operators inspecting run metadata after recovering from errors. Failure: Checkpoint saves perpetuate empty or invalid started_at timestamps from previous partial initializations."
+    },
+    {
+      "findingId": "0d26ed49c501fdb4",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/questions.py",
+      "line": 102,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 102 is instruction prose; consistency_questions() correctly returns {dim: Noul(...)} matching the TypeSafe SDK question shape.",
+      "message": "ghostreader/typesafe/questions.py:102 \u2014 Incompatible question object structure. Who is hurt: Callers invoking TypeSafe SDK with consistency questions. Failure: Passing bare Noul instances without required wrapping causes runtime argument or validation errors."
+    },
+    {
+      "findingId": "0618789e10032ced",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 188,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 188 is parse_ratings_from_raw; the 2000-char trim is only in _parse_report's JSON-failure fallback (line 106), not silent success-path truncation.",
+      "message": "ghostreader/agents/synthesis.py:188 \u2014 Silent output truncation. Who is hurt: Users relying on executive summary. Failure: _parse_report silently truncates raw response to 2000 characters without warning when JSON parsing fails."
+    },
+    {
+      "findingId": "6ac8ffb9fe625877",
+      "severity": "P1",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 104,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "outcome.md explicitly lists 'Still pending: {len(pending)}' (lines 96-97); incomplete work is disclosed, not presented as final.",
+      "message": "scripts/audit-triage-merge.py:104 \u2014 Premature outcome generation. Who is hurt: Stakeholders reviewing triage results. Failure: outcome.md is written even when unresolved pending items remain, presenting incomplete counts as final."
+    },
+    {
+      "findingId": "5d18770a93287d64",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/prose_analyst.py",
+      "line": 105,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 105 is a default dimension on successful parse; the prose.general synthetic finding at 117-126 is an intentional unstructured fallback, not a hidden crash.",
+      "message": "ghostreader/agents/prose_analyst.py:105 \u2014 Synthetic finding on parse failure. Who is hurt: Downstream report consumers. Failure: Fallback produces prose.general finding with truncated raw text on decode failure, obscuring the parse error."
+    },
+    {
+      "findingId": "f69dcb05438c339f",
+      "severity": "P1",
+      "filePath": "ghostreader/report/markdown_writer.py",
+      "line": 51,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 51 is a docstring; _slugify leaves ?*, but manuscript_name comes from Path stems already OS-safe on Windows, so the OSError path is not realistic here.",
+      "message": "ghostreader/report/markdown_writer.py:51 \u2014 Incomplete slugification. Who is hurt: users on Windows or platforms with invalid path characters in titles. Failure: characters like '?', '*', or '<' are not stripped by _slugify, causing write_text() to crash with OSError."
+    },
+    {
+      "findingId": "16b9d45e319c5170",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 280,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 280 builds the summary/manuscript context string; no AssertionError or TypesafeConfigError there (assert is at 349).",
+      "message": "ghostreader/agents/consistency_checker.py:280 \u2014 AssertionError instead of typed configuration error. Who is hurt: Pipeline callers. Failure: Uncaught AssertionError aborts the node instead of raising TypesafeConfigError."
+    },
+    {
+      "findingId": "b1fb05ab9eee3409",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/typesafe_consistency.py",
+      "line": 70,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Lines 68-73 prepend bias; build_consistency_state always sets fact_sheets or manuscript, so the else branch that sets fact_sheets=prefix alone is a defensive dead path.",
+      "message": "ghostreader/companion/typesafe_consistency.py:70 \u2014 Incomplete state initialization. Who is hurt: callers relying on TypeSafe consistency checks. Failure: when ts_state lacks fact_sheets and manuscript, ts_state['fact_sheets'] contains only prefix text, running checks without manuscript content."
+    },
+    {
+      "findingId": "564baa41d0f54ac4",
+      "severity": "P1",
+      "filePath": "ghostreader/ingestion/summarizer.py",
+      "line": 64,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Cited line 64 is ActSummary wiring; chapter.content[:12_000] at 83 is an intentional token-limit cap, not a pipeline-breaking defect.",
+      "message": "ghostreader/ingestion/summarizer.py:64 \u2014 Naive chapter truncation. Who is hurt: readers and analytical consumers. Failure: slicing chapter.content[:12_000] cuts mid-sentence or mid-word, producing incomplete chapter context for LLM summarization."
+    },
+    {
+      "findingId": "ff98e81f1d3da451",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 312,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 312 assigns noul_tie_breaks; the typesafe_client assert lives at scene_consistency_checker_node:349, and CLI injects the client when typesafe_enabled.",
+      "message": "ghostreader/agents/consistency_checker.py:312 \u2014 Bare assert on typesafe_client. Who is hurt: Users running with typesafe enabled when typesafe_client is missing or under python -O. Failure: Raises unhelpful AssertionError or crashes with AttributeError under -O."
+    },
+    {
+      "findingId": "61044a104835182c",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 310,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 310 is synthesis_node's signature; TypeSafe path setdefaults missing consistency dims (210-214), and total_findings 0 is correct when agents returned no findings.",
+      "message": "ghostreader/agents/synthesis.py:310 \u2014 Incomplete rating generation. Who is hurt: Report consumers. Failure: Dimension ratings miss categories when agent output is missing, yet report succeeds with total_findings 0."
+    },
+    {
+      "findingId": "4c93723ac0236a71",
+      "severity": "P1",
+      "filePath": "ghostreader/ingestion/epub_loader.py",
+      "line": 48,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 48 constructs Chapter; _local_tag strips {ns} prefixes and _extract_xhtml_title returns titles from xmlns XHTML.",
+      "message": "ghostreader/ingestion/epub_loader.py:48 \u2014 Namespace handling in XHTML parsing. Who is hurt: users loading namespace-qualified EPUBs. Failure: XML namespaces prevent local tag matching in subsequent helpers, causing title and heading extraction to fail silently."
+    },
+    {
+      "findingId": "bea4355b0f969697",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 40,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "involves_N at 40; cited_chapters uses bare digits only on chapter_ref, and Ch/Chapter prefixes on evidence/counter_evidence \u2014 years in prose do not become chapter ids.",
+      "message": "ghostreader/companion/continuity.py:40 \u2014 Overbroad digit extraction. Who is hurt: users analyzing manuscripts with years or numbers in evidence text. Failure: matching any digits parses unrelated numbers as chapter numbers, breaking preexisting and gate classification."
+    },
+    {
+      "findingId": "9db67c2cf07cdc53",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/repetition_detector.py",
+      "line": 480,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "L480 is _locate_term loop; one optional adverb is _DIALOGUE_TAG_RE at L135 (heuristic limit).",
+      "message": "ghostreader/analyzers/repetition_detector.py:480 \u2014 Dialogue tag regex limitation. Who is hurt: prose analysts reviewing dialogue style. Failure: _DIALOGUE_TAG_RE matches at most one trailing adverb, under-counting stacked adverbs like 'said quietly but firmly'."
+    },
+    {
+      "findingId": "314be01d994c5628",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 66,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "else appends defer into reporting (L83-84), but Phase 2b must clear defer before merge so path is protocol-gated",
+      "message": "scripts/audit-triage-merge.py:66 \u2014 Classification fallthrough. Who is hurt: Defer resolution workflows. Failure: Deferred findings fall through into reporting debt rather than remaining pending or in defer, corrupting summary metrics."
+    },
+    {
+      "findingId": "accbdd832edbf305",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 55,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Grounding rule is LLM prompt (L35-38); L146-154 fallback only on parse failure, not a quote-path contradiction.",
+      "message": "ghostreader/agents/consistency_checker.py:55 \u2014 Prompt grounding rule contradiction. Who is hurt: Users expecting verified citations. Failure: Strict direct quote grounding requirement is violated by fallback emitting unquoted neutral findings."
+    },
+    {
+      "findingId": "0730d5cba214759e",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/repetition_detector.py",
+      "line": 312,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "L312 ends analyze_sentence_patterns; dialogue verbs/regex live at L61-136 and analyze_dialogue_tags L422+.",
+      "message": "ghostreader/analyzers/repetition_detector.py:312 \u2014 Incomplete dialogue attribution patterns. Who is hurt: users relying on dialogue tag statistics. Failure: attribution styles using inverted order or verbs missing from _DIALOGUE_VERBS are ignored, skewing adverb tag reports."
+    },
+    {
+      "findingId": "2ecda5c8bde77738",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 171,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "join_rows omits auditCommit (L166-180) but export still reads summary.json auditCommit before unknown",
+      "message": "scripts/audit-triage-ingest.py:171 \u2014 Missing field. Who is hurt: Downstream consumers tracking commit metadata. Failure: join_rows omits auditCommit from ledger entries, causing export-buckets to fall back to 'unknown'."
+    },
+    {
+      "findingId": "d385c90ba4d58bbd",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/typesafe_consistency.py",
+      "line": 58,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "AnalysisState nests AnalysisConfig under config; pipeline builds config with typesafe_noul_positive_threshold before run_companion_consistency.",
+      "message": "ghostreader/companion/typesafe_consistency.py:58 \u2014 Missing state configuration key. Who is hurt: operators configuring custom confidence thresholds. Failure: state.get('config', {}) always defaults to 0.65 because AnalysisState does not nest settings under 'config'."
+    },
+    {
+      "findingId": "c339c09c23b83747",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/typesafe_consistency.py",
+      "line": 105,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "by_dim last-wins is real, but consistency_from_nouls emits one finding per dimension before that loop; mid-band findings append afterward.",
+      "message": "ghostreader/companion/typesafe_consistency.py:105 \u2014 Dict comprehension finding collision. Who is hurt: users analyzing manuscripts with multiple findings per dimension. Failure: by_dim dictionary overwrites earlier findings, losing notes in ratings enrichment."
+    },
+    {
+      "findingId": "b6632bcbdf528270",
+      "severity": "P2",
+      "filePath": "ghostreader/seed.py",
+      "line": 58,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "load_seed_meta catches YAMLError/OSError at L46-47 and returns {} by docstring design; L58 is _KNOWN_FIELDS not the handler",
+      "message": "ghostreader/seed.py:58 \u2014 Silent YAML error suppression. Who is hurt: Authors using seed.yaml metadata. Failure: Catches yaml.YAMLError and returns {} without warning, silently dropping author intent calibrations."
+    },
+    {
+      "findingId": "92500dab5d7a3ec5",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge.py",
+      "line": 62,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "fix-before-wontfix at L77 is documented exclusive membership (L68); inconsistent verifier pair is the root",
+      "message": "scripts/audit-triage-merge.py:62 \u2014 Priority inversion. Who is hurt: Release managers and triage engineers. Failure: Rows with verdict 'wontfix' but bucket 'fix' are classified as bugs to fix, overriding the wontfix disposition."
+    },
+    {
+      "findingId": "a3b9d5a3fb54b2c2",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/indexer.py",
+      "line": 99,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Drop-then-create is non-atomic, but manuscript source remains; today drop often never runs because list_tables membership is broken.",
+      "message": "ghostreader/ingestion/indexer.py:99 \u2014 Non-atomic table recreation. Who is hurt: callers expecting index persistence. Failure: existing tables are dropped before new ones are written; if embedding/insertion fails, data is irreversibly lost and tables remain missing."
+    },
+    {
+      "findingId": "9a7a7f6bc905156a",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 240,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "verdict None on build is expected; rule_classify then batch_entries keeps only verdict is None (L516-524)",
+      "message": "scripts/audit-triage-ingest.py:139 \u2014 Unclassified row batching. Who is hurt: Reviewers inspecting triage batches. Failure: Initial ledger population unconditionally sets verdict to None, potentially leaving classified entries mixed into pending batches."
+    },
+    {
+      "findingId": "db9bc5c081c3b0ec",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 530,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "category substring miss still takes candidates[0] (L161-162); hasMarkdown False only when no key candidates",
+      "message": "scripts/audit-triage-ingest.py:161 \u2014 Category matching failure. Who is hurt: Teams using --self-labels with --scope-markdown on. Failure: Substring category matching fails on minor variations, causing rows to be dropped due to hasMarkdown remaining False."
+    },
+    {
+      "findingId": "87c333353b7966e5",
+      "severity": "P2",
+      "filePath": "ghostreader/graph/workflow.py",
+      "line": 92,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "workflow.py:92 is depth routing, not client plumbing; assert typesafe_client is intentional when typesafe_enabled.",
+      "message": "ghostreader/graph/workflow.py:92 \u2014 Unvalidated client passing. Who is hurt: Callers configuring typesafe workflow. Failure: _make_consistency_node passes unverified typesafe_client into scene_consistency_checker_node, triggering assert failures downstream."
+    },
+    {
+      "findingId": "313c05795a08905b",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/indexer.py",
+      "line": 84,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "Schema already uses embedder.dimension at create_table; real dim lie is the OpenAIEmbedder 1536 hardcode sibling finding.",
+      "message": "ghostreader/ingestion/indexer.py:84 \u2014 PyArrow schema mismatch. Who is hurt: users retrieving vector embeddings. Failure: PyArrow schema dimension definitions can mismatch generated vector dimensions, raising pyarrow.lib.ArrowInvalid on create_table."
+    },
+    {
+      "findingId": "8f6099dd8b8ea3b6",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 380,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "_is_security_priority returns None on purpose so P0/P1 security stay pending for Meeseeks (L361-362)",
+      "message": "scripts/audit-triage-ingest.py:308 \u2014 Unhandled security classification. Who is hurt: Security auditors. Failure: rule_classify returns None for critical security P0/P1 cases, leaving them unclassified as pending instead of routing them to fix buckets."
+    },
+    {
+      "findingId": "4e0111a68068e43c",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-export-buckets.py",
+      "line": 32,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "bucket_map six verdict buckets vs outcome.md four sections are intentional different aggregations, not a broken classifier",
+      "message": "scripts/audit-triage-export-buckets.py:32 \u2014 Logic discrepancy. Who is hurt: Triage engineers reconciling counts. Failure: bucket_map classification rules diverge from outcome.md, causing manifest counts to differ from report summaries."
+    },
+    {
+      "findingId": "a306163991709e62",
+      "severity": "P2",
+      "filePath": "ghostreader/cli.py",
+      "line": 434,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "L434 is chat docstring; config_set L532 maps false via membership check to False correctly.",
+      "message": "ghostreader/cli.py:434 \u2014 Boolean coercion failure. Who is hurt: Users configuring boolean values via CLI. Failure: Configuring false for boolean config flags can improperly evaluate to True in downstream bool() checks."
+    },
+    {
+      "findingId": "d61ead8cda0e234d",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 283,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "L283 is prose_state; rate at L341-345 uses concern-only partition totals, so neutrals never enter the denominator.",
+      "message": "ghostreader/companion/pipeline.py:283 \u2014 Flawed rate calculation. Who is hurt: Users inspecting companion terminal output. Failure: Inaccurate ungrounded continuity rate printed to stderr when findings include neutral severities."
+    },
+    {
+      "findingId": "baac4342a9a21a83",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 316,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 316 extracts continuity findings; progress persists only at update_progress_after_run (~384) after a successful brief.",
+      "message": "ghostreader/companion/pipeline.py:316 \u2014 Premature progress persistence. Who is hurt: CI/CD workflows and progress tracking hooks. Failure: State cursor is permanently advanced even if downstream reporting fails, causing subsequent runs to skip chapters."
+    },
+    {
+      "findingId": "5fbd355d23ada02a",
+      "severity": "P2",
+      "filePath": "ghostreader/embed.py",
+      "line": 62,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 62 is SentenceTransformer construction; stub fallback lives in _make_st_embedder and logs a warning (default MiniLM and stub both 384-dim).",
+      "message": "ghostreader/embed.py:62 \u2014 Silent embedder fallback. Who is hurt: Users with invalid or missing SentenceTransformer models. Failure: Falling back silently to StubEmbedder causes dimension mismatches and crashes during vector table insertion or querying."
+    },
+    {
+      "findingId": "816cfd266530097c",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 178,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "L178 is hierarchy_block; jev-latest is ask() default in typesafe/client.py:56, separate from chat config.model.",
+      "message": "ghostreader/agents/consistency_checker.py:178 \u2014 Hardcoded model parameter. Who is hurt: Operators configuring alternative models. Failure: Consistency typesafe path hardcodes jev-latest via raw response helper ignoring config model selection."
+    },
+    {
+      "findingId": "8d41a6f878c62630",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 370,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "synthesis.py ends at L324; _merge_typesafe_stats at L131 defaults zeros when raw stats missing.",
+      "message": "ghostreader/agents/synthesis.py:370 \u2014 Silent zero stats aggregation. Who is hurt: Operators auditing TypeSafe execution. Failure: _merge_typesafe_stats yields all zeros without logging or indicating that TypeSafe stats data was missing."
+    },
+    {
+      "findingId": "5373ce017252e323",
+      "severity": "P2",
+      "filePath": "ghostreader/report/__init__.py",
+      "line": 77,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "f.get(rank, i+1) can yield None if rank is null, but dataclass accepts it and renderers print #None rather than crash; no producer emits null rank.",
+      "message": "ghostreader/report/__init__.py:77 \u2014 None handling in finding rank. Who is hurt: report exporters and viewers. Failure: if rank is explicitly None, f.get('rank', i + 1) assigns None, violating PrioritizedFinding.rank: int and crashing downstream formatters."
+    },
+    {
+      "findingId": "212d0de51d48cf96",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge-defer-resolution.py",
+      "line": 97,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "deferRemaining recounts ledger verdict==defer after writes (L103-107); inaccurate counts need an unshown inconsistent mutate path",
+      "message": "scripts/audit-triage-merge-defer-resolution.py:97 \u2014 Metric calculation divergence. Who is hurt: Consumers of defer-resolution-summary.json. Failure: Defer summary can record inaccurate remaining counts if ledger entries are modified inconsistently."
+    },
+    {
+      "findingId": "83d7b6b2917fc655",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-merge-defer-resolution.py",
+      "line": 116,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "return 1 if remaining defer (L124) correctly fails when resolution left verdict=defer; protocol requires zero defer",
+      "message": "scripts/audit-triage-merge-defer-resolution.py:116 \u2014 Erroneous exit code. Who is hurt: Automation pipelines and CI operators. Failure: Shell scripts fail with exit code 1 even when defer wave resolution successfully processed and kept findings deferred."
+    },
+    {
+      "findingId": "a20e5e7892a2c1cb",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/repetition_detector.py",
+      "line": 240,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "total_word_count uses .split() at L179; hyphenated words and contractions stay one token, not inflated as claimed.",
+      "message": "ghostreader/analyzers/repetition_detector.py:240 \u2014 Inaccurate total word count. Who is hurt: prose analysts monitoring word and repetition density. Failure: using .split() counts hyphenated compound words and contractions as whitespace-delimited tokens, inflating word count."
+    },
+    {
+      "findingId": "0334d65e6f942221",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/epub_loader.py",
+      "line": 74,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 74 is _element_text recursion on parsed XML; crude regex strip is only the ParseError fallback at _crude_strip.",
+      "message": "ghostreader/ingestion/epub_loader.py:74 \u2014 Fragile crude HTML stripping. Who is hurt: callers loading EPUBs with XML parse errors. Failure: crude regex tag stripping leaves unresolved entities and malformed formatting in plain text output."
+    },
+    {
+      "findingId": "76748006ea677bd6",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/__init__.py",
+      "line": 92,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "_MIN_SCENE_CHARS=200 intentionally drops frontmatter-sized blocks; whole-chapter scenes still form when content is long enough without ---.",
+      "message": "ghostreader/ingestion/__init__.py:92 \u2014 Total scene loss on short or frontmatter-only chapters. Who is hurt: Fact extractor and downstream analysis agents. Failure: Chapters containing only horizontal rules or short text blocks yield zero scenes, dropping chapter content entirely."
+    },
+    {
+      "findingId": "99dd64bf3ef1ef02",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 131,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "AgentFinding omits _certainty by design; adapters set it with type:ignore and prioritize_findings strips it intentionally.",
+      "message": "ghostreader/agents/consistency_checker.py:131 \u2014 Missing field in TypedDict schema. Who is hurt: Type checkers and callers expecting strict AgentFinding structure. Failure: Downstream confidence checks fail or _certainty is stripped/evaluates to 0.0."
+    },
+    {
+      "findingId": "d223cfd181de5f54",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 92,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "partition_findings only routes concern gate-dims; weak grounding goes to ungrounded (L96-101).",
+      "message": "ghostreader/companion/continuity.py:92 \u2014 Unguarded chapter reference partitioning. Who is hurt: consumers of continuity gates. Failure: hallucinated chapter numbers in evidence alter preexisting vs gate partitioning, misclassifying real continuity issues."
+    },
+    {
+      "findingId": "496fb712f4b89a4e",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/typesafe_consistency.py",
+      "line": 48,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Prefix mutates ts_state from build_consistency_state (new dict/strings), not AnalysisState scene_facts or chapters.",
+      "message": "ghostreader/companion/typesafe_consistency.py:48 \u2014 In-place state pollution. Who is hurt: subsequent pipeline components. Failure: mutating ts_state directly alters fact sheets or manuscript text, persisting the prefix into downstream processing steps."
+    },
+    {
+      "findingId": "37c89166eb41dfa6",
+      "severity": "P2",
+      "filePath": "ghostreader/graph/__init__.py",
+      "line": 55,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "AnalysisState is total=False; synthesis uses state.get and _format_agent_findings(None) -> No output available without KeyError.",
+      "message": "ghostreader/graph/__init__.py:55 \u2014 Missing output keys in quick mode. Who is hurt: Synthesis step during quick depth runs. Failure: AnalysisState expects analyst outputs that remain unpopulated, causing KeyError or None handling issues."
+    },
+    {
+      "findingId": "8c846ee8eb70b25b",
+      "severity": "P2",
+      "filePath": "ghostreader/graph/workflow.py",
+      "line": 105,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 105 returns synthesis; quick mode intentionally skips narrative/consistency and synthesis already tolerates missing outputs.",
+      "message": "ghostreader/graph/workflow.py:105 \u2014 Missing state handling in quick depth mode. Who is hurt: CLI users running with --depth quick. Failure: narrative_output and consistency_output remain None/unset, causing synthesis to report 'No output available.'"
+    },
+    {
+      "findingId": "38ead6361dbde671",
+      "severity": "P2",
+      "filePath": "ghostreader/graph/workflow.py",
+      "line": 148,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "workflow.py:148 wires conditional edges; ask() is in typesafe/client.py and only prechecks SDK/API key via TypesafeConfigError.",
+      "message": "ghostreader/graph/workflow.py:148 \u2014 Opaque SDK error exposure. Who is hurt: Pipeline callers. Failure: Downstream ask() calls bubble unhandled SDK/auth exceptions instead of structured TypesafeConfigError."
+    },
+    {
+      "findingId": "fb58c7de9654ed86",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-export-buckets.py",
+      "line": 73,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "commit resolves --commit then summary.json auditCommit then ledger[0]; unknown only if all missing (L76-87)",
+      "message": "scripts/audit-triage-export-buckets.py:73 \u2014 Commit fallback failure. Who is hurt: Downstream audit traceability consumers. Failure: Exported bucket manifests and README.md default commit to 'unknown' if summary.json is missing or lacks auditCommit."
+    },
+    {
+      "findingId": "48eb7eeade7ca2c9",
+      "severity": "P2",
+      "filePath": "scripts/audit-triage-ingest.py",
+      "line": 198,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "infer_section returns Findings with or without docker-compose.yml; rule uses docker-compose substring so .yaml matches",
+      "message": "scripts/audit-triage-ingest.py:198 \u2014 Incomplete file matching. Who is hurt: Security reviewers triaging deployment configs. Failure: docker-compose.yaml is omitted from the deployment whitelist and gets misclassified into appendix sections."
+    },
+    {
+      "findingId": "76f8005db0e3eca2",
+      "severity": "P3",
+      "filePath": "ghostreader/cache.py",
+      "line": 246,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 246 only loads CheckpointData; get_resume_point can ignore checkpoint results without a cache hash, but save_checkpoint/get_resume_point are unused by the analyze CLI.",
+      "message": "ghostreader/cache.py:246 \u2014 Broken checkpoint resume logic. Who is hurt: Pipeline execution resuming after crashes. Failure: Valid checkpointed chapter progress is marked as pending and re-analyzed if cache in-memory entries are missing."
+    },
+    {
+      "findingId": "39eff5c6562f9deb",
+      "severity": "P3",
+      "filePath": "ghostreader/cli.py",
+      "line": 312,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Anchors 215/312 are seed/rewrite code; chapter_facts are produced by extract_all_facts and optionally stored as scene_facts at 287-288 with no shown KeyError path.",
+      "message": "ghostreader/cli.py:215 \u2014 Unvalidated chapter facts input. Who is hurt: CLI analyze command users. Failure: Malformed or missing chapter facts list causes runtime KeyErrors or type errors inside analysis graph nodes."
+    },
+    {
+      "findingId": "7424f4e0dc736e83",
+      "severity": "P3",
+      "filePath": "ghostreader/commands/chat.py",
+      "line": 192,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Embed call is at line 182 (_embedder.embed([query])[0]); current Embedder implementations return one vector per input, and line 192 is only text append.",
+      "message": "ghostreader/commands/chat.py:192 \u2014 Fragile batch query embedding. Who is hurt: Chat users querying vector index. Failure: Unchecked list index on embed() can raise IndexError or dimension errors if embedders handle batching inconsistently."
+    },
+    {
+      "findingId": "ff57fd69ba438847",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/brief.py",
+      "line": 92,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 92 is generated_at serialization; exact severity=='concern' lives in compute_verdict (59-62) with no case-fold, but no concrete malformed-severity failure path is shown.",
+      "message": "ghostreader/companion/brief.py:92 \u2014 Gate bypass on malformed finding severities. Who is hurt: Downstream publication pipelines. Failure: Case-mismatched or non-standard severity strings fail equality check with 'concern', allowing defective chapters to ship."
+    },
+    {
+      "findingId": "123e5e84ef8bd01c",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 234,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "assert typesafe_client is at line 301 inside typesafe_enabled; companion CLI only enables TypeSafe inside AsyncTypeSafeClient, so AssertionError is an internal misuse path, and line 234 is unrelated.",
+      "message": "ghostreader/companion/pipeline.py:234 \u2014 Unhandled assertion failure. Who is hurt: Users running ghostreader companion with TypeSafe enabled. Failure: Missing client raises unhandled AssertionError instead of graceful error reporting or fallback."
+    },
+    {
+      "findingId": "0648cf74d6444880",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 480,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "ensure_facts has no degraded fallback, but commands/companion.py catches Exception and returns 1; abort-without-partial-facts is accepted fail-closed behavior, not a silent break.",
+      "message": "ghostreader/companion/pipeline.py:186 \u2014 Unhandled fact extraction failure in pipeline. Who is hurt: Companion pipeline users. Failure: Unhandled exceptions inside ensure_facts abort the entire pipeline instead of returning a degraded, usable fact set."
+    },
+    {
+      "findingId": "286759b8ea5aa4a3",
+      "severity": "P3",
+      "filePath": "ghostreader/ingestion/chunking.py",
+      "line": 65,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "_split_long_paragraph applies character overlap within oversized paragraphs (100-111); after that path, overlap is not seeded into the next paragraph buffer \u2014 niche quality limit, not a crash.",
+      "message": "ghostreader/ingestion/chunking.py:65 \u2014 Overlap context loss. Who is hurt: Ingestion and indexing pipeline. Failure: Paragraphs exceeding chunk_size split at character level lose overlap context with adjacent paragraphs."
+    },
+    {
+      "findingId": "846ff13a5dd0e9b4",
+      "severity": "P3",
+      "filePath": "ghostreader/report/rewrites.py",
+      "line": 55,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Empty LLM alternatives are skipped (91-92) without backfilling beyond the pre-sliced eligible[:max_rewrites] set \u2014 fewer suggestions, not incorrect ones.",
+      "message": "ghostreader/report/rewrites.py:55 \u2014 Slot depletion on empty responses. Who is hurt: Callers expecting up to max_rewrites suggestions. Failure: Empty LLM outputs are skipped after truncating the candidate list, yielding fewer rewrites than requested."
+    },
+    {
+      "findingId": "05cad7e1635410ba",
+      "severity": "P3",
+      "filePath": "ghostreader/report/rewrites.py",
+      "line": 62,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "generate_rewrites keeps input order after evidence filter then slices (66-67); CLI passes report.prioritized_findings already ranked.",
+      "message": "ghostreader/report/rewrites.py:62 \u2014 Arbitrary rewrite prioritization. Who is hurt: Users requesting rewrites for top concerns. Failure: Findings are sliced before sorting by severity or rank, causing low-priority findings to be rewritten while high-priority concerns are ignored."
+    },
+    {
+      "findingId": "54769f3dbe9459c1",
+      "severity": "P3",
+      "filePath": "ghostreader/report/rewrites.py",
+      "line": 68,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 68 is eligible[:max_rewrites]; rationale uses PrioritizedFinding str fields (severity/dimension/summary), so literal None formatting is not reachable on the typed path.",
+      "message": "ghostreader/report/rewrites.py:68 \u2014 Formatted None in rationale strings. Who is hurt: End users viewing report rewrite panels. Failure: Missing finding attributes format as literal 'None' in user-facing rationale text."
+    },
+    {
+      "findingId": "99640b93aedd2cdc",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/enrich.py",
+      "line": 140,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "consistency_tiebreak_batch increments failures for each missing dim (enrich.py:164-166); partial maps are counted.",
+      "message": "ghostreader/typesafe/enrich.py:140 \u2014 Undercounted failures on partial tiebreak maps. Who is hurt: Downstream callers relying on failure counts in consistency_tiebreak_batch. Failure: Partial dimension maps from LLM output default missing dimensions to neutral without accurately tracking failure totals."
+    },
+    {
+      "findingId": "5d872781206f554a",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/enrich.py",
+      "line": 160,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Prompt requires JSON bool; check at enrich.py:171 accepts True/true/True/1 \u2014 non-contract strings are hypothetical.",
+      "message": "ghostreader/typesafe/enrich.py:160 \u2014 Inexact boolean parsing for contradiction key. Who is hurt: Users relying on TypeSafe consistency tiebreaker. Failure: String representations of contradiction other than standard truthy forms are misclassified as neutral."
+    },
+    {
+      "findingId": "af51122734a54c5d",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/enrich.py",
+      "line": 177,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "if not parsed (enrich.py:192) only runs on empty map; partial successes are not wiped. Line 177 is finding evidence, not override.",
+      "message": "ghostreader/typesafe/enrich.py:177 \u2014 Redundant rating override. Who is hurt: Consistency tiebreaker callers in TypeSafe mode. Failure: Falsy parsed dict unconditionally resets all ratings and failures even if partial entries succeeded."
+    },
+    {
+      "findingId": "46e7491874851a96",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/routing.py",
+      "line": 29,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "needs_choice_enrich only special-cases concern (routing.py:32-34); other severities correctly use confidence_floor.",
+      "message": "ghostreader/typesafe/routing.py:29 \u2014 Unhandled custom severity strings. Who is hurt: Callers routing findings for Choice enrichment. Failure: Non-standard severity values from upstream are not handled explicitly, causing unexpected enrichment routing decisions."
+    },
+    {
+      "findingId": "56af3b1e000d334a",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/state_builders.py",
+      "line": 54,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Early fact_sheets return is intentional; consumers use in/get checks (consistency_checker.py:276-281) \u2014 no KeyError path.",
+      "message": "ghostreader/typesafe/state_builders.py:54 \u2014 Incomplete state payload on early return. Who is hurt: Downstream consumers of consistency state payloads. Failure: Early return when scene_facts is present omits manuscript and summary_hierarchy keys, risking KeyErrors."
+    },
+    {
+      "findingId": "0c3e087b28254010",
+      "severity": "P3",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 196,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 196 is _parse_findings in the unstructured path; scene_facts fallback at 354-355 is documented intentional design, and cli.py sets initial_state['scene_facts'] correctly.",
+      "message": "ghostreader/agents/consistency_checker.py:196 \u2014 Fact sheet key mismatch. Who is hurt: Fact extraction and consistency analysis execution. Failure: If scene_facts key is absent, node silently falls back to truncation-based consistency checking, ignoring extracted facts."
+    },
+    {
+      "findingId": "cd858998933acdd4",
+      "severity": "P3",
+      "filePath": "ghostreader/paths.py",
+      "line": 112,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 112 is chapter slug nesting; _resolve_project_root intentionally walks manuscript/CWD then package_project_root for Autonomicon foreign-CWD hooks.",
+      "message": "ghostreader/paths.py:112 \u2014 Flawed project root resolution. Who is hurt: Users expecting directory-specific configurations. Failure: Manuscript state paths can misidentify the root directory, causing the wrong configuration and models to be loaded."
+    },
+    {
+      "findingId": "330f8f3bd2e86cf9",
+      "severity": "P3",
+      "filePath": "ghostreader/graph/__init__.py",
+      "line": 111,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 111 is hierarchy act_summaries serialization; repetition_report_to_dicts (122+) reads typed RepetitionReport attributes from the analyze path.",
+      "message": "ghostreader/graph/__init__.py:111 \u2014 Fragile report serialization. Who is hurt: Callers running repetition analysis. Failure: Ingestion/repetition pre-processing crashes if repetition report structure deviates from expected dataclass attributes."
+    },
+    {
+      "findingId": "fefac0fffd37b312",
+      "severity": "P3",
+      "filePath": "ghostreader/typesafe/adapters.py",
+      "line": 162,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 162 is ratings_from_findings; noul bands are handled exhaustively at adapters.py:124-149 via noul_band().",
+      "message": "ghostreader/typesafe/adapters.py:162 \u2014 Incomplete noul band classification. Who is hurt: downstream consumers of consistency ratings. Failure: non-standard band outcomes or equal-threshold edge cases fall through to neutral ratings, masking consistency concerns."
+    }
+  ]
+}

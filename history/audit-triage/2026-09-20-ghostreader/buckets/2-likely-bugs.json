@@ -1,0 +1,38 @@
+{
+  "bucket": "2-likely-bugs",
+  "count": 3,
+  "auditCommit": "981f2df9",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader",
+  "findings": [
+    {
+      "findingId": "366d51b466913980",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 140,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "Cited line 140 is format_fact_sheets; _parse_fact_response:83-91 returns an empty ChapterFact on JSON failure, so consistency can report no contradictions after a parse miss.",
+      "message": "ghostreader/agents/fact_extractor.py:140 \u2014 Empty fact sheet fallback masking errors. Who is hurt: Consistency checker and manuscript author. Failure: _parse_fact_response returns empty ChapterFact on parse error, causing consistency checker to report false negative 'no contradictions'."
+    },
+    {
+      "findingId": "a6026a9e10a42e8f",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/markdown_loader.py",
+      "line": 81,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "Unmatched *.md files use len(chapters)+1; a name sorting before chapter-01.md (e.g. appendix.md) can both become chapter_number 1.",
+      "message": "ghostreader/ingestion/markdown_loader.py:81 \u2014 Chapter number collision in directory loading. Who is hurt: callers loading mixed markdown directories. Failure: falling back to len(chapters) + 1 causes collisions or non-monotonic chapter numbers when named and unnamed files coexist."
+    },
+    {
+      "findingId": "b1963356b16a32d8",
+      "severity": "P3",
+      "filePath": "ghostreader/commands/companion.py",
+      "line": 89,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "try/except covers only run_companion_pipeline (89-131); write_brief_files/export_brief_json at 134-139 sit outside and can raise an uncaught traceback.",
+      "message": "ghostreader/commands/companion.py:89 \u2014 Uncaught exceptions during report export. Who is hurt: CLI operators. Failure: errors raised during write_brief_files or export_brief_json escape the command handler with a traceback instead of exiting cleanly with status code 1."
+    }
+  ]
+}
