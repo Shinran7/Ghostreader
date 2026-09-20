@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from typesafe_sdk import Choice, Noul
-
 SEVERITY_CRITERIA: dict[str, str] = {
     "strength": "Clear craft strength worth preserving",
     "neutral": "Adequate; neither standout nor problematic",
@@ -104,7 +102,9 @@ _CONSISTENCY_INSTRUCTIONS: dict[str, str] = {
 }
 
 
-def _choice(instructions: str) -> Choice:
+def _choice(instructions: str) -> Any:
+    from typesafe_sdk import Choice
+
     return Choice(instructions=instructions, criteria=dict(SEVERITY_CRITERIA))
 
 
@@ -120,6 +120,8 @@ def narrative_questions() -> dict[str, Any]:
 
 def consistency_questions() -> dict[str, Any]:
     """Five Noul gates for consistency dimensions."""
+    from typesafe_sdk import Noul
+
     return {
         dim: Noul(instructions=_CONSISTENCY_INSTRUCTIONS[dim])
         for dim in CONSISTENCY_DIMENSIONS

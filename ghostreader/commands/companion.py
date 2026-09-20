@@ -36,7 +36,11 @@ async def run_companion(
 ) -> int:
     """Run companion pipeline. Returns process exit code (0/1/2)."""
     from ghostreader.llm import get_llm, load_secrets
-    from ghostreader.typesafe import ensure_typesafe_api_key, resolve_typesafe_enabled
+    from ghostreader.typesafe import (
+        ensure_typesafe_api_key,
+        ensure_typesafe_sdk,
+        resolve_typesafe_enabled,
+    )
     from ghostreader.typesafe.client import TypesafeConfigError
 
     path = path.resolve()
@@ -57,6 +61,7 @@ async def run_companion(
 
     if typesafe_on:
         try:
+            ensure_typesafe_sdk()
             ensure_typesafe_api_key()
         except TypesafeConfigError as exc:
             _ERR.print(f"[red]Error:[/red] {exc}")

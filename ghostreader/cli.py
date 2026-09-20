@@ -171,7 +171,11 @@ async def _run_analyze(
     from ghostreader.report.markdown_writer import write_markdown_report
     from ghostreader.report.rewrites import generate_rewrites
     from ghostreader.report.terminal_output import render_report
-    from ghostreader.typesafe import ensure_typesafe_api_key, resolve_typesafe_enabled
+    from ghostreader.typesafe import (
+        ensure_typesafe_api_key,
+        ensure_typesafe_sdk,
+        resolve_typesafe_enabled,
+    )
     from ghostreader.typesafe.client import TypesafeConfigError
 
     path = path.resolve()
@@ -184,6 +188,7 @@ async def _run_analyze(
     load_secrets()
     if typesafe_on:
         try:
+            ensure_typesafe_sdk()
             ensure_typesafe_api_key()
         except TypesafeConfigError as exc:
             rprint(f"[red]Error:[/red] {exc}")

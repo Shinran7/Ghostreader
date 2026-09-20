@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from langchain_core.language_models import BaseChatModel
-from typesafe_sdk import Noul
 
 from ghostreader.companion.continuity import COMPANION_GATE_DIMS
 from ghostreader.graph import AnalysisState
@@ -29,6 +28,8 @@ def _bias_prefix(*, mode: CompanionMode, chapter_n: int) -> str:
 
 def companion_gate_questions() -> dict[str, Any]:
     """Noul questions for contradiction-shaped dims only."""
+    from typesafe_sdk import Noul
+
     return {
         dim: Noul(instructions=_CONSISTENCY_INSTRUCTIONS[dim])
         for dim in sorted(COMPANION_GATE_DIMS)

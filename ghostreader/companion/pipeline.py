@@ -26,10 +26,6 @@ from ghostreader.companion.progress import (
     load_progress,
     update_progress_after_run,
 )
-from ghostreader.companion.typesafe_consistency import (
-    run_companion_consistency,
-    soft_bias_user_message,
-)
 from ghostreader.graph import chapters_to_dicts, repetition_report_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.report import DimensionRating, PrioritizedFinding
@@ -131,13 +127,15 @@ async def _run_llm_consistency(
     chapter_n: int,
     mode: Literal["progressive", "sweep"],
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
-    from ghostreader.agents.consistency_checker import _parse_findings
+    from ghostreader.agents.consistency_checker import (
+        _SCENE_CONSISTENCY_PROMPT,
+        _parse_findings,
+    )
     from ghostreader.agents.genre_prompts import get_genre_preamble
+    from ghostreader.companion.typesafe_consistency import soft_bias_user_message
     from ghostreader.seed import build_author_intent_block
 
     # Mirror scene_consistency_checker_node prompt with soft bias.
-    from ghostreader.agents.consistency_checker import _SCENE_CONSISTENCY_PROMPT
-
     author_intent = build_author_intent_block(seed_meta)
     system_prompt = _SCENE_CONSISTENCY_PROMPT.format(
         genre_preamble=get_genre_preamble(genre),
@@ -296,6 +294,10 @@ async def run_companion_pipeline(
             quiet_stdout_json=json_mode,
         )
         if typesafe_enabled:
+            from ghostreader.companion.typesafe_consistency import (
+                run_companion_consistency,
+            )
+
             assert typesafe_client is not None
             cont_state: dict[str, Any] = {
                 "chapters": chapters_to_dicts(cont_chapters),

@@ -13,7 +13,11 @@ from ghostreader.typesafe.adapters import (
     consistency_from_nouls,
     prioritize_findings,
 )
-from ghostreader.typesafe.client import TypesafeConfigError, ensure_typesafe_api_key
+from ghostreader.typesafe.client import (
+    TypesafeConfigError,
+    ensure_typesafe_api_key,
+    ensure_typesafe_sdk,
+)
 from ghostreader.typesafe.questions import (
     CONSISTENCY_DIMENSIONS,
     NARRATIVE_DIMENSIONS,
@@ -57,6 +61,27 @@ class TestEnsureKey:
         monkeypatch.setenv("TYPESAFE_API_KEY", "   ")
         with pytest.raises(TypesafeConfigError):
             ensure_typesafe_api_key()
+
+
+class TestEnsureSdk:
+    def test_missing_sdk_raises_actionable_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import builtins
+
+        real_import = builtins.__import__
+
+        def _fake_import(name: str, *args: object, **kwargs: object):  # noqa: ANN001
+            if name == "typesafe_sdk" or name.startswith("typesafe_sdk."):
+                raise ImportError("No module named 'typesafe_sdk'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _fake_import)
+        with pytest.raises(TypesafeConfigError, match="typesafe_sdk package"):
+            ensure_typesafe_sdk()
+
+    def test_sdk_present_ok(self) -> None:
+        ensure_typesafe_sdk()
 
     def test_present_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TYPESAFE_API_KEY", "sk-test")
