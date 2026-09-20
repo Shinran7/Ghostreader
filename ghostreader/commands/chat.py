@@ -19,6 +19,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from ghostreader.lancedb_util import has_table
+
 _CONSOLE = Console()
 
 _CHUNKS_TABLE = "chunks"
@@ -63,9 +65,8 @@ def run_chat(
 
     # Connect to LanceDB
     db = lancedb.connect(str(db_path))
-    available_tables = db.list_tables()
 
-    if _CHUNKS_TABLE not in available_tables:
+    if not has_table(db, _CHUNKS_TABLE):
         _CONSOLE.print(
             "[red]Error:[/red] Chunks table missing from LanceDB index. "
             "Re-run [cyan]ghostreader analyze[/cyan]."
@@ -75,7 +76,7 @@ def run_chat(
     chunks_table = db.open_table(_CHUNKS_TABLE)
     summaries_table = (
         db.open_table(_SUMMARIES_TABLE)
-        if _SUMMARIES_TABLE in available_tables
+        if has_table(db, _SUMMARIES_TABLE)
         else None
     )
 

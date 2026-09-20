@@ -10,6 +10,7 @@ import pyarrow as pa
 from ghostreader.embed import Embedder, StubEmbedder, get_embedder
 from ghostreader.ingestion import Chapter, SummaryHierarchy
 from ghostreader.ingestion.chunking import TextChunk, chunk_text
+from ghostreader.lancedb_util import has_table
 
 _CHUNKS_TABLE = "chunks"
 _SUMMARIES_TABLE = "summaries"
@@ -102,7 +103,7 @@ def _write_chunks_table(
         ]
     )
 
-    if _CHUNKS_TABLE in db.list_tables():
+    if has_table(db, _CHUNKS_TABLE):
         db.drop_table(_CHUNKS_TABLE)
     db.create_table(_CHUNKS_TABLE, data=records, schema=schema)
 
@@ -157,6 +158,6 @@ def _write_summaries_table(
         ]
     )
 
-    if _SUMMARIES_TABLE in db.list_tables():
+    if has_table(db, _SUMMARIES_TABLE):
         db.drop_table(_SUMMARIES_TABLE)
     db.create_table(_SUMMARIES_TABLE, data=records, schema=schema)
