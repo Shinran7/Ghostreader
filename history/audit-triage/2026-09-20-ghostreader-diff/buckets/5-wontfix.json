@@ -1,0 +1,28 @@
+{
+  "bucket": "5-wontfix",
+  "count": 2,
+  "auditCommit": "bfb9e722",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader-diff",
+  "findings": [
+    {
+      "findingId": "93b7743f5addd65c",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/indexer.py",
+      "line": 106,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "has_table then drop/create is single-CLI overwrite; concurrent indexers on one LanceDB are outside Ghostreader product use.",
+      "message": "ghostreader/ingestion/indexer.py:106 \u2014 TOCTOU race condition. Who is hurt: concurrent indexing processes. Failure: check-then-act gap between has_table and drop_table/create_table leads to table already exists or not found exceptions."
+    },
+    {
+      "findingId": "9e0bc244a2b5fcc2",
+      "severity": "P2",
+      "filePath": "ghostreader/commands/compare.py",
+      "line": 71,
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "CLI intentionally SystemExit(1) with a clear --no-cache message; tests/test_compare.py asserts that exit.",
+      "message": "ghostreader/commands/compare.py:71 \u2014 Hard process exit. Who is hurt: automated test harnesses and CLI wrappers. Failure: raise SystemExit(1) abruptly aborts execution on --no-cache instead of raising an exception or returning a status."
+    }
+  ]
+}

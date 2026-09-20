@@ -1,0 +1,12 @@
+{
+  "bugs": 0,
+  "reporting": 5,
+  "wontfix": 2,
+  "pending": 0,
+  "verdicts": {
+    "overstated": 3,
+    "duplicate": 1,
+    "false-positive": 1,
+    "wontfix": 2
+  }
+}

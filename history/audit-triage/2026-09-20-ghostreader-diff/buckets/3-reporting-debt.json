@@ -1,0 +1,58 @@
+{
+  "bucket": "3-reporting-debt",
+  "count": 5,
+  "auditCommit": "bfb9e722",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader-diff",
+  "findings": [
+    {
+      "findingId": "5e5755ca392fd020",
+      "severity": "P1",
+      "filePath": "ghostreader/embed.py",
+      "line": 109,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Known OpenAI models use _OPENAI_DIMS with no probe (tested); unknown-model probe can raise on auth/network, which is intentional fail-closed for bad config, not a P1 safe-property crash.",
+      "message": "ghostreader/embed.py:109 \u2014 Synchronous crash on property access. Who is hurt: callers expecting safe property inspection. Failure: dimension property crashes synchronously on probe failure with IndexError or network auth exceptions."
+    },
+    {
+      "findingId": "aee7cb52da24dc51",
+      "severity": "P2",
+      "filePath": "ghostreader/embed.py",
+      "line": 115,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "Line 115 is def embed (already guards empty vectors); probe[0] IndexError is the same unknown-model path as 5e5755ca392fd020.",
+      "message": "ghostreader/embed.py:115 \u2014 Unhandled empty response crash. Who is hurt: users configuring unknown or non-standard embedding models. Failure: indexing probe[0] crashes with IndexError if the embedding backend returns an empty vector list."
+    },
+    {
+      "findingId": "59ed99f2021791da",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 148,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "format_fact_sheets emits PARSE_FAILED: ... do not treat as contradiction-free for LLM consumers; parse_failed flag is set on the TypedDict for code paths.",
+      "message": "ghostreader/agents/fact_extractor.py:148 \u2014 Ineffective error propagation. Who is hurt: fact sheet consumers. Failure: formatting PARSE_FAILED as unstructured comment text allows downstream prompt consumers to treat empty sheets as contradiction-free."
+    },
+    {
+      "findingId": "97980081fe9290a8",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/repetition_detector.py",
+      "line": 215,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "ValueError catch is the empty-vocabulary guard after strip/empty-doc checks; vectorizer params are hardcoded so non-vocab ValueErrors are not a shown failure path.",
+      "message": "ghostreader/analyzers/repetition_detector.py:215 \u2014 Silent error suppression. Who is hurt: callers checking repetition accuracy. Failure: catching generic ValueError masks non-empty vocabulary vectorizer errors and falsely reports zero repetitions."
+    },
+    {
+      "findingId": "3e823ec400b7914e",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/synthesis.py",
+      "line": 297,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Unconditional strengths/concerns recompute from findings is the intentional fix for setdefault+fallback zeros; casing drift is hypothetical against lowercase prompt/TypedDict values.",
+      "message": "ghostreader/agents/synthesis.py:297 \u2014 Report counts mismatch. Who is hurt: report consumers. Failure: strengths_count and concerns_count unconditionally overwrite LLM output and drop counts if severity values differ in casing."
+    }
+  ]
+}

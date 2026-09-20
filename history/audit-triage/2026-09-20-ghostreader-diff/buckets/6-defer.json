@@ -1,0 +1,7 @@
+{
+  "bucket": "6-defer",
+  "count": 0,
+  "auditCommit": "bfb9e722",
+  "triageDir": ".tmp/audit-triage/2026-09-20-ghostreader-diff",
+  "findings": []
+}
