@@ -5,6 +5,15 @@ vbrief/.eval/
 # Ghostreader per-manuscript state
 .ghostreader/
 
+# SLizard audit cache — keep policy files trackable
+.slizard/*
+!.slizard/suppressions.yml
+!.slizard/config.json
+!.slizard/rules.yml
+
+# Audit triage scratch (exports under history/audit-triage/ are committed)
+.tmp/audit-triage/
+
 # Python
 __pycache__/
 *.pyc
