@@ -2,6 +2,15 @@
 
 Produces structured JSON output matching the internal analysis model,
 suitable for scripting and downstream tool integration.
+
+Version fields on the analyze payload:
+
+- ``ghostreader_version`` — analyze JSON *contract* (``ANALYZE_JSON_VERSION``).
+  Bumps only when analyze JSON shape changes. Independent of companion briefs.
+- ``package_version`` — installed package version (``ghostreader.__version__``).
+  For tool correlation; does not imply contract equality across surfaces.
+
+See ``ANALYZE_HOOK.md`` for the Autonomicon-facing contract note.
 """
 
 from __future__ import annotations
@@ -13,10 +22,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
 
+from ghostreader import __version__ as PACKAGE_VERSION
 from ghostreader.report import ReportOutput
 
 # Analyze JSON contract version (independent of package __version__).
 # Bumped to 0.2.0 when always-present repetition_findings landed.
+# package_version is additive and does not bump this contract.
 ANALYZE_JSON_VERSION = "0.2.0"
 
 
@@ -62,6 +73,7 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
     """Build the JSON-serializable dict from a ReportOutput."""
     return {
         "ghostreader_version": ANALYZE_JSON_VERSION,
+        "package_version": PACKAGE_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "manuscript_name": report.manuscript_name,
         "executive_summary": report.executive_summary,

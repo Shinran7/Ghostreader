@@ -8,7 +8,14 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.1`**. It is independent of package `__version__` and of analyze JSON export (those may stay `0.1.0`).
+`ghostreader_version` on this payload is **`0.2.1`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+
+| Field | Meaning |
+| --- | --- |
+| `ghostreader_version` | Companion JSON contract (**`0.2.1`**). Independent of analyze JSON (`0.2.0`) and of package `__version__`. |
+| `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
+
+Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
 
 ## Shared continuity judgment text (no contract bump)
 
@@ -60,6 +67,10 @@ Always present (empty lists until filled):
 
 - `repetition_findings` — algorithmic craft-window rows from `companion_repetition_to_dicts` (cap 25). Always present; empty when craft is skipped (`--continuity-only`) or nothing N-relevant was found.
 
+### Additive (no contract bump)
+
+- `package_version` — install version string. Same meaning as on analyze JSON. Brief stays **`0.2.1`**.
+
 | Field | Type | Notes |
 | --- | --- | --- |
 | `phrase` | string | Exact/near-exact text. Dialogue tags are the lemma only (e.g. `said`), not a `[dialogue tag]` prefix |
@@ -81,6 +92,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 ```json
 {
   "ghostreader_version": "0.2.1",
+  "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
   "manuscript_name": "the-jailer-s-wound",
@@ -136,7 +148,7 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.1`; additive keys exist including `repetition_findings`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.1`; additive keys exist including `repetition_findings` and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.

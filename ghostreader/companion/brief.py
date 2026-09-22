@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from ghostreader import __version__ as PACKAGE_VERSION
 from ghostreader.report import (
     DimensionRating,
     PrioritizedFinding,
@@ -20,6 +21,7 @@ from ghostreader.report import (
     severity_emoji,
 )
 
+# Companion brief JSON contract (independent of package __version__ / analyze).
 GHOSTREADER_VERSION = "0.2.1"
 
 
@@ -122,6 +124,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
     generated = brief.generated_at or datetime.now(timezone.utc).isoformat()
     return {
         "ghostreader_version": GHOSTREADER_VERSION,
+        "package_version": PACKAGE_VERSION,
         "mode": brief.mode,
         "generated_at": generated,
         "manuscript_name": brief.manuscript_name,

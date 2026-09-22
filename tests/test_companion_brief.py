@@ -83,6 +83,7 @@ class TestJsonPayload:
         payload = brief_to_payload(brief)
         for key in (
             "ghostreader_version",
+            "package_version",
             "mode",
             "verdict",
             "continuity_findings",
@@ -100,6 +101,9 @@ class TestJsonPayload:
             "ungrounded_count",
         ):
             assert key in payload
+        from ghostreader import __version__ as pkg_ver
+        from ghostreader.companion.brief import GHOSTREADER_VERSION
+
         assert payload["mode"] == "progressive"
         assert payload["warnings"] == ["gap note"]
         assert payload["craft_window_chapters"] == []
@@ -109,6 +113,9 @@ class TestJsonPayload:
         assert payload["narrative_ratings"] == []
         assert payload["verdict_drivers"] == []
         assert payload["repetition_findings"] == []
+        assert GHOSTREADER_VERSION == "0.2.1"
+        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["package_version"] == pkg_ver
 
         buf = io.StringIO()
         text = export_brief_json(brief, output=buf)
@@ -116,6 +123,7 @@ class TestJsonPayload:
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
         assert parsed["ghostreader_version"] == "0.2.1"
+        assert parsed["package_version"] == pkg_ver
 
     def test_craft_window_chapters_in_payload(self) -> None:
         brief = CompanionBrief(
@@ -135,6 +143,9 @@ class TestJsonPayload:
         assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
         assert payload["ghostreader_version"] == "0.2.1"
         assert payload["repetition_findings"] == []
+        from ghostreader import __version__ as pkg_ver
+
+        assert payload["package_version"] == pkg_ver
 
     def test_repetition_findings_in_payload(self) -> None:
         row = {

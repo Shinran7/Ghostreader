@@ -199,6 +199,9 @@ class TestJsonExport:
         assert data["overview"]["total_findings"] == 2
         assert data["ghostreader_version"] == "0.2.0"
         assert data["repetition_findings"] == []
+        from ghostreader import __version__ as pkg_ver
+
+        assert data["package_version"] == pkg_ver
 
     def test_export_json_to_stdout(self, sample_report: ReportOutput) -> None:
         from io import StringIO
@@ -211,6 +214,7 @@ class TestJsonExport:
     def test_contract_0_2_0_always_emits_repetition_findings(
         self, sample_report: ReportOutput
     ) -> None:
+        from ghostreader import __version__ as pkg_ver
         from ghostreader.report.json_export import ANALYZE_JSON_VERSION, _build_payload
 
         assert ANALYZE_JSON_VERSION == "0.2.0"
@@ -218,7 +222,7 @@ class TestJsonExport:
         assert payload["ghostreader_version"] == "0.2.0"
         assert "repetition_findings" in payload
         assert payload["repetition_findings"] == []
-        assert "package_version" not in payload
+        assert payload["package_version"] == pkg_ver
 
 
 # ── Algorithmic repetition export ─────────────────────────────────────
@@ -362,3 +366,6 @@ class TestAnalyzeRepetitionFindings:
         payload = _build_payload(sample_report)
         assert payload["repetition_findings"] == [row]
         assert payload["ghostreader_version"] == "0.2.0"
+        from ghostreader import __version__ as pkg_ver
+
+        assert payload["package_version"] == pkg_ver
