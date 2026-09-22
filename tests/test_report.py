@@ -197,6 +197,8 @@ class TestJsonExport:
         data = json.loads(text)
         assert data["manuscript_name"] == "Test Manuscript"
         assert data["overview"]["total_findings"] == 2
+        assert data["ghostreader_version"] == "0.2.0"
+        assert data["repetition_findings"] == []
 
     def test_export_json_to_stdout(self, sample_report: ReportOutput) -> None:
         from io import StringIO
@@ -205,3 +207,158 @@ class TestJsonExport:
         buf = StringIO()
         export_json(sample_report, output=buf)
         assert "Test Manuscript" in buf.getvalue()
+
+    def test_contract_0_2_0_always_emits_repetition_findings(
+        self, sample_report: ReportOutput
+    ) -> None:
+        from ghostreader.report.json_export import ANALYZE_JSON_VERSION, _build_payload
+
+        assert ANALYZE_JSON_VERSION == "0.2.0"
+        payload = _build_payload(sample_report)
+        assert payload["ghostreader_version"] == "0.2.0"
+        assert "repetition_findings" in payload
+        assert payload["repetition_findings"] == []
+        assert "package_version" not in payload
+
+
+# ── Algorithmic repetition export ─────────────────────────────────────
+
+
+class TestAnalyzeRepetitionFindings:
+    def test_row_shape_focus_count_zero_no_dialogue_tag(self) -> None:
+        from ghostreader.report.repetition_export import analyze_repetition_findings
+
+        chapters = [
+            {
+                "chapter_number": 1,
+                "content": "The cold iron bit his palm hard.",
+            },
+            {
+                "chapter_number": 3,
+                "content": "Again the cold iron sang.",
+            },
+        ]
+        data = [
+            {
+                "phrase": "cold iron",
+                "kind": "phrase",
+                "count": 14,
+                "chapters": [1, 3],
+                "severity": "high",
+            },
+            {
+                "phrase": "said",
+                "kind": "dialogue_tag",
+                "count": 99,
+                "chapters": [1],
+                "severity": "high",
+            },
+            {
+                "phrase": "shadow",
+                "kind": "word",
+                "count": 2,
+                "chapters": [1],
+                "severity": "low",
+            },
+        ]
+        rows = analyze_repetition_findings(data, chapters, cap=40)
+        assert all(r["kind"] != "dialogue_tag" for r in rows)
+        assert all(r["focus_count"] == 0 for r in rows)
+        assert rows[0]["phrase"] == "cold iron"
+        assert rows[0]["scope"] == "cross_chapter"
+        assert rows[0]["normalized_key"] == "cold iron"
+        assert rows[0]["quote"] is not None
+        assert "cold iron" in rows[0]["quote"].lower()
+        assert any(r["phrase"] == "shadow" and r["scope"] == "local" for r in rows)
+
+    def test_cap_and_empty_ok(self) -> None:
+        from ghostreader.report.repetition_export import analyze_repetition_findings
+
+        assert analyze_repetition_findings([], [], cap=40) == []
+        data = [
+            {
+                "phrase": f"term{i}",
+                "kind": "word",
+                "count": 100 - i,
+                "chapters": [1, 2] if i % 2 == 0 else [1],
+                "severity": "high" if i < 5 else "moderate",
+            }
+            for i in range(50)
+        ]
+        rows = analyze_repetition_findings(data, [], cap=40)
+        assert len(rows) == 40
+        rows_small = analyze_repetition_findings(data, [], cap=3)
+        assert len(rows_small) == 3
+
+    def test_sentence_pattern_uses_example_quote(self) -> None:
+        from ghostreader.report.repetition_export import analyze_repetition_findings
+
+        data = [
+            {
+                "phrase": "It was X that Y",
+                "kind": "sentence_pattern",
+                "count": 3,
+                "chapters": [2],
+                "severity": "moderate",
+                "examples": ["It was the gate that sealed them."],
+            }
+        ]
+        rows = analyze_repetition_findings(data, [], cap=40)
+        assert len(rows) == 1
+        assert rows[0]["focus_count"] == 0
+        assert rows[0]["quote"] == "It was the gate that sealed them."
+        assert rows[0]["scope"] == "local"
+
+    def test_markdown_subsection_when_rows_present(
+        self, sample_report: ReportOutput, tmp_path: Path
+    ) -> None:
+        from ghostreader.report.markdown_writer import write_markdown_report
+
+        sample_report.repetition_findings = [
+            {
+                "phrase": "cold iron",
+                "kind": "phrase",
+                "count": 14,
+                "chapters": [1, 3],
+                "scope": "cross_chapter",
+                "severity": "high",
+                "quote": "The cold iron bit his palm.",
+                "normalized_key": "cold iron",
+                "focus_count": 0,
+            }
+        ]
+        path = write_markdown_report(sample_report, output_dir=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "## Algorithmic repetition" in content
+        assert "cold iron" in content
+        assert "The cold iron bit his palm." in content
+
+    def test_markdown_omits_subsection_when_empty(
+        self, sample_report: ReportOutput, tmp_path: Path
+    ) -> None:
+        from ghostreader.report.markdown_writer import write_markdown_report
+
+        path = write_markdown_report(sample_report, output_dir=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "Algorithmic repetition" not in content
+
+    def test_json_includes_populated_repetition_findings(
+        self, sample_report: ReportOutput
+    ) -> None:
+        from ghostreader.report.json_export import _build_payload
+
+        row = {
+            "phrase": "cold iron",
+            "kind": "phrase",
+            "count": 14,
+            "chapters": [1, 3],
+            "scope": "cross_chapter",
+            "severity": "high",
+            "quote": "The cold iron bit his palm.",
+            "normalized_key": "cold iron",
+            "focus_count": 0,
+        }
+        sample_report.repetition_findings = [row]
+        payload = _build_payload(sample_report)
+        assert payload["repetition_findings"] == [row]
+        assert payload["ghostreader_version"] == "0.2.0"

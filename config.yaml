@@ -69,3 +69,6 @@ analyze_grounding_hardening: true
 # Continuity enrich signal_kind + tone_understatement plot_holes demotion.
 # false skips asking/parsing signal_kind and the tone demotion.
 analyze_continuity_signal_kind: true
+
+# Max algorithmic repetition_findings rows in analyze JSON export.
+analyze_repetition_findings_cap: 40

@@ -65,6 +65,7 @@ def write_markdown_report(
     sections.append(_severity_overview(report))
     sections.append(_dimension_ratings(report))
     sections.append(_findings(report))
+    sections.append(_algorithmic_repetition(report))
 
     if show_rewrites and report.rewrite_suggestions:
         sections.append(_rewrites(report.rewrite_suggestions))
@@ -156,6 +157,32 @@ def _findings(report: ReportOutput) -> str:
                 parts.append(f"> **vs.** {f.counter_evidence}\n")
 
     return "\n".join(parts)
+
+
+def _algorithmic_repetition(report: ReportOutput) -> str:
+    """Thin subsection for book-wide algorithmic repetition rows (RD-2)."""
+    rows = report.repetition_findings
+    if not rows:
+        return ""
+    lines = [
+        "\n## Algorithmic repetition\n",
+        "*Detector rows (prefer these for surgical avoid-lists).*\n",
+    ]
+    for row in rows:
+        phrase = row.get("phrase") or ""
+        kind = row.get("kind") or "phrase"
+        count = row.get("count") or 0
+        severity = row.get("severity") or "low"
+        chapters = row.get("chapters") or []
+        ch_str = ", ".join(str(c) for c in chapters) if chapters else "—"
+        lines.append(
+            f"- **{severity}** `{phrase}` ({kind} × {count}; chapters: {ch_str})"
+        )
+        quote = row.get("quote")
+        if quote:
+            lines.append(f"  > {quote}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _rewrites(suggestions: list[RewriteSuggestion]) -> str:

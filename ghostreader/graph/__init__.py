@@ -29,6 +29,7 @@ class AnalysisConfig(TypedDict, total=False):
     analyze_continuity_enrich_total_budget: int
     analyze_grounding_hardening: bool
     analyze_continuity_signal_kind: bool
+    analyze_repetition_findings_cap: int
 
 
 class AgentFinding(TypedDict, total=False):

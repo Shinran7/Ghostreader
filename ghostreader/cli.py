@@ -169,6 +169,7 @@ async def _run_analyze(
     from ghostreader.report import ReportOutput
     from ghostreader.report.json_export import export_json
     from ghostreader.report.markdown_writer import write_markdown_report
+    from ghostreader.report.repetition_export import analyze_repetition_findings
     from ghostreader.report.rewrites import generate_rewrites
     from ghostreader.report.terminal_output import render_report
     from ghostreader.typesafe import (
@@ -328,17 +329,20 @@ async def _run_analyze(
         "analyze_continuity_enrich_total_budget": cfg.analyze_continuity_enrich_total_budget,
         "analyze_grounding_hardening": cfg.analyze_grounding_hardening,
         "analyze_continuity_signal_kind": cfg.analyze_continuity_signal_kind,
+        "analyze_repetition_findings_cap": cfg.analyze_repetition_findings_cap,
     }
+    chapter_dicts = chapters_to_dicts(chapters)
+    repetition_data = repetition_report_to_dicts(
+        rep_report,
+        max_words=cfg.analyze_repetition_words,
+        max_phrases=cfg.analyze_repetition_phrases,
+        max_patterns=cfg.analyze_repetition_patterns,
+    )
     initial_state: dict = {
-        "chapters": chapters_to_dicts(chapters),
+        "chapters": chapter_dicts,
         "chunk_count": chunk_count,
         "summary_hierarchy": hierarchy_to_dict(hierarchy),
-        "repetition_data": repetition_report_to_dicts(
-            rep_report,
-            max_words=cfg.analyze_repetition_words,
-            max_phrases=cfg.analyze_repetition_phrases,
-            max_patterns=cfg.analyze_repetition_patterns,
-        ),
+        "repetition_data": repetition_data,
         "config": config,
     }
     if chapter_facts:
@@ -365,6 +369,11 @@ async def _run_analyze(
         final_report,
         manuscript_name=manuscript_name,
         warnings=pipeline_warnings,
+        repetition_findings=analyze_repetition_findings(
+            repetition_data,
+            chapter_dicts,
+            cap=cfg.analyze_repetition_findings_cap,
+        ),
     )
 
     # ── 5b. Optional rewrite suggestions ──

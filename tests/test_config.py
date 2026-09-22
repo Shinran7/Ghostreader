@@ -36,6 +36,7 @@ class TestGhostreaderConfig:
         assert cfg.analyze_continuity_enrich_total_budget == 120000
         assert cfg.analyze_grounding_hardening is True
         assert cfg.analyze_continuity_signal_kind is True
+        assert cfg.analyze_repetition_findings_cap == 40
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -59,6 +60,7 @@ class TestGhostreaderConfig:
         assert "analyze_continuity_enrich_total_budget: 120000" in text
         assert "analyze_grounding_hardening: true" in text
         assert "analyze_continuity_signal_kind: true" in text
+        assert "analyze_repetition_findings_cap: 40" in text
         assert "Does NOT revert analyze_repetition_*" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
@@ -72,6 +74,7 @@ class TestGhostreaderConfig:
         assert loaded.analyze_repetition_patterns == 20
         assert loaded.analyze_grounding_hardening is True
         assert loaded.analyze_continuity_signal_kind is True
+        assert loaded.analyze_repetition_findings_cap == 40
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

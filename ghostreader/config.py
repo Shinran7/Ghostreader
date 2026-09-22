@@ -62,6 +62,8 @@ class GhostreaderConfig(BaseModel):
     analyze_grounding_hardening: bool = True
     # Ask/parse continuity signal_kind; demote tone_understatement plot_holes.
     analyze_continuity_signal_kind: bool = True
+    # Max algorithmic repetition_findings rows in analyze JSON (always on).
+    analyze_repetition_findings_cap: int = 40
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -173,6 +175,9 @@ class GhostreaderConfig(BaseModel):
             f"# Continuity enrich signal_kind + tone_understatement plot_holes demotion.",
             f"# false skips asking/parsing signal_kind and the tone demotion.",
             f"analyze_continuity_signal_kind: {_fmt(self.analyze_continuity_signal_kind)}",
+            f"",
+            f"# Max algorithmic repetition_findings rows in analyze JSON export.",
+            f"analyze_repetition_findings_cap: {_fmt(self.analyze_repetition_findings_cap)}",
             f"",
         ]
 

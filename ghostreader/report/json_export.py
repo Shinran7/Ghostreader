@@ -15,6 +15,10 @@ from typing import Any, TextIO
 
 from ghostreader.report import ReportOutput
 
+# Analyze JSON contract version (independent of package __version__).
+# Bumped to 0.2.0 when always-present repetition_findings landed.
+ANALYZE_JSON_VERSION = "0.2.0"
+
 
 def export_json(
     report: ReportOutput,
@@ -57,7 +61,7 @@ def export_json(
 def _build_payload(report: ReportOutput) -> dict[str, Any]:
     """Build the JSON-serializable dict from a ReportOutput."""
     return {
-        "ghostreader_version": "0.1.0",
+        "ghostreader_version": ANALYZE_JSON_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "manuscript_name": report.manuscript_name,
         "executive_summary": report.executive_summary,
@@ -73,10 +77,11 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
         "prioritized_findings": [
             asdict(f) for f in report.prioritized_findings
         ],
+        "repetition_findings": list(report.repetition_findings),
         "rewrite_suggestions": [
             asdict(s) for s in report.rewrite_suggestions
         ] if report.rewrite_suggestions else [],
     }
 
 
-__all__ = ["export_json"]
+__all__ = ["ANALYZE_JSON_VERSION", "export_json"]
