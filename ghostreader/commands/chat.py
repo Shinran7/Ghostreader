@@ -20,6 +20,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from ghostreader.lancedb_util import has_table
+from ghostreader.llm import message_text
 
 _CONSOLE = Console()
 
@@ -150,7 +151,7 @@ def _chat_loop(
 
         try:
             response = llm.invoke(history)
-            answer = str(response.content).strip()
+            answer = message_text(response.content)
         except Exception as exc:
             answer = f"[LLM error: {exc}]"
 

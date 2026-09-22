@@ -28,3 +28,9 @@ typesafe_confidence_floor: 0.55
 
 # Consistency Noul at or above this → concern + enrich. Mid-band always LLM tie-break.
 typesafe_noul_positive_threshold: 0.65
+
+# Probe chat model JSON contract at analyze/companion start (model-switch guard).
+llm_json_probe: true
+
+# Abort when fact-extraction JSON parse fails (empty sheets poison continuity).
+abort_on_fact_parse_failure: true

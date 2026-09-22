@@ -8,7 +8,6 @@ all scenes in a manuscript fit in a single consistency-checking prompt.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import NotRequired, TypedDict
 
@@ -16,7 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.ingestion import Chapter
-from ghostreader.llm import message_text
+from ghostreader.llm import ainvoke_text, extract_json_object
 
 logger = logging.getLogger(__name__)
 
@@ -89,37 +88,6 @@ def parse_failed_warning(failed: int, total: int) -> str:
     )
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if not text.startswith("```"):
-        return text
-    lines = text.split("\n")
-    if lines and lines[0].strip().startswith("```"):
-        lines = lines[1:]
-    if lines and lines[-1].strip().startswith("```"):
-        lines = lines[:-1]
-    return "\n".join(lines).strip()
-
-
-def _loads_fact_dict(text: str) -> dict | None:
-    """Try to parse a fact-sheet JSON object from model text."""
-    cleaned = _strip_fences(text)
-    candidates = [cleaned]
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        candidates.append(cleaned[start : end + 1])
-
-    for candidate in candidates:
-        try:
-            data = json.loads(candidate)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if isinstance(data, dict):
-            return data
-    return None
-
-
 def _fact_from_dict(data: dict, chapter: Chapter) -> ChapterFact:
     return ChapterFact(
         chapter_number=chapter.chapter_number,
@@ -145,7 +113,7 @@ def _empty_parse_failed(chapter: Chapter) -> ChapterFact:
 
 def _parse_fact_response(raw: str, chapter: Chapter) -> ChapterFact:
     """Parse the LLM response into a ChapterFact, with fallback."""
-    data = _loads_fact_dict(raw)
+    data = extract_json_object(raw)
     if data is not None:
         return _fact_from_dict(data, chapter)
 
@@ -169,13 +137,13 @@ async def extract_chapter_facts(
         f"Chapter {chapter.chapter_number}: {chapter.title}\n\n"
         f"{chapter.content}"
     )
-    response = await llm.ainvoke(
+    raw_text = await ainvoke_text(
+        llm,
         [
             SystemMessage(content=_EXTRACTION_PROMPT),
             HumanMessage(content=user_message),
-        ]
+        ],
     )
-    raw_text = message_text(response.content)
     fact = _parse_fact_response(raw_text, chapter)
     if not fact.get("parse_failed"):
         return fact
@@ -184,7 +152,8 @@ async def extract_chapter_facts(
         "Retrying fact extraction JSON repair for chapter %s",
         chapter.chapter_number,
     )
-    repair = await llm.ainvoke(
+    repair_text = await ainvoke_text(
+        llm,
         [
             SystemMessage(content=_REPAIR_PROMPT),
             HumanMessage(
@@ -194,9 +163,9 @@ async def extract_chapter_facts(
                     f"Previous invalid reply (truncate ok):\n{raw_text[:2000]}"
                 )
             ),
-        ]
+        ],
     )
-    return _parse_fact_response(message_text(repair.content), chapter)
+    return _parse_fact_response(repair_text, chapter)
 
 
 async def extract_all_facts(

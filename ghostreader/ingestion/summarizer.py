@@ -15,6 +15,7 @@ from ghostreader.ingestion import (
     ChapterSummary,
     SummaryHierarchy,
 )
+from ghostreader.llm import message_text
 
 DEFAULT_CHAPTERS_PER_ACT = 5
 
@@ -94,7 +95,7 @@ async def _summarize_chapter(chapter: Chapter, llm: BaseChatModel) -> str:
             ),
         ]
     )
-    return str(response.content).strip()
+    return message_text(response.content)
 
 
 async def _summarize_act(act_number: int, act_text: str, llm: BaseChatModel) -> str:
@@ -110,7 +111,7 @@ async def _summarize_act(act_number: int, act_text: str, llm: BaseChatModel) -> 
             ),
         ]
     )
-    return str(response.content).strip()
+    return message_text(response.content)
 
 
 async def _summarize_global(all_acts_text: str, llm: BaseChatModel) -> str:
@@ -126,7 +127,7 @@ async def _summarize_global(all_acts_text: str, llm: BaseChatModel) -> str:
             ),
         ]
     )
-    return str(response.content).strip()
+    return message_text(response.content)
 
 
 def _group_into_acts(

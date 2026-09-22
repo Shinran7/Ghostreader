@@ -33,6 +33,12 @@ class GhostreaderConfig(BaseModel):
     companion_prior: Literal["full", "rolling"] = "full"
     companion_rolling_min_chapters: int = 15
     companion_fact_chars_budget: int = 48000
+    # Preflight: ask the chat model for {"ok": true} before expensive work.
+    # Catches provider content-shape / JSON breakage after model switches.
+    llm_json_probe: bool = True
+    # Abort analyze/companion (exit 1) when any chapter fact sheet fails JSON parse.
+    # Continuity on empty sheets looks "clean" and must not be trusted.
+    abort_on_fact_parse_failure: bool = True
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -103,6 +109,12 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Auto-roll when formatted fact sheets exceed this many characters.",
             f"companion_fact_chars_budget: {_fmt(self.companion_fact_chars_budget)}",
+            f"",
+            f"# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
+            f"llm_json_probe: {_fmt(self.llm_json_probe)}",
+            f"",
+            f"# Abort when fact-extraction JSON parse fails (empty sheets poison continuity).",
+            f"abort_on_fact_parse_failure: {_fmt(self.abort_on_fact_parse_failure)}",
             f"",
         ]
 

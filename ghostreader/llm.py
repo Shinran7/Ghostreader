@@ -24,6 +24,8 @@ def message_text(content: object) -> str:
     Some providers (notably Gemini via langchain) return a list of content
     parts instead of a bare string. ``str(list)`` dumps a Python repr and
     breaks JSON/summary parsing downstream.
+
+    Always prefer this over ``str(response.content)`` when switching models.
     """
     if content is None:
         return ""
@@ -44,6 +46,125 @@ def message_text(content: object) -> str:
                     parts.append(str(text))
         return "\n".join(parts).strip()
     return str(content).strip()
+
+
+def _strip_markdown_fences(text: str) -> str:
+    text = text.strip()
+    if not text.startswith("```"):
+        return text
+    lines = text.split("\n")
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def _loads_json_candidates(candidates: list[str]) -> object | None:
+    import json
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return None
+
+
+def extract_json_object(text: str) -> dict | None:
+    """Parse a JSON object from model text, or ``None`` if unavailable.
+
+    Handles markdown fences and leading/trailing commentary by slicing from
+    the first ``{`` to the last ``}``.
+    """
+    cleaned = _strip_markdown_fences(text)
+    if not cleaned:
+        return None
+    candidates = [cleaned]
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidates.append(cleaned[start : end + 1])
+    value = _loads_json_candidates(candidates)
+    return value if isinstance(value, dict) else None
+
+
+def extract_json_array(text: str) -> list | None:
+    """Parse a JSON array from model text, or ``None`` if unavailable.
+
+    Handles markdown fences and leading/trailing commentary by slicing from
+    the first ``[`` to the last ``]``. Prefer this over object slicing when
+    the payload is a findings list (objects inside arrays must not win).
+    """
+    cleaned = _strip_markdown_fences(text)
+    if not cleaned:
+        return None
+    candidates = [cleaned]
+    start = cleaned.find("[")
+    end = cleaned.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        candidates.append(cleaned[start : end + 1])
+    value = _loads_json_candidates(candidates)
+    return value if isinstance(value, list) else None
+
+
+async def ainvoke_text(
+    llm: BaseChatModel,
+    messages: list[BaseMessage],
+) -> str:
+    """Invoke a chat model and normalize ``content`` via ``message_text``."""
+    response = await llm.ainvoke(messages)
+    return message_text(getattr(response, "content", response))
+
+
+_JSON_PROBE_SYSTEM = (
+    "You are a JSON contract probe. Return ONLY valid JSON with this exact shape: "
+    '{"ok": true}. No markdown fences. No commentary.'
+)
+_JSON_PROBE_REPAIR = (
+    "Your previous reply was not valid JSON. Return ONLY {\"ok\": true} "
+    "with no markdown and no other keys."
+)
+
+
+async def probe_json_contract(llm: BaseChatModel) -> tuple[bool, str]:
+    """Cheap preflight: can this model return parseable JSON after normalization?
+
+    Skips automatically for the in-process stub LLM (tests / no-key mode).
+    Returns ``(ok, detail)`` where *detail* is the raw normalized text or a
+    skip reason.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    if getattr(llm, "_llm_type", None) == "stub":
+        return True, "skipped stub LLM"
+
+    text = await ainvoke_text(
+        llm,
+        [
+            SystemMessage(content=_JSON_PROBE_SYSTEM),
+            HumanMessage(content="Probe now."),
+        ],
+    )
+    data = extract_json_object(text)
+    if isinstance(data, dict) and data.get("ok") is True:
+        return True, text
+
+    repair = await ainvoke_text(
+        llm,
+        [
+            SystemMessage(content=_JSON_PROBE_REPAIR),
+            HumanMessage(
+                content=f"Previous invalid reply:\n{text[:1000]}\n\nReturn {{\"ok\": true}} only."
+            ),
+        ],
+    )
+    data = extract_json_object(repair)
+    if isinstance(data, dict) and data.get("ok") is True:
+        return True, repair
+    return False, repair or text
 
 
 def load_secrets() -> None:

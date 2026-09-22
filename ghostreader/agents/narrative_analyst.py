@@ -12,7 +12,6 @@ Uses the summary hierarchy for cross-chapter awareness.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -111,28 +110,22 @@ def _format_chapter_excerpts(
 
 def _parse_findings(raw: str) -> list[AgentFinding]:
     """Parse LLM response into structured findings, with fallback."""
-    text = raw.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [ln for ln in lines if not ln.strip().startswith("```")]
-        text = "\n".join(lines)
+    from ghostreader.llm import extract_json_array
 
-    try:
-        data = json.loads(text)
-        if isinstance(data, list):
-            return [
-                AgentFinding(
-                    dimension=f.get("dimension", "narrative.unknown"),
-                    severity=f.get("severity", "neutral"),
-                    summary=f.get("summary", ""),
-                    evidence=f.get("evidence", ""),
-                    chapter_ref=str(f.get("chapter_ref", "")),
-                )
-                for f in data
-                if isinstance(f, dict)
-            ]
-    except (json.JSONDecodeError, TypeError):
-        pass
+    text = raw.strip()
+    data = extract_json_array(text)
+    if isinstance(data, list):
+        return [
+            AgentFinding(
+                dimension=f.get("dimension", "narrative.unknown"),
+                severity=f.get("severity", "neutral"),
+                summary=f.get("summary", ""),
+                evidence=f.get("evidence", ""),
+                chapter_ref=str(f.get("chapter_ref", "")),
+            )
+            for f in data
+            if isinstance(f, dict)
+        ]
 
     return [
         AgentFinding(
@@ -178,7 +171,9 @@ async def _narrative_llm_path(
         ]
     )
 
-    raw_text = str(response.content).strip()
+    from ghostreader.llm import message_text
+
+    raw_text = message_text(response.content)
     findings = _parse_findings(raw_text)
 
     output: AgentOutput = {

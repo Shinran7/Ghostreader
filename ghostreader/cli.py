@@ -212,6 +212,24 @@ async def _run_analyze(
             f"(jev-latest, confidence floor {floor})"
         )
 
+    if cfg.llm_json_probe:
+        from ghostreader.llm import probe_json_contract
+
+        rprint("[cyan]Probing LLM JSON contract...[/cyan]")
+        probe_ok, probe_detail = await probe_json_contract(llm)
+        if not probe_ok:
+            rprint(
+                "[bold red]Aborting:[/bold red] Chat model failed the JSON contract probe "
+                "after normalization + one repair retry.\n"
+                "  Continuity/fact extraction would produce empty sheets and false "
+                "'no contradictions' results.\n"
+                "  Switch models, fix provider wiring, or set llm_json_probe: false "
+                "(not recommended).\n"
+                f"  Probe reply was: {probe_detail[:300]!r}"
+            )
+            raise typer.Exit(code=1)
+        rprint("[green]LLM JSON probe:[/green] ok")
+
     # ── Seed.yaml: author-stated intent ──
     from ghostreader.seed import load_seed_meta
 
@@ -249,6 +267,15 @@ async def _run_analyze(
         warn = parse_failed_warning(failed_facts, len(chapter_facts))
         pipeline_warnings.append(warn)
         rprint(f"[bold yellow]Warning:[/bold yellow] {warn}")
+        if cfg.abort_on_fact_parse_failure:
+            rprint(
+                "[bold red]Aborting:[/bold red] Fact extraction JSON parse failures "
+                "poison continuity. Empty sheets look 'clean' and must not be trusted.\n"
+                "  Re-run after fixing the model response format, or set "
+                "abort_on_fact_parse_failure: false to continue degraded "
+                "(warnings still recorded)."
+            )
+            raise typer.Exit(code=1)
 
     rprint("[cyan]Building summary hierarchy...[/cyan]")
     hierarchy = await build_summary_hierarchy(chapters, llm)

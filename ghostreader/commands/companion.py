@@ -83,6 +83,23 @@ async def run_companion(
             f"(companion gate dims; floor {cfg.typesafe_confidence_floor})"
         )
 
+    if cfg.llm_json_probe:
+        from ghostreader.llm import probe_json_contract
+
+        _ERR.print("[cyan]Probing LLM JSON contract...[/cyan]")
+        probe_ok, probe_detail = await probe_json_contract(llm)
+        if not probe_ok:
+            _ERR.print(
+                "[bold red]Aborting:[/bold red] Chat model failed the JSON contract probe "
+                "after normalization + one repair retry.\n"
+                "  Companion continuity would run on empty fact sheets.\n"
+                "  Switch models, fix provider wiring, or set llm_json_probe: false "
+                "(not recommended).\n"
+                f"  Probe reply was: {probe_detail[:300]!r}"
+            )
+            return 1
+        _ERR.print("[green]LLM JSON probe:[/green] ok")
+
     effective_genre = genre or discovery.seed_meta.get("genre") or cfg.genre
     story_state = story_state_dir_for(path)
 
@@ -142,6 +159,21 @@ async def run_companion(
             render_brief_terminal(brief)
     except Exception as exc:  # noqa: BLE001
         _ERR.print(f"[red]Error:[/red] Failed to write companion brief: {exc}")
+        return 1
+
+    fact_parse_poisoned = any(
+        w.startswith("Fact extraction JSON parse failed") for w in brief.warnings
+    )
+    if (
+        fact_parse_poisoned
+        and cfg.abort_on_fact_parse_failure
+        and not craft_only
+    ):
+        _ERR.print(
+            "[bold red]Exiting 1:[/bold red] Fact extraction JSON parse failures "
+            "poisoned continuity. Brief was still written (verdict=watch). "
+            "Set abort_on_fact_parse_failure: false to treat as soft watch only."
+        )
         return 1
 
     if fail_on_continuity and any(

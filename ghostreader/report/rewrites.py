@@ -7,6 +7,7 @@ alternative*, never as corrections — the tool is diagnostic, not prescriptive.
 
 from __future__ import annotations
 
+from ghostreader.llm import message_text
 from ghostreader.report import PrioritizedFinding, RewriteSuggestion
 
 # ── Prompt template ──────────────────────────────────────────────────
@@ -83,7 +84,7 @@ async def generate_rewrites(
                     HumanMessage(content=user_msg),
                 ]
             )
-            alternative = str(response.content).strip()
+            alternative = message_text(response.content)
         except Exception:
             # If the LLM call fails, skip this finding silently.
             continue
