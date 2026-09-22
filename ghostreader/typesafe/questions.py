@@ -118,6 +118,35 @@ def narrative_questions() -> dict[str, Any]:
     return {dim: _choice(_NARRATIVE_INSTRUCTIONS[dim]) for dim in NARRATIVE_DIMENSIONS}
 
 
+# Companion light narrative — chapter-N wording only (do not reuse analyze text).
+COMPANION_NARRATIVE_DIMENSIONS: tuple[str, ...] = (
+    "narrative.pacing",
+    "narrative.character_arcs",
+)
+
+_COMPANION_NARRATIVE_INSTRUCTIONS: dict[str, str] = {
+    "narrative.pacing": (
+        "Rate pacing and tension IN THE FOCUS CHAPTER ONLY. Prior fact sheets are "
+        "context for what came before, not a full-book scorecard. Flag a concern "
+        "only if this chapter sags, rushes, or stalls in a way that hurts the read. "
+        "Do not rate overall manuscript pacing across acts."
+    ),
+    "narrative.character_arcs": (
+        "Rate character movement IN THE FOCUS CHAPTER ONLY against prior fact "
+        "sheets. Flag flat or inconsistent behavior shown in this chapter. Do not "
+        "judge the full manuscript arc or demand end-of-book payoff."
+    ),
+}
+
+
+def companion_narrative_questions() -> dict[str, Any]:
+    """Two Choice questions for companion light narrative (pacing + arcs)."""
+    return {
+        dim: _choice(_COMPANION_NARRATIVE_INSTRUCTIONS[dim])
+        for dim in COMPANION_NARRATIVE_DIMENSIONS
+    }
+
+
 def consistency_questions() -> dict[str, Any]:
     """Five Noul gates for consistency dimensions."""
     from typesafe_sdk import Noul

@@ -9,6 +9,7 @@ from ghostreader.companion.brief import (
     CompanionBrief,
     brief_to_payload,
     compute_verdict,
+    compute_verdict_drivers,
     export_brief_json,
     render_brief_markdown,
 )
@@ -44,6 +45,19 @@ class TestVerdict:
             chapter_ref="18",
         )
         assert compute_verdict([], [craft]) == "watch"
+
+    def test_watch_on_narrative(self) -> None:
+        nar = PrioritizedFinding(
+            rank=1,
+            dimension="narrative.pacing",
+            severity="concern",
+            summary="stall",
+            evidence="Ch 1: x",
+            chapter_ref="1",
+        )
+        assert compute_verdict([], [], [nar]) == "watch"
+        assert compute_verdict_drivers([], [], [nar]) == ["narrative"]
+
 
 
 class TestJsonPayload:
