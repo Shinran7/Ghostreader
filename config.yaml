@@ -72,3 +72,11 @@ analyze_continuity_signal_kind: true
 
 # Max algorithmic repetition_findings rows in analyze JSON export.
 analyze_repetition_findings_cap: 40
+
+# Enrich TypeSafe strength findings in the Choice enrich batch.
+# false keeps high-conf strengths as template stubs (companion-like).
+analyze_enrich_strengths: true
+
+# Drop empty-evidence strengths from findings lists after prioritize.
+# Dimension ratings still show strength; TypeSafe-off summary prose unchanged.
+analyze_omit_empty_strengths: true

@@ -64,6 +64,10 @@ class GhostreaderConfig(BaseModel):
     analyze_continuity_signal_kind: bool = True
     # Max algorithmic repetition_findings rows in analyze JSON (always on).
     analyze_repetition_findings_cap: int = 40
+    # Include TypeSafe strengths in Choice enrich batch (analyze only).
+    analyze_enrich_strengths: bool = True
+    # Drop empty-evidence strengths from prioritized findings after synthesis.
+    analyze_omit_empty_strengths: bool = True
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -178,6 +182,14 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Max algorithmic repetition_findings rows in analyze JSON export.",
             f"analyze_repetition_findings_cap: {_fmt(self.analyze_repetition_findings_cap)}",
+            f"",
+            f"# Enrich TypeSafe strength findings in the Choice enrich batch.",
+            f"# false keeps high-conf strengths as template stubs (companion-like).",
+            f"analyze_enrich_strengths: {_fmt(self.analyze_enrich_strengths)}",
+            f"",
+            f"# Drop empty-evidence strengths from findings lists after prioritize.",
+            f"# Dimension ratings still show strength; TypeSafe-off summary prose unchanged.",
+            f"analyze_omit_empty_strengths: {_fmt(self.analyze_omit_empty_strengths)}",
             f"",
         ]
 

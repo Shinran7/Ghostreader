@@ -330,6 +330,8 @@ async def _run_analyze(
         "analyze_grounding_hardening": cfg.analyze_grounding_hardening,
         "analyze_continuity_signal_kind": cfg.analyze_continuity_signal_kind,
         "analyze_repetition_findings_cap": cfg.analyze_repetition_findings_cap,
+        "analyze_enrich_strengths": cfg.analyze_enrich_strengths,
+        "analyze_omit_empty_strengths": cfg.analyze_omit_empty_strengths,
     }
     chapter_dicts = chapters_to_dicts(chapters)
     repetition_data = repetition_report_to_dicts(

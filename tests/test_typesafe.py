@@ -102,8 +102,25 @@ class TestRouting:
     def test_needs_enrich_on_low_conf(self) -> None:
         assert needs_choice_enrich("strength", 0.4, confidence_floor=0.55) is True
 
-    def test_skip_enrich_high_conf_strength(self) -> None:
+    def test_skip_enrich_high_conf_strength_default(self) -> None:
+        # Function default enrich_strengths=False (companion-safe).
         assert needs_choice_enrich("strength", 0.9, confidence_floor=0.55) is False
+
+    def test_enrich_high_conf_strength_when_flag_on(self) -> None:
+        assert (
+            needs_choice_enrich(
+                "strength", 0.9, confidence_floor=0.55, enrich_strengths=True
+            )
+            is True
+        )
+
+    def test_skip_enrich_high_conf_strength_when_flag_off(self) -> None:
+        assert (
+            needs_choice_enrich(
+                "strength", 0.9, confidence_floor=0.55, enrich_strengths=False
+            )
+            is False
+        )
 
     def test_noul_bands(self) -> None:
         assert noul_band(0.7) == "positive"

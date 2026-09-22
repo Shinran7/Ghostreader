@@ -30,6 +30,8 @@ class AnalysisConfig(TypedDict, total=False):
     analyze_grounding_hardening: bool
     analyze_continuity_signal_kind: bool
     analyze_repetition_findings_cap: int
+    analyze_enrich_strengths: bool
+    analyze_omit_empty_strengths: bool
 
 
 class AgentFinding(TypedDict, total=False):

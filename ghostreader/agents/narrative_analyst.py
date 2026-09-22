@@ -202,6 +202,7 @@ async def _narrative_typesafe_path(
 
     config = state.get("config", {})
     floor = float(config.get("typesafe_confidence_floor", 0.55))
+    enrich_strengths = bool(config.get("analyze_enrich_strengths", True))
 
     ts_state = build_narrative_state(state)
     response = await ask(
@@ -218,6 +219,7 @@ async def _narrative_typesafe_path(
             str(f.get("severity", "neutral")),
             float(f.get("_certainty", 0.0) or 0.0),  # type: ignore[arg-type]
             confidence_floor=floor,
+            enrich_strengths=enrich_strengths,
         )
     ]
 

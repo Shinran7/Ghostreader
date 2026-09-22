@@ -86,6 +86,59 @@ def _format_agent_findings(output: AgentOutput | None) -> str:
     return "\n".join(lines)
 
 
+def _format_prioritized_findings(findings: list[dict[str, Any]]) -> str:
+    """Format filtered prioritized findings for the TypeSafe exec-summary prompt."""
+    if not findings:
+        return "No prioritized findings."
+
+    lines = [f"### Prioritized findings ({len(findings)})"]
+    for f in findings:
+        counter = f.get("counter_evidence", "")
+        counter_line = f"\n   Counter-evidence: {counter}" if counter else ""
+        lines.append(
+            f"{f.get('rank', '?')}. [{f.get('severity', '?')}] "
+            f"{f.get('dimension', '?')}: {f.get('summary', '')}\n"
+            f"   Evidence: {f.get('evidence', 'N/A')}"
+            f"{counter_line}\n"
+            f"   Chapters: {f.get('chapter_ref', '?')}"
+        )
+    return "\n".join(lines)
+
+
+def omit_empty_evidence_strengths(
+    prioritized: list[dict[str, Any]],
+    *,
+    enabled: bool = True,
+) -> tuple[list[dict[str, Any]], int]:
+    """Drop empty-evidence strengths; re-rank remaining 1…n.
+
+    Tone-demoted neutrals and concerns are kept. Returns (filtered, omitted).
+    """
+    if not enabled:
+        return list(prioritized), 0
+
+    kept: list[dict[str, Any]] = []
+    omitted = 0
+    for item in prioritized:
+        severity = str(item.get("severity", "neutral"))
+        evidence = str(item.get("evidence", "") or "").strip()
+        if severity == "strength" and not evidence:
+            omitted += 1
+            continue
+        kept.append(dict(item))
+
+    for i, item in enumerate(kept, 1):
+        item["rank"] = i
+    return kept, omitted
+
+
+def _counts_from_findings(findings: list[dict[str, Any]]) -> tuple[int, int, int]:
+    """Return strengths_count, concerns_count, total_findings."""
+    strengths = sum(1 for f in findings if f.get("severity") == "strength")
+    concerns = sum(1 for f in findings if f.get("severity") == "concern")
+    return strengths, concerns, len(findings)
+
+
 def _parse_report(raw: str) -> dict[str, Any]:
     """Parse synthesis LLM response into structured report, with fallback."""
     text = raw.strip()
@@ -143,6 +196,7 @@ def _merge_typesafe_stats(state: AnalysisState) -> dict[str, Any]:
         "repetition_demotions": 0,
         "continuity_evidence_retries": 0,
         "continuity_demotions": 0,
+        "empty_strengths_omitted": 0,
     }
     for key in ("prose_output", "narrative_output", "consistency_output"):
         output = state.get(key)  # type: ignore[literal-required]
@@ -169,6 +223,7 @@ def _merge_typesafe_stats(state: AnalysisState) -> dict[str, Any]:
             "repetition_demotions",
             "continuity_evidence_retries",
             "continuity_demotions",
+            "empty_strengths_omitted",
         ):
             totals[field] = int(totals[field]) + int(stats.get(field, 0) or 0)
     return totals
@@ -227,23 +282,28 @@ async def _synthesis_typesafe_path(
         prose_ratings, narrative_ratings, consistency_ratings
     )
 
+    config = state.get("config", {})
+    omit_empty = bool(config.get("analyze_omit_empty_strengths", True))
+
     all_findings = _collect_all_findings(state)
     prioritized = prioritize_findings(all_findings)
+    prioritized, omitted = omit_empty_evidence_strengths(
+        prioritized, enabled=omit_empty
+    )
+    strengths_count, concerns_count, total_findings = _counts_from_findings(
+        prioritized
+    )
 
-    prose_block = _format_agent_findings(prose_output)
-    narrative_block = _format_agent_findings(narrative_output)
-    consistency_block = _format_agent_findings(consistency_output)
     ratings_lines = "\n".join(
         f"- {dim}: {info.get('severity')} — {info.get('note', '')}"
         for dim, info in dimension_ratings.items()
     )
+    findings_block = _format_prioritized_findings(prioritized)
 
     user_message = (
         "Write an executive summary from these ratings and findings.\n\n"
         f"## Dimension Ratings\n{ratings_lines}\n\n"
-        f"## Prose Analysis\n{prose_block}\n\n"
-        f"## Narrative Analysis\n{narrative_block}\n\n"
-        f"## Consistency Analysis\n{consistency_block}"
+        f"## Prioritized Findings\n{findings_block}"
     )
 
     response = await llm.ainvoke(
@@ -254,19 +314,20 @@ async def _synthesis_typesafe_path(
     )
     executive_summary = message_text(response.content)
 
+    typesafe_stats = _merge_typesafe_stats(state)
+    typesafe_stats["empty_strengths_omitted"] = int(
+        typesafe_stats.get("empty_strengths_omitted", 0) or 0
+    ) + omitted
+
     report: dict[str, Any] = {
         "executive_summary": executive_summary,
         "dimension_ratings": dimension_ratings,
         "prioritized_findings": prioritized,
-        "strengths_count": sum(
-            1 for f in all_findings if f.get("severity") == "strength"
-        ),
-        "concerns_count": sum(
-            1 for f in all_findings if f.get("severity") == "concern"
-        ),
-        "total_findings": len(all_findings),
+        "strengths_count": strengths_count,
+        "concerns_count": concerns_count,
+        "total_findings": total_findings,
         "raw_response": executive_summary,
-        "typesafe": _merge_typesafe_stats(state),
+        "typesafe": typesafe_stats,
     }
     return {"final_report": report}
 
@@ -313,6 +374,24 @@ async def _synthesis_llm_path(
     report["total_findings"] = len(all_findings)
     report["raw_response"] = raw_text
 
+    # Omit empty-evidence strengths from the structured list (KD-8). Free-form
+    # executive_summary from the full synthesis call is not rewritten.
+    config = state.get("config", {})
+    omit_empty = bool(config.get("analyze_omit_empty_strengths", True))
+    prioritized = list(report.get("prioritized_findings") or [])
+    had_prioritized = bool(prioritized)
+    prioritized, _omitted = omit_empty_evidence_strengths(
+        prioritized, enabled=omit_empty
+    )
+    report["prioritized_findings"] = prioritized
+    if had_prioritized:
+        strengths_count, concerns_count, total_findings = _counts_from_findings(
+            prioritized
+        )
+        report["strengths_count"] = strengths_count
+        report["concerns_count"] = concerns_count
+        report["total_findings"] = total_findings
+
     return {"final_report": report}
 
 
@@ -330,4 +409,7 @@ async def synthesis_node(
     return await _synthesis_llm_path(state, llm)
 
 
-__all__ = ["synthesis_node"]
+__all__ = [
+    "omit_empty_evidence_strengths",
+    "synthesis_node",
+]

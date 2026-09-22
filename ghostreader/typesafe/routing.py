@@ -27,9 +27,16 @@ def needs_choice_enrich(
     confidence: float,
     *,
     confidence_floor: float = 0.55,
+    enrich_strengths: bool = False,
 ) -> bool:
-    """True when concern or low Choice confidence needs narrow LLM enrich."""
+    """True when concern, optional strength, or low confidence needs enrich.
+
+    ``enrich_strengths`` defaults False so companion callers stay off unless
+    they opt in. Analyze passes True via ``analyze_enrich_strengths``.
+    """
     if severity == "concern":
+        return True
+    if enrich_strengths and severity == "strength":
         return True
     return confidence < confidence_floor
 
