@@ -1,0 +1,13 @@
+{
+  "bugs": 1,
+  "reporting": 6,
+  "wontfix": 0,
+  "pending": 0,
+  "verdicts": {
+    "appendix-noise": 1,
+    "false-positive": 3,
+    "likely-bug": 1,
+    "bad-anchor": 1,
+    "overstated": 1
+  }
+}

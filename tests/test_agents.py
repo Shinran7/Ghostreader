@@ -342,3 +342,36 @@ class TestOmitEmptyStrengths:
         assert prioritized[0]["severity"] == "concern"
         # Free-form summary is not scrubbed on this path.
         assert "Stub strength is great." in parsed["executive_summary"]
+
+
+class TestConsistencyParseFindings:
+    def test_non_dict_array_falls_back_unstructured(self) -> None:
+        from ghostreader.agents.consistency_checker import _parse_findings
+
+        findings = _parse_findings('["not a finding", 42]')
+        assert len(findings) == 1
+        assert findings[0]["dimension"] == "consistency.general"
+        assert findings[0]["summary"].startswith("Consistency check completed")
+
+    def test_empty_array_means_no_findings(self) -> None:
+        from ghostreader.agents.consistency_checker import _parse_findings
+
+        assert _parse_findings("[]") == []
+
+    def test_dict_items_still_parse(self) -> None:
+        from ghostreader.agents.consistency_checker import _parse_findings
+
+        raw = json.dumps(
+            [
+                {
+                    "dimension": "consistency.plot_holes",
+                    "severity": "concern",
+                    "summary": "Impossible travel",
+                    "evidence": "Ch 1 then Ch 2",
+                    "chapter_ref": "1-2",
+                }
+            ]
+        )
+        findings = _parse_findings(raw)
+        assert len(findings) == 1
+        assert findings[0]["dimension"] == "consistency.plot_holes"

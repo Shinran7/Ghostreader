@@ -1,0 +1,18 @@
+{
+  "bucket": "2-likely-bugs",
+  "count": 1,
+  "auditCommit": "923b95d2",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader-diff",
+  "findings": [
+    {
+      "findingId": "1b422a75624fac96",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 148,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "Re-read _parse_findings 143-160: non-dict items are continue-skipped then return out. Docstring promises fallback, but a non-empty all-non-dict array returns [] and never hits the unstructured fallback (162-169). Code-default typesafe_enabled=false uses this LLM/scene parse path, so malformed arrays can zero out consistency findings.",
+      "message": "ghostreader/agents/consistency_checker.py:148 \u2014 Silent parse skip. Who is hurt: callers expecting full dimension coverage. Failure: _parse_findings silently drops non-dict items, yielding a partial finding list and missing ratings for chapters emitting malformed items."
+    }
+  ]
+}

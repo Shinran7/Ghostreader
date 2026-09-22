@@ -1,0 +1,58 @@
+{
+  "bucket": "3-reporting-debt",
+  "count": 5,
+  "auditCommit": "923b95d2",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader-diff",
+  "findings": [
+    {
+      "findingId": "745b259bd2457bf0",
+      "severity": "P1",
+      "filePath": "ghostreader/typesafe/enrich.py",
+      "line": 222,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Re-read consistency_tiebreak_batch 272-280: signal_kind is stored on findings only; ratings stay severity/note by schema. demote_tone_plot_holes reads finding.signal_kind and updates rating severity/note. prioritize_findings/report JSON keep signal_kind on findings \u2014 classification is not lost.",
+      "message": "ghostreader/typesafe/enrich.py:222 \u2014 Signal kind omission in ratings. Who is hurt: synthesis consumers reading dimension ratings. Failure: consistency_tiebreak_batch attaches signal_kind to findings but omits it from ratings, causing downstream synthesis to lose the classification."
+    },
+    {
+      "findingId": "5a9bb71c9d368c09",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/prose_analyst.py",
+      "line": 282,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Re-read apply_repetition_evidence_policy: _update_rating runs on enrich-success (334-342), detector fallback (357-361), and demote (373). prose_analyst 282-293 passes ratings and assigns ratings_out. Notes stay synced with rewritten summaries on the typesafe path.",
+      "message": "ghostreader/agents/prose_analyst.py:282 \u2014 Rating notes desynchronization. Who is hurt: downstream consumers of ratings notes. Failure: ratings notes retain stale descriptions from before apply_repetition_evidence_policy while findings hold rewritten summaries."
+    },
+    {
+      "findingId": "167d47c916fc143c",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 392,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Re-read scene path 499-506: demote_* update finding severities without ratings=; AgentOutput has no ratings blob. Typesafe path 406-417 does pass ratings. Synthesis LLM path formats demoted findings; no stale rating severity left in product output.",
+      "message": "ghostreader/agents/consistency_checker.py:392 \u2014 Lost ratings side effects. Who is hurt: report consumers reading severity. Failure: scene_consistency_checker_node omits ratings in demote_ungrounded_concerns and demote_tone_plot_holes, leaving original un-demoted severities in output."
+    },
+    {
+      "findingId": "921889fb75c307af",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 187,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Re-read fact_extractor.py:170-191 \u2014 _is_empty_fact_payload has one docstring only; line 187 is _parse_fact_response's real docstring. No discarded bare triple-quoted expression exists at the cited site.",
+      "message": "Dead string literal in `_is_empty_fact_payload`: Python only treats the first `\"\"\"...\"\"\"` after `def` as the docstring. This subsequent triple-quoted block is silently discarded as a bare expression. Convert it to a `#` comment or merge it into the docstring."
+    },
+    {
+      "findingId": "05b49f921547d109",
+      "severity": "P2",
+      "filePath": "ghostreader/typesafe/grounding.py",
+      "line": 428,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Re-read demote_tone_plot_holes 414-423: last write to ratings[PLOT_HOLES_DIM]['note'] is real, but ratings are one slot per dimension by contract and each finding keeps its own summary. Typesafe path normally emits one plot_holes finding, so production harm is negligible.",
+      "message": "ghostreader/typesafe/grounding.py:428 \u2014 State overwrite defect. Who is hurt: Downstream consumers of dimension ratings. Failure: Multiple demoted plot hole findings overwrite ratings[PLOT_HOLES_DIM]['note'], discarding previous findings' notes and attributing the rating solely to the last item."
+    }
+  ]
+}

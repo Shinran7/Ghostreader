@@ -1,0 +1,18 @@
+{
+  "bucket": "4-appendix-noise",
+  "count": 1,
+  "auditCommit": "923b95d2",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader-diff",
+  "findings": [
+    {
+      "findingId": "b3e71bff79849a2e",
+      "severity": "P1",
+      "filePath": "ghostreader/typesafe/grounding.py",
+      "line": 97,
+      "verdict": "appendix-noise",
+      "bucket": "reporting",
+      "evidence": "Re-read grounding.py:97 \u2014 state.get(\"scene_facts\", []) is a normal safe default; truncated null-handling advisory with no failure path.",
+      "message": "Null Handling: `scene_facts` \u2014 .get(\"scene_facts\","
+    }
+  ]
+}

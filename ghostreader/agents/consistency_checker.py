@@ -133,8 +133,26 @@ def _format_chapter_excerpts(
     return "\n\n".join(parts)
 
 
+def _unstructured_consistency_finding(text: str) -> list[AgentFinding]:
+    return [
+        AgentFinding(
+            dimension="consistency.general",
+            severity="neutral",
+            summary="Consistency check completed (unstructured response)",
+            evidence=text[:500],
+            chapter_ref="all",
+        )
+    ]
+
+
 def _parse_findings(raw: str) -> list[AgentFinding]:
-    """Parse LLM response into structured findings, with fallback."""
+    """Parse LLM response into structured findings, with fallback.
+
+    A genuine empty JSON array ``[]`` means no findings. A non-empty array
+    with no dict items (e.g. ``[\"oops\"]``) must not silently become ``[]`` —
+    fall back to one unstructured finding so the LLM/scene path cannot drop
+    the whole consistency pass.
+    """
     from ghostreader.llm import extract_json_array
     from ghostreader.typesafe.enrich import normalize_signal_kind
 
@@ -157,17 +175,13 @@ def _parse_findings(raw: str) -> list[AgentFinding]:
             if kind is not None:
                 finding["signal_kind"] = kind
             out.append(finding)
-        return out
+        if out:
+            return out
+        if not data:
+            return []
+        return _unstructured_consistency_finding(text)
 
-    return [
-        AgentFinding(
-            dimension="consistency.general",
-            severity="neutral",
-            summary="Consistency check completed (unstructured response)",
-            evidence=text[:500],
-            chapter_ref="all",
-        )
-    ]
+    return _unstructured_consistency_finding(text)
 
 
 async def consistency_checker_node(
