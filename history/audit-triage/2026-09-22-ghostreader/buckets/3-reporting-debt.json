@@ -1,0 +1,118 @@
+{
+  "bucket": "3-reporting-debt",
+  "count": 11,
+  "auditCommit": "d7dd6be9",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader",
+  "findings": [
+    {
+      "findingId": "739a85b0e6a663e2",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 76,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "collect_info_findings/cited_chapters use .get() plus str(...) defaults; malformed chapter/evidence fields do not raise TypeError/AttributeError.",
+      "message": "ghostreader/companion/continuity.py:76 \u2014 Missing finding structure validation. Downstream analyzers encounter unhandled Type/Attribute errors when parsing finding dicts with malformed chapter or evidence fields."
+    },
+    {
+      "findingId": "5a1330e92dd38bd0",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 80,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "Same continuity soft-grounding helpers as 739a85b0e6a663e2; line 80 is the collect_info_findings signature, still defensive .get access.",
+      "message": "ghostreader/companion/continuity.py:80 \u2014 Missing key validation. Callers encounter AttributeError or TypeError when finding objects lack standard schema fields."
+    },
+    {
+      "findingId": "66db69fd0118d30a",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/brief.py",
+      "line": 336,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "info_continuity_findings are PrioritizedFinding via _rank_findings; _print_findings already renders brief.info_continuity_findings at line 339.",
+      "message": "ghostreader/companion/brief.py:336 \u2014 Incompatible finding format. Terminal brief consumers risk rendering failures if _print_findings does not support new PrioritizedFinding fields on info dims."
+    },
+    {
+      "findingId": "f6d9fed3bfdf0c34",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 112,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "ensure_info_ratings returns dict maps; pipeline converts with _ratings_from_map before CompanionBrief, so brief_to_payload asdict sees DimensionRating instances.",
+      "message": "ghostreader/companion/continuity.py:112 \u2014 Data structure mismatch. brief_to_payload raises TypeError during asdict() because ensure_info_ratings returns raw dicts instead of DimensionRating instances."
+    },
+    {
+      "findingId": "dc197139d7c9e52f",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/continuity.py",
+      "line": 95,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "Line 95 is severity != concern filter; no recursion and chapter citation parsing is finite regex findall/finditer.",
+      "message": "ghostreader/companion/continuity.py:95 \u2014 Potential recursion or key lookup defect. Callers face KeyError or unbounded loops in preexisting checks with malformed chapter citation structures."
+    },
+    {
+      "findingId": "bb14a3bfc657f733",
+      "severity": "P3",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 140,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "extract_chapter_facts does exactly one repair ainvoke; extract_all_facts bounds concurrency with Semaphore(max_concurrent=10), not unbounded retries.",
+      "message": "ghostreader/agents/fact_extractor.py:140 \u2014 Unbounded synchronous retry during concurrent fact extraction. Who is hurt: CLI operators running large manuscripts. Failure: Second LLM retry calls run without timeouts or throttling across parallel batches, potentially multiplying latency and exhausting rate limits."
+    },
+    {
+      "findingId": "7b46bb94223a5223",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 183,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "assert typesafe_client is not None only when config typesafe_enabled; companion CLI pairs enabled=True with AsyncTypeSafeClient context, so default path does not trip it.",
+      "message": "ghostreader/companion/craft.py:183 \u2014 Unhandled `AssertionError` on missing TypeSafe client. Who is hurt: Companion pipeline operators. Failure: Execution crashes abruptly with an assertion failure when `typesafe_enabled` is set without an initialized client."
+    },
+    {
+      "findingId": "35daeaf0a4583638",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/fact_memory.py",
+      "line": 131,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "FactRecord.fact is always a ChapterFact dict from from_dict; record.fact.get('parse_failed') cannot AttributeError on records returned by get().",
+      "message": "ghostreader/companion/fact_memory.py:131 \u2014 Unchecked attribute access on record fact. Who is hurt: Companion cache consumers. Failure: Calling `.get()` on an invalid or null `record.fact` raises `AttributeError`, failing fact freshness checks."
+    },
+    {
+      "findingId": "c43507754a15c233",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 407,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "Line 407 is include_info_dims=companion_info_dims; continuity findings are dict TypedDicts and partition_findings already uses .get.",
+      "message": "ghostreader/companion/pipeline.py:407 \u2014 Object type mismatch in findings partitioning. Who is hurt: Companion pipeline operators. Failure: Passing typed objects where dictionary access (`.get()`) is expected raises `AttributeError` during finding processing."
+    },
+    {
+      "findingId": "2e88e80c9420c12a",
+      "severity": "P3",
+      "filePath": "ghostreader/report/markdown_writer.py",
+      "line": 118,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Warnings are rendered under Overview ### Pipeline warnings; executive_summary is separate LLM prose and is not a status bit that claims clean when warnings exist.",
+      "message": "ghostreader/report/markdown_writer.py:118 \u2014 Non-empty warnings list does not downgrade executive summary status. Who is hurt: Report readers. Failure: Executive summary can declare analysis clean or complete even when critical pipeline warnings are appended below."
+    },
+    {
+      "findingId": "989efc4b730852c0",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 501,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "compute_verdict already accepts narrative_findings: list[PrioritizedFinding] | None = None; pipeline call at line 507 matches.",
+      "message": "ghostreader/companion/pipeline.py:501 \u2014 Incompatible signature call on `compute_verdict`. Who is hurt: Pipeline execution callers. Failure: Passing a third argument (`narrative_findings`) breaks execution if `compute_verdict` does not accept the extra parameter."
+    }
+  ]
+}

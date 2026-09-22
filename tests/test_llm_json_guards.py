@@ -32,6 +32,11 @@ class TestExtractJson:
         assert isinstance(data, list)
         assert data[0]["dimension"] == "prose.repetition"
 
+    def test_array_ignores_nested_array_inside_object(self) -> None:
+        raw = 'Wrapper:\n{"items": [1, 2, 3], "ok": true}\n'
+        assert extract_json_array(raw) is None
+        assert extract_json_object(raw) == {"items": [1, 2, 3], "ok": True}
+
     def test_python_list_repr_fails(self) -> None:
         broken = str([{"type": "text", "text": '{"ok": true}'}])
         assert extract_json_object(broken) is None

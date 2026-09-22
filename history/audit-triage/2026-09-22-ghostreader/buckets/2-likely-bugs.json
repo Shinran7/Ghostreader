@@ -1,0 +1,7 @@
+{
+  "bucket": "2-likely-bugs",
+  "count": 0,
+  "auditCommit": "d7dd6be9",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader",
+  "findings": []
+}

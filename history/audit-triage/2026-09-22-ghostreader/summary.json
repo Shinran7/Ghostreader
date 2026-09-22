@@ -1,0 +1,16 @@
+{
+  "triageId": "2026-09-22-ghostreader",
+  "auditCommit": "d7dd6be9",
+  "ledgerSource": "markdown",
+  "total": 14,
+  "markdownParsed": 14,
+  "withMessage": 14,
+  "ruled": 0,
+  "pending": 14,
+  "batches": 1,
+  "byVerdict": {
+    "pending": 14
+  },
+  "scopedToNewMarkdown": true,
+  "outOfScopeDeferredNoMarkdown": 0
+}

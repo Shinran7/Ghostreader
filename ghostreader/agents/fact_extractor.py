@@ -111,16 +111,42 @@ def _empty_parse_failed(chapter: Chapter) -> ChapterFact:
     )
 
 
+def _is_empty_fact_payload(data: dict) -> bool:
+    """True when the JSON object carries no usable fact content (e.g. ``{}``)."""
+    characters = data.get("characters") or []
+    location = str(data.get("location") or "").strip()
+    timeline = data.get("timeline_markers") or []
+    facts = data.get("established_facts") or []
+    objects = data.get("key_objects") or []
+    return (
+        not characters
+        and not location
+        and not timeline
+        and not facts
+        and not objects
+    )
+
+
 def _parse_fact_response(raw: str, chapter: Chapter) -> ChapterFact:
-    """Parse the LLM response into a ChapterFact, with fallback."""
+    """Parse the LLM response into a ChapterFact, with fallback.
+
+    Empty or minimal objects (``{}`` / all-empty lists) are treated as
+    ``parse_failed`` so continuity cannot look clean on poisoned sheets.
+    """
     data = extract_json_object(raw)
-    if data is not None:
+    if data is not None and not _is_empty_fact_payload(data):
         return _fact_from_dict(data, chapter)
 
-    logger.warning(
-        "Fact extraction JSON parse failed for chapter %s; marking parse_failed",
-        chapter.chapter_number,
-    )
+    if data is not None and _is_empty_fact_payload(data):
+        logger.warning(
+            "Fact extraction returned empty JSON for chapter %s; marking parse_failed",
+            chapter.chapter_number,
+        )
+    else:
+        logger.warning(
+            "Fact extraction JSON parse failed for chapter %s; marking parse_failed",
+            chapter.chapter_number,
+        )
     return _empty_parse_failed(chapter)
 
 

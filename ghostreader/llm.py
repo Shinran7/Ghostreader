@@ -73,41 +73,90 @@ def _loads_json_candidates(candidates: list[str]) -> object | None:
     return None
 
 
+def _raw_decode_at(text: str, start: int) -> object | None:
+    """Decode one JSON value starting at *start*, or ``None`` on failure."""
+    import json
+
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text, start)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return value
+
+
+def _iter_top_level_starts(text: str, opener: str) -> list[int]:
+    """Indexes of *opener* that are not nested inside `{...}` or a string.
+
+    Used so ``extract_json_array`` does not grab an inner ``[…]`` from a
+    prose-wrapped object like ``{\"items\": [1, 2, 3]}``.
+    """
+    starts: list[int] = []
+    in_str = False
+    escape = False
+    brace_depth = 0
+    for i, ch in enumerate(text):
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        # Record top-level openers before adjusting brace depth so `{` itself
+        # is found when opener is `{`.
+        if ch == opener and brace_depth == 0:
+            starts.append(i)
+        if ch == "{":
+            brace_depth += 1
+            continue
+        if ch == "}":
+            brace_depth = max(0, brace_depth - 1)
+            continue
+    return starts
+
+
 def extract_json_object(text: str) -> dict | None:
     """Parse a JSON object from model text, or ``None`` if unavailable.
 
-    Handles markdown fences and leading/trailing commentary by slicing from
-    the first ``{`` to the last ``}``.
+    Handles markdown fences and leading/trailing commentary. Prefers a
+    top-level ``{…}`` (not an object nested inside an array wrapper).
     """
     cleaned = _strip_markdown_fences(text)
     if not cleaned:
         return None
-    candidates = [cleaned]
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        candidates.append(cleaned[start : end + 1])
-    value = _loads_json_candidates(candidates)
-    return value if isinstance(value, dict) else None
+    whole = _loads_json_candidates([cleaned])
+    if isinstance(whole, dict):
+        return whole
+    for start in _iter_top_level_starts(cleaned, "{"):
+        value = _raw_decode_at(cleaned, start)
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def extract_json_array(text: str) -> list | None:
     """Parse a JSON array from model text, or ``None`` if unavailable.
 
-    Handles markdown fences and leading/trailing commentary by slicing from
-    the first ``[`` to the last ``]``. Prefer this over object slicing when
-    the payload is a findings list (objects inside arrays must not win).
+    Handles markdown fences and leading/trailing commentary. Only accepts a
+    **top-level** array (brace depth 0). Nested arrays inside objects are
+    ignored so findings parsers do not silently consume ``items`` from a
+    wrapper object.
     """
     cleaned = _strip_markdown_fences(text)
     if not cleaned:
         return None
-    candidates = [cleaned]
-    start = cleaned.find("[")
-    end = cleaned.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        candidates.append(cleaned[start : end + 1])
-    value = _loads_json_candidates(candidates)
-    return value if isinstance(value, list) else None
+    whole = _loads_json_candidates([cleaned])
+    if isinstance(whole, list):
+        return whole
+    for start in _iter_top_level_starts(cleaned, "["):
+        value = _raw_decode_at(cleaned, start)
+        if isinstance(value, list):
+            return value
+    return None
 
 
 async def ainvoke_text(

@@ -49,6 +49,22 @@ class TestParseFactResponse:
         assert result.get("parse_failed") is not True
         assert result["location"] == "Tavern"
 
+    def test_empty_object_marks_parse_failed(self) -> None:
+        chapter = _ch(number=4)
+        result = _parse_fact_response("{}", chapter)
+        assert result["parse_failed"] is True
+        assert result["characters"] == []
+        assert result["location"] == ""
+
+    def test_all_empty_fields_mark_parse_failed(self) -> None:
+        chapter = _ch(number=4)
+        raw = (
+            '{"characters": [], "location": "", "timeline_markers": [], '
+            '"established_facts": [], "key_objects": []}'
+        )
+        result = _parse_fact_response(raw, chapter)
+        assert result["parse_failed"] is True
+
     def test_markdown_fenced_json(self) -> None:
         chapter = _ch(number=1)
         raw = f"```json\n{_VALID_JSON}\n```"

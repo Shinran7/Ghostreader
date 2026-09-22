@@ -1,0 +1,28 @@
+{
+  "bucket": "1-confirmed-bugs-to-fix",
+  "count": 2,
+  "auditCommit": "d7dd6be9",
+  "triageDir": ".tmp/audit-triage/2026-09-22-ghostreader",
+  "findings": [
+    {
+      "findingId": "44983c7141c3511b",
+      "severity": "P1",
+      "filePath": "ghostreader/llm.py",
+      "line": 94,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "extract_json_array first-[/last-] on prose-wrapped object returns nested list (e.g. items [1,2,3]); prose/consistency/narrative parsers consume that and can yield empty findings when items are non-dicts.",
+      "message": "ghostreader/llm.py:88 \u2014 `extract_json_array` extracts nested array instead of root construct. Who is hurt: Pipeline components expecting root-level JSON. Failure: Slicing across brackets grabs an inner array from a top-level object, bypassing outermost structure validation."
+    },
+    {
+      "findingId": "2800db8af7d57d21",
+      "severity": "P3",
+      "filePath": "ghostreader/agents/fact_extractor.py",
+      "line": 55,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "_parse_fact_response('{}') builds empty ChapterFact with no parse_failed; count_parse_failed/abort_on_fact_parse_failure only key off that flag, so silent empty sheets can look clean.",
+      "message": "ghostreader/agents/fact_extractor.py:55 \u2014 Empty or minimal repair responses pass as successful fact sheets. Who is hurt: Continuity checkers and fact sheet consumers. Failure: Repaired JSON returning an empty object or minimal `{}` passes validation without `parse_failed`, populating empty lists and poisoning continuity checks."
+    }
+  ]
+}
