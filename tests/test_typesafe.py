@@ -182,6 +182,33 @@ class TestAdapters:
         assert ranked[0]["rank"] == 1
         assert "_certainty" not in ranked[0]
 
+    def test_prioritize_copies_signal_kind(self) -> None:
+        with_kind = prioritize_findings(
+            [
+                {
+                    "dimension": "consistency.plot_holes",
+                    "severity": "neutral",
+                    "summary": "Tone note",
+                    "evidence": "Ch 1: 'x'",
+                    "chapter_ref": "1",
+                    "signal_kind": "tone_understatement",
+                }
+            ]  # type: ignore[arg-type]
+        )
+        assert with_kind[0]["signal_kind"] == "tone_understatement"
+        without = prioritize_findings(
+            [
+                {
+                    "dimension": "prose.rhythm",
+                    "severity": "concern",
+                    "summary": "x",
+                    "evidence": "",
+                    "chapter_ref": "",
+                }
+            ]  # type: ignore[arg-type]
+        )
+        assert "signal_kind" not in without[0]
+
 
 class TestQuestionBanks:
     def test_prose_keys(self) -> None:
@@ -235,3 +262,75 @@ class TestQuestionBanks:
             assert "belongs on plot_holes" in lower or "belongs here, not on" in lower or (
                 "impossible location" in lower and "plot_holes" in lower
             )
+            assert "signal_kind" in lower
+
+
+class TestEnrichSignalKind:
+    def test_continuity_system_lists_signal_kind_and_countdown(self) -> None:
+        from ghostreader.typesafe.enrich import (
+            _CONTINUITY_COUNTDOWN_ADDENDUM,
+            _ENRICH_SYSTEM_CONTINUITY,
+        )
+
+        assert "signal_kind" in _ENRICH_SYSTEM_CONTINUITY
+        assert "tone_understatement" in _ENRICH_SYSTEM_CONTINUITY
+        assert "fact_contradiction" in _ENRICH_SYSTEM_CONTINUITY
+        assert "wrong_place" in _ENRICH_SYSTEM_CONTINUITY
+        anti = "not the same failure as the non-monotonic bump"
+        assert anti in _ENRICH_SYSTEM_CONTINUITY
+        assert anti in _CONTINUITY_COUNTDOWN_ADDENDUM
+        assert "non-monotonic" in _CONTINUITY_COUNTDOWN_ADDENDUM
+
+    def test_normalize_unknown_to_other(self) -> None:
+        from ghostreader.typesafe.enrich import normalize_signal_kind
+
+        assert normalize_signal_kind("tone_understatement") == "tone_understatement"
+        assert normalize_signal_kind("WeirdLabel") == "other"
+        assert normalize_signal_kind("") is None
+        assert normalize_signal_kind(None) is None
+
+    @pytest.mark.asyncio
+    async def test_parse_copies_signal_kind(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from unittest.mock import AsyncMock, MagicMock
+
+        from ghostreader.typesafe.enrich import enrich_findings_batch
+
+        payload = (
+            '{"consistency.plot_holes": {'
+            '"summary": "Tone understates prior rift", '
+            '"evidence": "Ch 4: \'brief\'", '
+            '"counter_evidence": "Ch 2: \'fury\'", '
+            '"chapter_ref": "2 vs 4", '
+            '"signal_kind": "tone_understatement"}}'
+        )
+
+        class FakeMsg:
+            content = payload
+
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=FakeMsg())
+        findings = [
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "stub",
+                "evidence": "",
+                "chapter_ref": "",
+            }
+        ]
+        updated, _raw, failures = await enrich_findings_batch(
+            llm,
+            findings,  # type: ignore[arg-type]
+            ["consistency.plot_holes"],
+            context_block="ctx",
+            include_counter_evidence=True,
+            ask_signal_kind=True,
+        )
+        assert failures == 0
+        assert updated[0]["signal_kind"] == "tone_understatement"
+        assert updated[0]["severity"] == "concern"
+        system = llm.ainvoke.await_args.args[0][0].content
+        assert "signal_kind" in system
+        user = llm.ainvoke.await_args.args[0][1].content
+        assert "signal_kind" in user
+        assert "not the same failure as the non-monotonic bump" in user

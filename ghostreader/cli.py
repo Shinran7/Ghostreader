@@ -327,6 +327,7 @@ async def _run_analyze(
         "analyze_excerpt_min_per_chapter": cfg.analyze_excerpt_min_per_chapter,
         "analyze_continuity_enrich_total_budget": cfg.analyze_continuity_enrich_total_budget,
         "analyze_grounding_hardening": cfg.analyze_grounding_hardening,
+        "analyze_continuity_signal_kind": cfg.analyze_continuity_signal_kind,
     }
     initial_state: dict = {
         "chapters": chapters_to_dicts(chapters),

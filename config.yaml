@@ -65,3 +65,7 @@ analyze_continuity_enrich_total_budget: 120000
 # false restores legacy flat excerpts and skips those policies.
 # Does NOT revert analyze_repetition_* caps or kind/pattern examples.
 analyze_grounding_hardening: true
+
+# Continuity enrich signal_kind + tone_understatement plot_holes demotion.
+# false skips asking/parsing signal_kind and the tone demotion.
+analyze_continuity_signal_kind: true

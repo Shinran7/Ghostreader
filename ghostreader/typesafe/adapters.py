@@ -184,6 +184,9 @@ def prioritize_findings(findings: list[AgentFinding]) -> list[dict[str, Any]]:
             "counter_evidence": f.get("counter_evidence", ""),
             "chapter_ref": f.get("chapter_ref", ""),
         }
+        kind = f.get("signal_kind")
+        if kind:
+            item["signal_kind"] = str(kind)
         out.append(item)
     return out
 

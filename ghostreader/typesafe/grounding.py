@@ -3,6 +3,7 @@
 Slice 3: ``prose.repetition`` quote guarantee (retry → detector fallback → demote).
 Slice 4: continuity enrich/tie-break context (sheets + hit-weighted manuscript).
 Slice 5: ``demote_ungrounded_concerns`` for empty-evidence continuity concerns.
+Follow-up: ``demote_tone_plot_holes`` for tone_understatement on plot_holes.
 """
 
 from __future__ import annotations
@@ -19,9 +20,13 @@ from ghostreader.graph import AgentFinding, AnalysisState
 logger = logging.getLogger(__name__)
 
 REPETITION_DIM = "prose.repetition"
+PLOT_HOLES_DIM = "consistency.plot_holes"
 DETECTOR_LABEL = "(from repetition detector)"
 _DEMOTE_NOTE = "prose.repetition: insufficient grounded evidence"
 _CONTINUITY_DEMOTE_NOTE = "No grounded chapter evidence after enrich"
+_TONE_DEMOTE_PREFIX = (
+    "Framing/tone understatement (not a plot hole)"
+)
 _SEV_RANK = {"high": 0, "moderate": 1, "low": 2}
 _PREFERRED_KINDS = frozenset({"word", "phrase"})
 _DIGIT = re.compile(r"\b(\d+)\b")
@@ -370,6 +375,61 @@ async def apply_repetition_evidence_policy(
     return updated, stats, ratings
 
 
+def demote_tone_plot_holes(
+    findings: list[AgentFinding],
+    *,
+    ratings: dict[str, dict[str, str]] | None = None,
+    enabled: bool = True,
+) -> tuple[list[AgentFinding], int, dict[str, dict[str, str]] | None]:
+    """Demote plot_holes concerns labeled ``tone_understatement`` to neutral.
+
+    Enrich cannot change severity; this runs after enrich / mid-band.
+    Keeps the finding (with quotes) and a clarifying summary. Does not demote
+    ``other``, ``wrong_place``, or ``fact_contradiction``. Kill-switch via
+    ``enabled`` (``analyze_continuity_signal_kind``).
+    """
+    if not enabled:
+        return findings, 0, ratings
+
+    updated = list(findings)
+    demotions = 0
+    for i, finding in enumerate(updated):
+        if str(finding.get("dimension") or "") != PLOT_HOLES_DIM:
+            continue
+        if str(finding.get("severity") or "") != "concern":
+            continue
+        if str(finding.get("signal_kind") or "") != "tone_understatement":
+            continue
+        prior = str(finding.get("summary") or "").strip()
+        note = (
+            f"{_TONE_DEMOTE_PREFIX}: {prior}"
+            if prior
+            else f"{_TONE_DEMOTE_PREFIX}."
+        )
+        f: AgentFinding = dict(finding)  # type: ignore[assignment]
+        f["severity"] = "neutral"
+        f["summary"] = note
+        updated[i] = f
+        demotions += 1
+        if ratings is not None:
+            entry = ratings.get(PLOT_HOLES_DIM)
+            if entry is None:
+                ratings[PLOT_HOLES_DIM] = {
+                    "severity": "neutral",
+                    "note": note,
+                }
+            else:
+                entry["severity"] = "neutral"
+                entry["note"] = note
+
+    if demotions:
+        logger.info(
+            "continuity signal_kind: demoted %s tone_understatement plot_hole(s)",
+            demotions,
+        )
+    return updated, demotions, ratings
+
+
 def demote_ungrounded_concerns(
     findings: list[AgentFinding],
     *,
@@ -419,10 +479,12 @@ def demote_ungrounded_concerns(
 
 __all__ = [
     "DETECTOR_LABEL",
+    "PLOT_HOLES_DIM",
     "REPETITION_DIM",
     "apply_repetition_evidence_policy",
     "build_continuity_enrich_context",
     "build_detector_fallback_evidence",
     "continuity_manuscript_hits",
+    "demote_tone_plot_holes",
     "demote_ungrounded_concerns",
 ]

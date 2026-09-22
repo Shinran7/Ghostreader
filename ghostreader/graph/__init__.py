@@ -28,6 +28,7 @@ class AnalysisConfig(TypedDict, total=False):
     analyze_excerpt_min_per_chapter: int
     analyze_continuity_enrich_total_budget: int
     analyze_grounding_hardening: bool
+    analyze_continuity_signal_kind: bool
 
 
 class AgentFinding(TypedDict, total=False):
@@ -39,6 +40,9 @@ class AgentFinding(TypedDict, total=False):
     evidence: str  # quoted or cited passage(s)
     chapter_ref: str  # chapter number or range, e.g. "3" or "7-9"
     counter_evidence: str  # (consistency only) quote from the contradicting passage
+    # Continuity enrich optional label (KD-2 / KD-13):
+    # fact_contradiction | wrong_place | tone_understatement | other
+    signal_kind: str
 
 
 class AgentOutput(TypedDict):

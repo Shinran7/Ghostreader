@@ -12,6 +12,7 @@ from ghostreader.typesafe.grounding import (
     REPETITION_DIM,
     apply_repetition_evidence_policy,
     build_detector_fallback_evidence,
+    demote_tone_plot_holes,
     demote_ungrounded_concerns,
 )
 
@@ -473,7 +474,7 @@ class TestConsistencyTypesafeCallOrder:
 
         mid_contexts: list[str] = []
 
-        async def fake_tiebreak(llm, dims, *, context_block):
+        async def fake_tiebreak(llm, dims, *, context_block, **kwargs):
             mid_contexts.append(context_block)
             return (
                 [
@@ -865,3 +866,196 @@ class TestSceneLlmPathDemotion:
             typesafe_client=None,
         )
         assert result["consistency_output"]["findings"][0]["severity"] == "concern"
+
+# -- signal_kind tone plot-hole demotion -------------------------------
+
+
+_TONE_PREFIX = "Framing/tone understatement (not a plot hole)"
+
+
+class TestDemoteTonePlotHoles:
+    def test_tone_understatement_demotes_to_neutral_kept(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Brief estrangement understates prior rift",
+                "evidence": "Ch 4: 'a brief estrangement'",
+                "counter_evidence": "Ch 2: 'they parted in fury'",
+                "chapter_ref": "2 vs 4",
+                "signal_kind": "tone_understatement",
+            }
+        ]
+        ratings = {
+            "consistency.plot_holes": {
+                "severity": "concern",
+                "note": "Brief estrangement understates prior rift",
+            }
+        }
+        out, count, ratings = demote_tone_plot_holes(
+            findings,  # type: ignore[arg-type]
+            ratings=ratings,
+            enabled=True,
+        )
+        assert count == 1
+        assert out[0]["severity"] == "neutral"
+        assert out[0]["signal_kind"] == "tone_understatement"
+        assert out[0]["evidence"] == "Ch 4: 'a brief estrangement'"
+        assert _TONE_PREFIX in out[0]["summary"]
+        assert "Brief estrangement" in out[0]["summary"]
+        assert ratings["consistency.plot_holes"]["severity"] == "neutral"
+        assert _TONE_PREFIX in ratings["consistency.plot_holes"]["note"]
+
+    def test_fact_contradiction_unchanged(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Paid twice",
+                "evidence": "Ch 1: 'paid'",
+                "signal_kind": "fact_contradiction",
+            }
+        ]
+        out, count, _ = demote_tone_plot_holes(
+            findings,  # type: ignore[arg-type]
+            enabled=True,
+        )
+        assert count == 0
+        assert out[0]["severity"] == "concern"
+
+    def test_other_and_wrong_place_not_demoted(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Odd presence",
+                "evidence": "Ch 3: 'he stood'",
+                "signal_kind": "other",
+            },
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Cannot be there",
+                "evidence": "Ch 5: 'across the sea'",
+                "signal_kind": "wrong_place",
+            },
+        ]
+        out, count, _ = demote_tone_plot_holes(
+            findings,  # type: ignore[arg-type]
+            enabled=True,
+        )
+        assert count == 0
+        assert out[0]["severity"] == "concern"
+        assert out[1]["severity"] == "concern"
+
+    def test_kill_switch_noop(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Tone",
+                "evidence": "Ch 1: 'x'",
+                "signal_kind": "tone_understatement",
+            }
+        ]
+        out, count, _ = demote_tone_plot_holes(
+            findings,  # type: ignore[arg-type]
+            enabled=False,
+        )
+        assert count == 0
+        assert out[0]["severity"] == "concern"
+
+
+class TestTypesafeToneDemotionOrder:
+    @pytest.mark.asyncio
+    async def test_demotes_after_enrich_before_empty_policy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ghostreader.agents.consistency_checker import _consistency_typesafe_path
+
+        enrich_dim = "consistency.plot_holes"
+        findings = [
+            {
+                "dimension": enrich_dim,
+                "severity": "concern",
+                "summary": "Template concern",
+                "evidence": "",
+                "counter_evidence": "",
+                "chapter_ref": "",
+            }
+        ]
+        ratings = {enrich_dim: {"severity": "concern", "note": "Template concern"}}
+
+        async def fake_enrich(llm, cur_findings, dims, *, context_block, **kwargs):
+            assert kwargs.get("ask_signal_kind") is True
+            updated = [
+                {
+                    **f,
+                    "summary": "Brief estrangement understates prior conflict",
+                    "evidence": "Ch 4: 'brief estrangement'",
+                    "counter_evidence": "Ch 2: 'parted in fury'",
+                    "chapter_ref": "2 vs 4",
+                    "signal_kind": "tone_understatement",
+                }
+                if f.get("dimension") in dims
+                else f
+                for f in cur_findings
+            ]
+            return updated, {d: "{}" for d in dims}, 0
+
+        class FakeResponse:
+            nouls: dict[str, Any] = {}
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 2, "title": "Two", "content": "parted in fury"},
+                {"chapter_number": 4, "title": "Four", "content": "brief estrangement"},
+            ],
+            "scene_facts": [_fact(2), _fact(4)],
+            "summary_hierarchy": {},
+            "config": {
+                "typesafe_noul_positive_threshold": 0.65,
+                "analyze_grounding_hardening": True,
+                "analyze_continuity_signal_kind": True,
+                "analyze_continuity_enrich_total_budget": 20000,
+            },
+        }
+
+        monkeypatch.setattr(
+            "ghostreader.typesafe.client.ask",
+            AsyncMock(return_value=FakeResponse()),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.consistency_from_nouls",
+            lambda *_a, **_k: (findings, ratings, [enrich_dim], []),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.serialize_noul_answers",
+            lambda *_a, **_k: {},
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.enrich_findings_batch",
+            fake_enrich,
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.consistency_tiebreak_batch",
+            AsyncMock(return_value=([], {}, {}, 0)),
+        )
+
+        result = await _consistency_typesafe_path(
+            state,  # type: ignore[arg-type]
+            MagicMock(),
+            MagicMock(),
+        )
+        f = result["consistency_output"]["findings"][0]
+        assert f["severity"] == "neutral"
+        assert f["signal_kind"] == "tone_understatement"
+        assert "brief estrangement" in f["evidence"]
+        assert _TONE_PREFIX in f["summary"]
+        import json
+
+        raw = result["consistency_output"]["raw_response"]
+        stats = json.loads(raw)["stats"] if isinstance(raw, str) else raw["stats"]
+        assert stats["tone_plot_hole_demotions"] == 1
+        assert stats["continuity_demotions"] == 0
+        assert ratings[enrich_dim]["severity"] == "neutral"

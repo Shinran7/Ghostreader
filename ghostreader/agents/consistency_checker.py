@@ -82,6 +82,8 @@ Return a JSON array of findings. Each finding must have:
   (use empty string "" for foreshadowing/unresolved findings where only one
   side exists)
 - "chapter_ref": chapter number(s) where this applies, e.g. "3 vs 8"
+- "signal_kind" (optional): one of "fact_contradiction", "wrong_place",
+  "tone_understatement", "other" — for plot_holes / character continuity labels
 
 Return ONLY the JSON array, no markdown fencing or commentary.
 """
@@ -134,12 +136,16 @@ def _format_chapter_excerpts(
 def _parse_findings(raw: str) -> list[AgentFinding]:
     """Parse LLM response into structured findings, with fallback."""
     from ghostreader.llm import extract_json_array
+    from ghostreader.typesafe.enrich import normalize_signal_kind
 
     text = raw.strip()
     data = extract_json_array(text)
     if isinstance(data, list):
-        return [
-            AgentFinding(
+        out: list[AgentFinding] = []
+        for f in data:
+            if not isinstance(f, dict):
+                continue
+            finding = AgentFinding(
                 dimension=f.get("dimension", "consistency.unknown"),
                 severity=f.get("severity", "neutral"),
                 summary=f.get("summary", ""),
@@ -147,9 +153,11 @@ def _parse_findings(raw: str) -> list[AgentFinding]:
                 counter_evidence=f.get("counter_evidence", ""),
                 chapter_ref=str(f.get("chapter_ref", "")),
             )
-            for f in data
-            if isinstance(f, dict)
-        ]
+            kind = normalize_signal_kind(f.get("signal_kind"))
+            if kind is not None:
+                finding["signal_kind"] = kind
+            out.append(finding)
+        return out
 
     return [
         AgentFinding(
@@ -262,6 +270,8 @@ Return a JSON array of findings. Each finding must have:
 - "counter_evidence": the conflicting fact from another chapter, prefixed with
   chapter number, e.g. "Ch 13: Jordan's cousin referred to as 'she'"
 - "chapter_ref": chapter numbers, e.g. "1 vs 13"
+- "signal_kind" (optional): one of "fact_contradiction", "wrong_place",
+  "tone_understatement", "other" — for plot_holes / character continuity labels
 
 If no contradictions are found, return an empty array [].
 Return ONLY the JSON array, no markdown fencing or commentary.
@@ -290,8 +300,8 @@ async def _consistency_typesafe_path(
     Ask stays fact-sheet-only (``build_consistency_state``). Enrich / tie-break
     use capped sheets + hit-weighted manuscript when grounding hardening is on
     (KD-4 / KD-12 / KD-14). Call order: enrich → focused empty-evidence retry
-    → mid-band tie-break with the original capped context → demote empty
-    evidence (KD-14 step 4 / KD-7).
+    → mid-band tie-break with the original capped context → tone plot-hole
+    demotion → demote empty evidence (KD-14 step 4 / KD-7).
     """
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
@@ -305,6 +315,7 @@ async def _consistency_typesafe_path(
     )
     from ghostreader.typesafe.grounding import (
         build_continuity_enrich_context,
+        demote_tone_plot_holes,
         demote_ungrounded_concerns,
     )
     from ghostreader.typesafe.questions import CONSISTENCY_DIMENSIONS, consistency_questions
@@ -313,6 +324,7 @@ async def _consistency_typesafe_path(
     config = state.get("config", {})
     positive = float(config.get("typesafe_noul_positive_threshold", 0.65))
     hardening = bool(config.get("analyze_grounding_hardening", True))
+    ask_signal_kind = bool(config.get("analyze_continuity_signal_kind", True))
 
     ts_state = build_consistency_state(state)
     response = await ask(
@@ -341,6 +353,7 @@ async def _consistency_typesafe_path(
             enrich_dims,
             context_block=context_v1,
             include_counter_evidence=True,
+            ask_signal_kind=ask_signal_kind,
         )
         llm_enrichments = len(enrich_dims)
         _sync_enrich_rating_notes(ratings, findings, enrich_dims)
@@ -366,6 +379,7 @@ async def _consistency_typesafe_path(
                     empty_dims,
                     context_block=context_focused,
                     include_counter_evidence=True,
+                    ask_signal_kind=ask_signal_kind,
                 )
                 enrich_raw.update(retry_raw)
                 parse_failures += retry_failures
@@ -375,7 +389,10 @@ async def _consistency_typesafe_path(
 
     if mid_dims:
         mid_findings, mid_ratings, mid_raw, mid_failures = await consistency_tiebreak_batch(
-            llm, mid_dims, context_block=context_v1
+            llm,
+            mid_dims,
+            context_block=context_v1,
+            ask_signal_kind=ask_signal_kind,
         )
         findings.extend(mid_findings)
         ratings.update(mid_ratings)
@@ -384,6 +401,13 @@ async def _consistency_typesafe_path(
         noul_tie_breaks = len(mid_dims)
         llm_enrichments += len(mid_dims)
         # Mid-band empty evidence: no enrich retry (KD-14); demotion below.
+
+    # Tone understatement on plot_holes → neutral (keep finding + quotes).
+    findings, tone_demotions, ratings = demote_tone_plot_holes(
+        findings,
+        ratings=ratings,
+        enabled=ask_signal_kind,
+    )
 
     # KD-14 step 4: demote empty-evidence concerns even with chapter_ref.
     findings, continuity_demotions, ratings = demote_ungrounded_concerns(
@@ -398,6 +422,7 @@ async def _consistency_typesafe_path(
         "enrich_parse_failures": parse_failures,
         "noul_tie_breaks": noul_tie_breaks,
         "continuity_evidence_retries": continuity_evidence_retries,
+        "tone_plot_hole_demotions": tone_demotions,
         "continuity_demotions": continuity_demotions,
     }
     raw = build_typesafe_raw_response(
@@ -462,10 +487,18 @@ async def scene_consistency_checker_node(
     )
 
     from ghostreader.llm import message_text
-    from ghostreader.typesafe.grounding import demote_ungrounded_concerns
+    from ghostreader.typesafe.grounding import (
+        demote_tone_plot_holes,
+        demote_ungrounded_concerns,
+    )
 
     raw_text = message_text(response.content)
     findings = _parse_findings(raw_text)
+    # Best-effort signal_kind demotion when the scene prompt returns it.
+    ask_signal_kind = bool(config.get("analyze_continuity_signal_kind", True))
+    findings, _tone_demotions, _ = demote_tone_plot_holes(
+        findings, enabled=ask_signal_kind
+    )
     # KD-13: empty-evidence demotion only (no chapter-text enrich on this path).
     hardening = bool(config.get("analyze_grounding_hardening", True))
     findings, _demotions, _ = demote_ungrounded_concerns(

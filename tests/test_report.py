@@ -83,6 +83,37 @@ class TestReportOutput:
         assert report.dimension_ratings == []
         assert report.prioritized_findings == []
 
+    def test_signal_kind_passthrough_to_json(self) -> None:
+        from ghostreader.report.json_export import _build_payload
+
+        report = ReportOutput.from_final_report(
+            {
+                "executive_summary": "",
+                "dimension_ratings": {},
+                "prioritized_findings": [
+                    {
+                        "rank": 1,
+                        "dimension": "consistency.plot_holes",
+                        "severity": "neutral",
+                        "summary": "Framing/tone understatement (not a plot hole): brief",
+                        "evidence": "Ch 4: 'brief estrangement'",
+                        "chapter_ref": "2 vs 4",
+                        "counter_evidence": "Ch 2: 'fury'",
+                        "signal_kind": "tone_understatement",
+                    }
+                ],
+                "strengths_count": 0,
+                "concerns_count": 0,
+                "total_findings": 1,
+            }
+        )
+        assert report.prioritized_findings[0].signal_kind == "tone_understatement"
+        payload = _build_payload(report)
+        assert (
+            payload["prioritized_findings"][0]["signal_kind"]
+            == "tone_understatement"
+        )
+
 
 # ── Helpers ───────────────────────────────────────────────────────────
 

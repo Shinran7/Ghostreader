@@ -38,6 +38,7 @@ class PrioritizedFinding:
     evidence: str
     chapter_ref: str
     counter_evidence: str = ""
+    signal_kind: str = ""
 
 
 @dataclass
@@ -96,6 +97,7 @@ class ReportOutput:
                 evidence=f.get("evidence", ""),
                 chapter_ref=f.get("chapter_ref", ""),
                 counter_evidence=f.get("counter_evidence", ""),
+                signal_kind=str(f.get("signal_kind") or ""),
             )
             for i, f in enumerate(report.get("prioritized_findings", []))
         ]

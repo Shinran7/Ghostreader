@@ -60,6 +60,8 @@ class GhostreaderConfig(BaseModel):
     # Master switch for hit-weighted excerpts + empty-evidence policies.
     # Does NOT gate analyze_repetition_* caps / kind / pattern examples.
     analyze_grounding_hardening: bool = True
+    # Ask/parse continuity signal_kind; demote tone_understatement plot_holes.
+    analyze_continuity_signal_kind: bool = True
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -167,6 +169,10 @@ class GhostreaderConfig(BaseModel):
             f"# false restores legacy flat excerpts and skips those policies.",
             f"# Does NOT revert analyze_repetition_* caps or kind/pattern examples.",
             f"analyze_grounding_hardening: {_fmt(self.analyze_grounding_hardening)}",
+            f"",
+            f"# Continuity enrich signal_kind + tone_understatement plot_holes demotion.",
+            f"# false skips asking/parsing signal_kind and the tone demotion.",
+            f"analyze_continuity_signal_kind: {_fmt(self.analyze_continuity_signal_kind)}",
             f"",
         ]
 
