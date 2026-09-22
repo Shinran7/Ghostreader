@@ -12,7 +12,7 @@ Uses genre-aware system prompt preamble.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -88,7 +88,7 @@ def _format_repetition_data(repetition_data: list[dict[str, Any]]) -> str:
 def _format_chapter_excerpts(
     chapters: list[dict[str, Any]], *, max_chars_per_chapter: int = 4000
 ) -> str:
-    """Build truncated chapter excerpts for prose analysis."""
+    """Build truncated chapter excerpts for prose analysis (legacy flat heads)."""
     parts: list[str] = []
     for ch in chapters:
         title = ch.get("title", f"Chapter {ch.get('chapter_number', '?')}")
@@ -96,6 +96,33 @@ def _format_chapter_excerpts(
         content = ch.get("content", "")[:max_chars_per_chapter]
         parts.append(f"--- Chapter {number}: {title} ---\n{content}")
     return "\n\n".join(parts)
+
+
+def format_prose_manuscript(
+    chapters: list[dict[str, Any]],
+    repetition_data: list[dict[str, Any]],
+    config: Mapping[str, Any] | None = None,
+) -> str:
+    """Manuscript block for prose judge/enrich.
+
+    When ``analyze_grounding_hardening`` is true (default), use hit-weighted
+    chapter heads under ``min(budget, 4000*N)``. When false, legacy flat 4k heads.
+    """
+    cfg = config or {}
+    if not cfg.get("analyze_grounding_hardening", True):
+        return _format_chapter_excerpts(chapters)
+
+    from ghostreader.excerpts import build_hit_weighted_excerpts, hits_from_repetition_data
+
+    hits = hits_from_repetition_data(repetition_data)
+    return build_hit_weighted_excerpts(
+        chapters,
+        hits,
+        total_budget=int(cfg.get("analyze_excerpt_total_budget", 100000)),
+        window_chars=int(cfg.get("analyze_excerpt_window_chars", 900)),
+        min_per_chapter=int(cfg.get("analyze_excerpt_min_per_chapter", 400)),
+        legacy_per_chapter=4000,
+    )
 
 
 def _parse_findings(raw: str) -> list[AgentFinding]:
@@ -145,7 +172,7 @@ async def _prose_llm_path(state: AnalysisState, llm: BaseChatModel) -> dict[str,
     )
 
     repetition_block = _format_repetition_data(repetition_data)
-    chapter_block = _format_chapter_excerpts(chapters)
+    chapter_block = format_prose_manuscript(chapters, repetition_data, config)
 
     user_message = (
         f"Analyze the prose quality of this manuscript.\n\n"
@@ -214,7 +241,7 @@ async def _prose_typesafe_path(
     repetition_data = state.get("repetition_data", [])
     context = (
         f"## Repetition Data\n{_format_repetition_data(repetition_data)}\n\n"
-        f"## Manuscript Text\n{_format_chapter_excerpts(chapters)}"
+        f"## Manuscript Text\n{format_prose_manuscript(chapters, repetition_data, config)}"
     )
 
     enrich_raw: dict[str, Any] = {}
@@ -274,4 +301,4 @@ async def prose_analyst_node(
     return await _prose_llm_path(state, llm)
 
 
-__all__ = ["prose_analyst_node"]
+__all__ = ["format_prose_manuscript", "prose_analyst_node"]

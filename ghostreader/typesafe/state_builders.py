@@ -14,10 +14,8 @@ from ghostreader.agents.narrative_analyst import (
 from ghostreader.agents.narrative_analyst import (
     _format_summary_hierarchy as _narrative_hierarchy,
 )
-from ghostreader.agents.prose_analyst import (
-    _format_chapter_excerpts as _prose_excerpts,
-)
 from ghostreader.agents.prose_analyst import _format_repetition_data
+from ghostreader.agents.prose_analyst import format_prose_manuscript
 from ghostreader.graph import AnalysisState
 from ghostreader.seed import build_author_intent_block
 
@@ -32,12 +30,15 @@ def _genre_and_intent(state: AnalysisState) -> dict[str, Any]:
 
 
 def build_prose_state(state: AnalysisState) -> dict[str, Any]:
-    """Prose TypeSafe state (4000 chars/chapter excerpts)."""
+    """Prose TypeSafe state (hit-weighted heads when grounding hardening is on)."""
     chapters = state.get("chapters", [])
     repetition_data = state.get("repetition_data", [])
+    config = state.get("config", {})
     payload = _genre_and_intent(state)
     payload["repetition_data"] = _format_repetition_data(repetition_data)
-    payload["manuscript"] = _prose_excerpts(chapters)
+    payload["manuscript"] = format_prose_manuscript(
+        chapters, repetition_data, config
+    )
     return payload
 
 
