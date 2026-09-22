@@ -1,4 +1,7 @@
-"""Chapter Companion — progressive continuity + craft brief for Autonomicon hooks."""
+"""Chapter Companion — progressive continuity + craft brief for Autonomicon hooks.
+
+Autonomicon JSON contract (0.2.0 fields, verdict rules, smoke checklist): see HOOK.md.
+"""
 
 from __future__ import annotations
 

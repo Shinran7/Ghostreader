@@ -26,7 +26,7 @@ class TestGhostreaderConfig:
         assert cfg.companion_craft_window == 5
         assert cfg.companion_cross_chapter_craft is True
         assert cfg.companion_info_dims is True
-        assert cfg.companion_light_narrative is False
+        assert cfg.companion_light_narrative is True
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -40,14 +40,14 @@ class TestGhostreaderConfig:
         assert "companion_craft_window: 5" in text
         assert "companion_cross_chapter_craft: true" in text
         assert "companion_info_dims: true" in text
-        assert "companion_light_narrative: false" in text
+        assert "companion_light_narrative: true" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
         assert loaded.companion_prior == "full"
         assert loaded.companion_craft_window == 5
         assert loaded.companion_cross_chapter_craft is True
         assert loaded.companion_info_dims is True
-        assert loaded.companion_light_narrative is False
+        assert loaded.companion_light_narrative is True
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

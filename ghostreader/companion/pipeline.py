@@ -251,7 +251,7 @@ async def run_companion_pipeline(
     companion_craft_window: int = 5,
     companion_cross_chapter_craft: bool = True,
     companion_info_dims: bool = True,
-    companion_light_narrative: bool = False,
+    companion_light_narrative: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     json_mode: bool = False,
