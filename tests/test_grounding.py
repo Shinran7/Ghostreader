@@ -283,3 +283,349 @@ class TestApplyPolicyRetry:
         assert stats["repetition_evidence_retries"] == 1
         assert stats["repetition_detector_fallbacks"] == 1
         assert DETECTOR_LABEL in str(out[0]["evidence"])
+
+
+# ── Slice 4: continuity enrich context + KD-14 call order ─────────────
+
+
+def _fact(n: int, *, location: str = "Hall") -> dict[str, Any]:
+    return {
+        "chapter_number": n,
+        "characters": [{"name": "Ada", "details": "tall"}],
+        "location": location,
+        "timeline_markers": [],
+        "established_facts": [f"Fact in chapter {n}"],
+        "key_objects": [],
+    }
+
+
+def _long_content(n: int, size: int = 5000) -> str:
+    return (f"Chapter {n} body. Eye color sapphire. " * 200)[:size]
+
+
+class TestContinuityManuscriptHits:
+    def test_base_and_summary_boost(self) -> None:
+        from ghostreader.typesafe.grounding import continuity_manuscript_hits
+
+        hits = continuity_manuscript_hits(
+            [1, 2, 3],
+            [{"summary": "Conflict in chapters 1 and 99", "chapter_ref": ""}],
+            focused=False,
+        )
+        by = {h.chapter_number: h.weight for h in hits}
+        assert by[1] == 3.0  # 1.0 base + 2.0 boost
+        assert by[2] == 1.0
+        assert by[3] == 1.0
+        assert 99 not in by
+
+    def test_focused_multiplies_chapter_ref_once(self) -> None:
+        from ghostreader.typesafe.grounding import continuity_manuscript_hits
+
+        hits = continuity_manuscript_hits(
+            [1, 2],
+            [
+                {
+                    "summary": "Ch 1 vs Ch 2",
+                    "chapter_ref": "1 vs 2",
+                    "evidence": "",
+                }
+            ],
+            focused=True,
+        )
+        by = {h.chapter_number: h.weight for h in hits}
+        # base 1 + summary boost 2 = 3, then ×5 for chapter_ref
+        assert by[1] == 15.0
+        assert by[2] == 15.0
+
+
+class TestBuildContinuityEnrichContext:
+    def test_combined_cap_respected(self) -> None:
+        from ghostreader.typesafe.grounding import build_continuity_enrich_context
+
+        chapters = [
+            {
+                "chapter_number": i,
+                "title": f"Ch {i}",
+                "content": _long_content(i, 8000),
+            }
+            for i in range(1, 6)
+        ]
+        state: dict[str, Any] = {
+            "chapters": chapters,
+            "scene_facts": [_fact(i) for i in range(1, 6)],
+            "config": {
+                "analyze_grounding_hardening": True,
+                "analyze_continuity_enrich_total_budget": 5000,
+                "analyze_excerpt_window_chars": 900,
+                "analyze_excerpt_min_per_chapter": 400,
+            },
+        }
+        ctx = build_continuity_enrich_context(
+            state,  # type: ignore[arg-type]
+            findings=[
+                {
+                    "summary": "Eye color flips in 2 vs 4",
+                    "chapter_ref": "2 vs 4",
+                    "evidence": "",
+                }
+            ],
+            focused=False,
+        )
+        assert len(ctx) <= 5000
+        assert "## Scene Fact Sheets" in ctx
+        assert "## Manuscript Excerpts (grounding)" in ctx
+
+    def test_sheets_alone_when_over_budget(self) -> None:
+        from ghostreader.typesafe.grounding import build_continuity_enrich_context
+
+        fat = "X" * 4000
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 1, "title": "One", "content": _long_content(1)}
+            ],
+            "scene_facts": [
+                {
+                    "chapter_number": 1,
+                    "characters": [],
+                    "location": fat,
+                    "timeline_markers": [],
+                    "established_facts": [fat],
+                    "key_objects": [],
+                }
+            ],
+            "config": {
+                "analyze_grounding_hardening": True,
+                "analyze_continuity_enrich_total_budget": 2000,
+            },
+        }
+        ctx = build_continuity_enrich_context(state)  # type: ignore[arg-type]
+        assert len(ctx) <= 2000
+        assert "## Manuscript Excerpts" not in ctx
+
+    def test_hardening_off_sheets_only(self) -> None:
+        from ghostreader.typesafe.grounding import build_continuity_enrich_context
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 1, "title": "One", "content": _long_content(1)}
+            ],
+            "scene_facts": [_fact(1)],
+            "config": {"analyze_grounding_hardening": False},
+        }
+        ctx = build_continuity_enrich_context(state)  # type: ignore[arg-type]
+        assert "## Scene Fact Sheets" in ctx
+        assert "## Manuscript Excerpts" not in ctx
+
+
+class TestConsistencyTypesafeCallOrder:
+    @pytest.mark.asyncio
+    async def test_enrich_retry_then_midband_uses_context_v1(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ghostreader.agents.consistency_checker import _consistency_typesafe_path
+
+        enrich_dim = "consistency.character"
+        mid_dim = "consistency.timeline"
+        findings = [
+            {
+                "dimension": enrich_dim,
+                "severity": "concern",
+                "summary": "Gender flip in chapters 1 and 2",
+                "evidence": "",
+                "counter_evidence": "",
+                "chapter_ref": "1 vs 2",
+            }
+        ]
+        ratings = {
+            enrich_dim: {"severity": "concern", "note": "Gender flip"},
+            mid_dim: {"severity": "neutral", "note": "Pending"},
+            "consistency.plot_holes": {"severity": "neutral", "note": "ok"},
+            "consistency.foreshadowing": {"severity": "neutral", "note": "ok"},
+            "consistency.unresolved": {"severity": "neutral", "note": "ok"},
+        }
+
+        enrich_calls: list[dict[str, Any]] = []
+
+        async def fake_enrich(llm, cur_findings, dims, *, context_block, **kwargs):
+            enrich_calls.append(
+                {"dims": list(dims), "context": context_block, "kwargs": kwargs}
+            )
+            # First call leaves evidence empty; second fills it.
+            if len(enrich_calls) == 1:
+                updated = [
+                    {**f, "evidence": ""} if f.get("dimension") in dims else f
+                    for f in cur_findings
+                ]
+                return updated, {d: None for d in dims}, len(dims)
+            updated = [
+                {
+                    **f,
+                    "evidence": "Ch 1: 'he'",
+                    "counter_evidence": "Ch 2: 'she'",
+                    "summary": "Grounded gender flip",
+                }
+                if f.get("dimension") in dims
+                else f
+                for f in cur_findings
+            ]
+            return updated, {d: "{}" for d in dims}, 0
+
+        mid_contexts: list[str] = []
+
+        async def fake_tiebreak(llm, dims, *, context_block):
+            mid_contexts.append(context_block)
+            return (
+                [
+                    {
+                        "dimension": mid_dim,
+                        "severity": "concern",
+                        "summary": "Mid empty",
+                        "evidence": "",
+                        "counter_evidence": "",
+                        "chapter_ref": "1",
+                    }
+                ],
+                {mid_dim: {"severity": "concern", "note": "Mid empty"}},
+                {mid_dim: "{}"},
+                0,
+            )
+
+        class FakeResponse:
+            nouls: dict[str, Any] = {}
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {
+                    "chapter_number": 1,
+                    "title": "One",
+                    "content": _long_content(1),
+                },
+                {
+                    "chapter_number": 2,
+                    "title": "Two",
+                    "content": _long_content(2),
+                },
+            ],
+            "scene_facts": [_fact(1), _fact(2)],
+            "summary_hierarchy": {},
+            "config": {
+                "typesafe_noul_positive_threshold": 0.65,
+                "analyze_grounding_hardening": True,
+                "analyze_continuity_enrich_total_budget": 20000,
+                "analyze_excerpt_window_chars": 900,
+                "analyze_excerpt_min_per_chapter": 400,
+            },
+        }
+
+        monkeypatch.setattr(
+            "ghostreader.typesafe.client.ask",
+            AsyncMock(return_value=FakeResponse()),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.consistency_from_nouls",
+            lambda *_a, **_k: (findings, ratings, [enrich_dim], [mid_dim]),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.serialize_noul_answers",
+            lambda *_a, **_k: {},
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.enrich_findings_batch",
+            fake_enrich,
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.consistency_tiebreak_batch",
+            fake_tiebreak,
+        )
+
+        result = await _consistency_typesafe_path(
+            state,  # type: ignore[arg-type]
+            MagicMock(),
+            MagicMock(),
+        )
+
+        assert len(enrich_calls) == 2
+        assert enrich_calls[0]["dims"] == [enrich_dim]
+        assert enrich_calls[1]["dims"] == [enrich_dim]
+        assert "## Manuscript Excerpts (grounding)" in enrich_calls[0]["context"]
+        # Focused retry may differ; mid-band must reuse original context_v1.
+        assert len(mid_contexts) == 1
+        assert mid_contexts[0] == enrich_calls[0]["context"]
+        # Mid-band empty evidence must not trigger a third enrich.
+        assert len(enrich_calls) == 2
+
+        raw = result["consistency_output"]["raw_response"]
+        import json
+
+        stats = json.loads(raw)["stats"] if isinstance(raw, str) else raw["stats"]
+        assert stats["continuity_evidence_retries"] == 1
+        assert stats["continuity_demotions"] == 0
+        assert stats["noul_tie_breaks"] == 1
+
+    @pytest.mark.asyncio
+    async def test_hardening_off_skips_focused_retry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ghostreader.agents.consistency_checker import _consistency_typesafe_path
+
+        enrich_dim = "consistency.character"
+        findings = [
+            {
+                "dimension": enrich_dim,
+                "severity": "concern",
+                "summary": "Still empty",
+                "evidence": "",
+                "counter_evidence": "",
+                "chapter_ref": "1",
+            }
+        ]
+        ratings = {enrich_dim: {"severity": "concern", "note": "Still empty"}}
+
+        enrich = AsyncMock(
+            return_value=(findings, {enrich_dim: None}, 1)
+        )
+
+        class FakeResponse:
+            nouls: dict[str, Any] = {}
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 1, "title": "One", "content": "Hello"}
+            ],
+            "scene_facts": [_fact(1)],
+            "config": {
+                "analyze_grounding_hardening": False,
+                "typesafe_noul_positive_threshold": 0.65,
+            },
+        }
+
+        monkeypatch.setattr(
+            "ghostreader.typesafe.client.ask",
+            AsyncMock(return_value=FakeResponse()),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.consistency_from_nouls",
+            lambda *_a, **_k: (findings, ratings, [enrich_dim], []),
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.adapters.serialize_noul_answers",
+            lambda *_a, **_k: {},
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.enrich_findings_batch",
+            enrich,
+        )
+        monkeypatch.setattr(
+            "ghostreader.typesafe.enrich.consistency_tiebreak_batch",
+            AsyncMock(return_value=([], {}, {}, 0)),
+        )
+
+        await _consistency_typesafe_path(
+            state,  # type: ignore[arg-type]
+            MagicMock(),
+            MagicMock(),
+        )
+
+        assert enrich.await_count == 1
+        ctx = enrich.await_args.kwargs["context_block"]
+        assert "## Manuscript Excerpts" not in ctx

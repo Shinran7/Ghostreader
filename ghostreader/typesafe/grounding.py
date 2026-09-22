@@ -1,18 +1,20 @@
 """Post-enrich grounding policies for analyze (empty-evidence handling).
 
 Slice 3: ``prose.repetition`` quote guarantee (retry → detector fallback → demote).
+Slice 4: continuity enrich/tie-break context (sheets + hit-weighted manuscript).
 Slice 5 will add ``demote_ungrounded_concerns`` for continuity.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Mapping, Sequence
 
 from langchain_core.language_models import BaseChatModel
 
-from ghostreader.excerpts import quote_from_text
-from ghostreader.graph import AgentFinding
+from ghostreader.excerpts import Hit, build_hit_weighted_excerpts, quote_from_text
+from ghostreader.graph import AgentFinding, AnalysisState
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +23,135 @@ DETECTOR_LABEL = "(from repetition detector)"
 _DEMOTE_NOTE = "prose.repetition: insufficient grounded evidence"
 _SEV_RANK = {"high": 0, "moderate": 1, "low": 2}
 _PREFERRED_KINDS = frozenset({"word", "phrase"})
+_DIGIT = re.compile(r"\b(\d+)\b")
+_SHEETS_HDR = "## Scene Fact Sheets\n"
+_MS_HDR = "\n\n## Manuscript Excerpts (grounding)\n"
+_DEFAULT_CONTINUITY_BUDGET = 120_000
+_CONTINUITY_LEGACY_PER_CHAPTER = 3000
 
 
 def _evidence_empty(finding: Mapping[str, Any]) -> bool:
     return not str(finding.get("evidence") or "").strip()
+
+
+def continuity_manuscript_hits(
+    known_chapters: Sequence[int],
+    findings: Sequence[Mapping[str, Any]] | None = None,
+    *,
+    focused: bool = False,
+) -> list[Hit]:
+    """Hit weights for continuity manuscript excerpts.
+
+    Base ``1.0`` per known (fact-sheet) chapter. Summary digits that intersect
+    known chapters get ``+2.0``. On focused retry, ``chapter_ref`` chapters
+    are multiplied by ``×5`` once (plus base/boosts already applied).
+    """
+    known = sorted({int(c) for c in known_chapters})
+    if not known:
+        return []
+    known_set = set(known)
+    weights = {c: 1.0 for c in known}
+    focused_chs: set[int] = set()
+
+    for f in findings or []:
+        for m in _DIGIT.finditer(str(f.get("summary") or "")):
+            n = int(m.group(1))
+            if n in known_set:
+                weights[n] += 2.0
+        if focused:
+            ref = str(f.get("chapter_ref") or "")
+            for m in _DIGIT.finditer(ref):
+                n = int(m.group(1))
+                if n in known_set:
+                    focused_chs.add(n)
+
+    if focused:
+        for n in focused_chs:
+            weights[n] *= 5.0
+
+    return [
+        Hit(chapter_number=c, weight=w) for c, w in sorted(weights.items()) if w > 0
+    ]
+
+
+def build_continuity_enrich_context(
+    state: AnalysisState,
+    *,
+    findings: Sequence[Mapping[str, Any]] | None = None,
+    focused: bool = False,
+) -> str:
+    """Sheets + hit-weighted manuscript under the combined continuity ceiling.
+
+    When ``analyze_grounding_hardening`` is false and scene facts exist, returns
+    fact sheets only (legacy). Ask path stays sheets-only via
+    ``build_consistency_state``; this string is for enrich / tie-break only.
+    """
+    config = state.get("config", {}) or {}
+    hardening = bool(config.get("analyze_grounding_hardening", True))
+    scene_facts = state.get("scene_facts", [])  # type: ignore[literal-required]
+    chapters = state.get("chapters", [])
+
+    if not scene_facts:
+        from ghostreader.agents.consistency_checker import (
+            _format_chapter_excerpts,
+            _format_summary_hierarchy,
+        )
+
+        hierarchy = state.get("summary_hierarchy", {}) or {}
+        return (
+            f"## Summary Hierarchy\n{_format_summary_hierarchy(hierarchy)}\n\n"
+            f"## Manuscript Text\n{_format_chapter_excerpts(chapters)}"
+        )
+
+    from ghostreader.agents.fact_extractor import format_fact_sheets
+
+    sheets_raw = format_fact_sheets(scene_facts)  # type: ignore[arg-type]
+    if not hardening:
+        return f"{_SHEETS_HDR}{sheets_raw}"
+
+    combined = int(
+        config.get(
+            "analyze_continuity_enrich_total_budget", _DEFAULT_CONTINUITY_BUDGET
+        )
+        or _DEFAULT_CONTINUITY_BUDGET
+    )
+    if combined <= 0:
+        return f"{_SHEETS_HDR}{sheets_raw}"
+
+    sheets_with_hdr = f"{_SHEETS_HDR}{sheets_raw}"
+    if len(sheets_with_hdr) >= combined:
+        room = max(0, combined - len(_SHEETS_HDR))
+        return f"{_SHEETS_HDR}{sheets_raw[:room]}"
+
+    ms_budget = combined - len(sheets_with_hdr) - len(_MS_HDR)
+    if ms_budget <= 0:
+        return sheets_with_hdr[:combined]
+
+    known = [int(f.get("chapter_number", 0)) for f in scene_facts]
+    hits = continuity_manuscript_hits(known, findings, focused=focused)
+    manuscript = build_hit_weighted_excerpts(
+        chapters,
+        hits,
+        total_budget=ms_budget,
+        window_chars=int(config.get("analyze_excerpt_window_chars", 900) or 900),
+        min_per_chapter=int(
+            config.get("analyze_excerpt_min_per_chapter", 400) or 400
+        ),
+        legacy_per_chapter=_CONTINUITY_LEGACY_PER_CHAPTER,
+    )
+    if not manuscript:
+        return sheets_with_hdr
+
+    ctx = f"{sheets_with_hdr}{_MS_HDR}{manuscript}"
+    if len(ctx) > combined:
+        ctx = ctx[:combined]
+    logger.debug(
+        "continuity enrich context: %s chars (ceiling %s, focused=%s)",
+        len(ctx),
+        combined,
+        focused,
+    )
+    return ctx
 
 
 def _is_repetition_concern(finding: Mapping[str, Any]) -> bool:
@@ -246,5 +373,7 @@ __all__ = [
     "DETECTOR_LABEL",
     "REPETITION_DIM",
     "apply_repetition_evidence_policy",
+    "build_continuity_enrich_context",
     "build_detector_fallback_evidence",
+    "continuity_manuscript_hits",
 ]

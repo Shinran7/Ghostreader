@@ -239,10 +239,30 @@ Return ONLY the JSON array, no markdown fencing or commentary.
 """
 
 
+def _sync_enrich_rating_notes(
+    ratings: dict[str, dict[str, str]],
+    findings: list[AgentFinding],
+    dims: list[str],
+) -> None:
+    by_dim = {f.get("dimension"): f for f in findings}
+    for dim in dims:
+        f = by_dim.get(dim)
+        if f and dim in ratings:
+            ratings[dim]["note"] = str(
+                f.get("summary", ratings[dim].get("note", ""))
+            )
+
+
 async def _consistency_typesafe_path(
     state: AnalysisState, llm: BaseChatModel, typesafe_client: Any
 ) -> dict[str, Any]:
-    """TypeSafe Noul gates + enrich/tie-break. Live graph entry uses this."""
+    """TypeSafe Noul gates + enrich/tie-break. Live graph entry uses this.
+
+    Ask stays fact-sheet-only (``build_consistency_state``). Enrich / tie-break
+    use capped sheets + hit-weighted manuscript when grounding hardening is on
+    (KD-4 / KD-12 / KD-14). Call order: enrich → focused empty-evidence retry
+    → mid-band tie-break with the original capped context. Demotion is Slice 5.
+    """
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
         consistency_from_nouls,
@@ -253,11 +273,13 @@ async def _consistency_typesafe_path(
         consistency_tiebreak_batch,
         enrich_findings_batch,
     )
+    from ghostreader.typesafe.grounding import build_continuity_enrich_context
     from ghostreader.typesafe.questions import CONSISTENCY_DIMENSIONS, consistency_questions
     from ghostreader.typesafe.state_builders import build_consistency_state
 
     config = state.get("config", {})
     positive = float(config.get("typesafe_noul_positive_threshold", 0.65))
+    hardening = bool(config.get("analyze_grounding_hardening", True))
 
     ts_state = build_consistency_state(state)
     response = await ask(
@@ -267,38 +289,60 @@ async def _consistency_typesafe_path(
         response, positive_threshold=positive
     )
 
-    # Context for enrich / tie-break mirrors TypeSafe state preference.
-    if "fact_sheets" in ts_state:
-        context = f"## Scene Fact Sheets\n{ts_state['fact_sheets']}"
-    else:
-        context = (
-            f"## Summary Hierarchy\n{ts_state.get('summary_hierarchy', '')}\n\n"
-            f"## Manuscript Text\n{ts_state.get('manuscript', '')}"
-        )
+    # Build capped enrich/tie-break context once (context_v1). Focused retry
+    # may use a separate focused string; mid-band always reuses context_v1.
+    context_v1 = build_continuity_enrich_context(
+        state, findings=findings, focused=False
+    )
 
     enrich_raw: dict[str, Any] = {}
     parse_failures = 0
     llm_enrichments = 0
     noul_tie_breaks = 0
+    continuity_evidence_retries = 0
 
     if enrich_dims:
         findings, enrich_raw, parse_failures = await enrich_findings_batch(
             llm,
             findings,
             enrich_dims,
-            context_block=context,
+            context_block=context_v1,
             include_counter_evidence=True,
         )
         llm_enrichments = len(enrich_dims)
-        by_dim = {f.get("dimension"): f for f in findings}
-        for dim in enrich_dims:
-            f = by_dim.get(dim)
-            if f and dim in ratings:
-                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
+        _sync_enrich_rating_notes(ratings, findings, enrich_dims)
+
+        # KD-14 step 2: one focused enrich retry for still-empty evidence
+        # among positive-band dims only (not mid-band).
+        if hardening:
+            by_dim = {f.get("dimension"): f for f in findings}
+            empty_dims = [
+                d
+                for d in enrich_dims
+                if d in by_dim
+                and not str(by_dim[d].get("evidence") or "").strip()
+            ]
+            if empty_dims:
+                empty_findings = [by_dim[d] for d in empty_dims]
+                context_focused = build_continuity_enrich_context(
+                    state, findings=empty_findings, focused=True
+                )
+                findings, retry_raw, retry_failures = await enrich_findings_batch(
+                    llm,
+                    findings,
+                    empty_dims,
+                    context_block=context_focused,
+                    include_counter_evidence=True,
+                )
+                enrich_raw.update(retry_raw)
+                parse_failures += retry_failures
+                continuity_evidence_retries = 1
+                llm_enrichments += len(empty_dims)
+                _sync_enrich_rating_notes(ratings, findings, empty_dims)
 
     if mid_dims:
         mid_findings, mid_ratings, mid_raw, mid_failures = await consistency_tiebreak_batch(
-            llm, mid_dims, context_block=context
+            llm, mid_dims, context_block=context_v1
         )
         findings.extend(mid_findings)
         ratings.update(mid_ratings)
@@ -306,12 +350,15 @@ async def _consistency_typesafe_path(
         parse_failures += mid_failures
         noul_tie_breaks = len(mid_dims)
         llm_enrichments += len(mid_dims)
+        # Mid-band empty evidence: no enrich retry (demotion lands in Slice 5).
 
     stats = {
         "judgments": len(CONSISTENCY_DIMENSIONS),
         "llm_enrichments": llm_enrichments,
         "enrich_parse_failures": parse_failures,
         "noul_tie_breaks": noul_tie_breaks,
+        "continuity_evidence_retries": continuity_evidence_retries,
+        "continuity_demotions": 0,
     }
     raw = build_typesafe_raw_response(
         answers=serialize_noul_answers(response),
