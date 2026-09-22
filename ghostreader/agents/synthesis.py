@@ -138,6 +138,11 @@ def _merge_typesafe_stats(state: AnalysisState) -> dict[str, Any]:
         "low_confidence_enriches": 0,
         "enrich_parse_failures": 0,
         "noul_tie_breaks": 0,
+        "repetition_evidence_retries": 0,
+        "repetition_detector_fallbacks": 0,
+        "repetition_demotions": 0,
+        "continuity_evidence_retries": 0,
+        "continuity_demotions": 0,
     }
     for key in ("prose_output", "narrative_output", "consistency_output"):
         output = state.get(key)  # type: ignore[literal-required]
@@ -159,6 +164,11 @@ def _merge_typesafe_stats(state: AnalysisState) -> dict[str, Any]:
             "low_confidence_enriches",
             "enrich_parse_failures",
             "noul_tie_breaks",
+            "repetition_evidence_retries",
+            "repetition_detector_fallbacks",
+            "repetition_demotions",
+            "continuity_evidence_retries",
+            "continuity_demotions",
         ):
             totals[field] = int(totals[field]) + int(stats.get(field, 0) or 0)
     return totals

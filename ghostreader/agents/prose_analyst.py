@@ -106,7 +106,7 @@ def format_prose_manuscript(
     """Manuscript block for prose judge/enrich.
 
     When ``analyze_grounding_hardening`` is true (default), use hit-weighted
-    chapter heads under ``min(budget, 4000*N)``. When false, legacy flat 4k heads.
+    windows under ``min(budget, 4000*N)``. When false, legacy flat 4k heads.
     """
     cfg = config or {}
     if not cfg.get("analyze_grounding_hardening", True):
@@ -192,6 +192,17 @@ async def _prose_llm_path(state: AnalysisState, llm: BaseChatModel) -> dict[str,
     raw_text = message_text(response.content)
     findings = _parse_findings(raw_text)
 
+    from ghostreader.typesafe.grounding import apply_repetition_evidence_policy
+
+    # LLM path: detector fallback / demote only (no enrich retry).
+    findings, _policy_stats, _ = await apply_repetition_evidence_policy(
+        findings,
+        repetition_data=repetition_data,
+        chapters=chapters,
+        hardening_enabled=bool(config.get("analyze_grounding_hardening", True)),
+        allow_enrich_retry=False,
+    )
+
     output: AgentOutput = {
         "agent": "prose_analyst",
         "findings": findings,
@@ -264,11 +275,27 @@ async def _prose_typesafe_path(
             if f and dim in ratings:
                 ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
 
+    from ghostreader.typesafe.grounding import apply_repetition_evidence_policy
+
+    findings, policy_stats, ratings_out = await apply_repetition_evidence_policy(
+        findings,
+        repetition_data=repetition_data,
+        chapters=chapters,
+        ratings=ratings,
+        hardening_enabled=bool(config.get("analyze_grounding_hardening", True)),
+        llm=llm,
+        context_block=context,
+        allow_enrich_retry=True,
+    )
+    if ratings_out is not None:
+        ratings = ratings_out
+
     stats = {
         "judgments": len(PROSE_DIMENSIONS),
         "llm_enrichments": llm_enrichments,
         "low_confidence_enriches": low_conf,
         "enrich_parse_failures": parse_failures,
+        **policy_stats,
     }
     raw = build_typesafe_raw_response(
         answers=serialize_choice_answers(response),
