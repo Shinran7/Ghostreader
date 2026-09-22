@@ -46,3 +46,22 @@ llm_json_probe: true
 
 # Abort when fact-extraction JSON parse fails (empty sheets poison continuity).
 abort_on_fact_parse_failure: true
+
+# Analyze repetition feed: max word / phrase / sentence-pattern rows.
+# Always applied (not gated by analyze_grounding_hardening).
+analyze_repetition_words: 50
+analyze_repetition_phrases: 40
+analyze_repetition_patterns: 20
+
+# Hit-weighted manuscript excerpt ceiling (chars, headers included).
+analyze_excerpt_total_budget: 100000
+analyze_excerpt_window_chars: 900
+analyze_excerpt_min_per_chapter: 400
+
+# Continuity enrich/tie-break combined ceiling (sheets + manuscript).
+analyze_continuity_enrich_total_budget: 120000
+
+# Hit-weighted excerpts + empty-evidence retry/fallback/demotion.
+# false restores legacy flat excerpts and skips those policies.
+# Does NOT revert analyze_repetition_* caps or kind/pattern examples.
+analyze_grounding_hardening: true

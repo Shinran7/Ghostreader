@@ -293,7 +293,13 @@ async def _run_analyze(
 
     # ── 2. Repetition detection (algorithmic, no LLM) ──
     rprint("[cyan]Running repetition detection...[/cyan]")
-    detector = RepetitionDetector()
+    detector = RepetitionDetector(
+        top_n_words=max(
+            50,
+            cfg.analyze_repetition_words,
+            cfg.analyze_repetition_phrases,
+        ),
+    )
     rep_report = detector.run(chapters)
     rprint(
         f"  Words: [green]{len(rep_report.word_frequencies)}[/green], "
@@ -313,12 +319,25 @@ async def _run_analyze(
         "typesafe_enabled": typesafe_on,
         "typesafe_confidence_floor": cfg.typesafe_confidence_floor,
         "typesafe_noul_positive_threshold": cfg.typesafe_noul_positive_threshold,
+        "analyze_repetition_words": cfg.analyze_repetition_words,
+        "analyze_repetition_phrases": cfg.analyze_repetition_phrases,
+        "analyze_repetition_patterns": cfg.analyze_repetition_patterns,
+        "analyze_excerpt_total_budget": cfg.analyze_excerpt_total_budget,
+        "analyze_excerpt_window_chars": cfg.analyze_excerpt_window_chars,
+        "analyze_excerpt_min_per_chapter": cfg.analyze_excerpt_min_per_chapter,
+        "analyze_continuity_enrich_total_budget": cfg.analyze_continuity_enrich_total_budget,
+        "analyze_grounding_hardening": cfg.analyze_grounding_hardening,
     }
     initial_state: dict = {
         "chapters": chapters_to_dicts(chapters),
         "chunk_count": chunk_count,
         "summary_hierarchy": hierarchy_to_dict(hierarchy),
-        "repetition_data": repetition_report_to_dicts(rep_report),
+        "repetition_data": repetition_report_to_dicts(
+            rep_report,
+            max_words=cfg.analyze_repetition_words,
+            max_phrases=cfg.analyze_repetition_phrases,
+            max_patterns=cfg.analyze_repetition_patterns,
+        ),
         "config": config,
     }
     if chapter_facts:

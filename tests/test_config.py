@@ -27,6 +27,14 @@ class TestGhostreaderConfig:
         assert cfg.companion_cross_chapter_craft is True
         assert cfg.companion_info_dims is True
         assert cfg.companion_light_narrative is True
+        assert cfg.analyze_repetition_words == 50
+        assert cfg.analyze_repetition_phrases == 40
+        assert cfg.analyze_repetition_patterns == 20
+        assert cfg.analyze_excerpt_total_budget == 100000
+        assert cfg.analyze_excerpt_window_chars == 900
+        assert cfg.analyze_excerpt_min_per_chapter == 400
+        assert cfg.analyze_continuity_enrich_total_budget == 120000
+        assert cfg.analyze_grounding_hardening is True
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -41,6 +49,15 @@ class TestGhostreaderConfig:
         assert "companion_cross_chapter_craft: true" in text
         assert "companion_info_dims: true" in text
         assert "companion_light_narrative: true" in text
+        assert "analyze_repetition_words: 50" in text
+        assert "analyze_repetition_phrases: 40" in text
+        assert "analyze_repetition_patterns: 20" in text
+        assert "analyze_excerpt_total_budget: 100000" in text
+        assert "analyze_excerpt_window_chars: 900" in text
+        assert "analyze_excerpt_min_per_chapter: 400" in text
+        assert "analyze_continuity_enrich_total_budget: 120000" in text
+        assert "analyze_grounding_hardening: true" in text
+        assert "Does NOT revert analyze_repetition_*" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
         assert loaded.companion_prior == "full"
@@ -48,6 +65,10 @@ class TestGhostreaderConfig:
         assert loaded.companion_cross_chapter_craft is True
         assert loaded.companion_info_dims is True
         assert loaded.companion_light_narrative is True
+        assert loaded.analyze_repetition_words == 50
+        assert loaded.analyze_repetition_phrases == 40
+        assert loaded.analyze_repetition_patterns == 20
+        assert loaded.analyze_grounding_hardening is True
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

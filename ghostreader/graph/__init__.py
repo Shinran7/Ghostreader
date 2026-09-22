@@ -20,6 +20,14 @@ class AnalysisConfig(TypedDict, total=False):
     typesafe_enabled: bool
     typesafe_confidence_floor: float
     typesafe_noul_positive_threshold: float
+    analyze_repetition_words: int
+    analyze_repetition_phrases: int
+    analyze_repetition_patterns: int
+    analyze_excerpt_total_budget: int
+    analyze_excerpt_window_chars: int
+    analyze_excerpt_min_per_chapter: int
+    analyze_continuity_enrich_total_budget: int
+    analyze_grounding_hardening: bool
 
 
 class AgentFinding(TypedDict, total=False):
@@ -119,42 +127,118 @@ def hierarchy_to_dict(h: SummaryHierarchy) -> dict[str, Any]:
     }
 
 
+_SEVERITY_RANK = {"high": 0, "moderate": 1, "low": 2}
+
+
+def _word_severity(tfidf_score: float) -> str:
+    if tfidf_score > 0.3:
+        return "high"
+    if tfidf_score > 0.15:
+        return "moderate"
+    return "low"
+
+
+def _phrase_severity(count: int) -> str:
+    if count >= 10:
+        return "high"
+    if count >= 5:
+        return "moderate"
+    return "low"
+
+
+def _pattern_severity(similarity_score: float) -> str:
+    if similarity_score >= 0.9:
+        return "high"
+    if similarity_score >= 0.75:
+        return "moderate"
+    return "low"
+
+
+def _locations_payload(
+    locations: list[Any],
+    *,
+    max_locations: int,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for loc in locations[:max_locations]:
+        out.append({
+            "chapter_number": loc.chapter_number,
+            "approximate_position": loc.approximate_position,
+        })
+    return out
+
+
 def repetition_report_to_dicts(
     report: "RepetitionReport",  # noqa: F821
+    *,
+    max_words: int = 50,
+    max_phrases: int = 40,
+    max_patterns: int = 20,
+    include_locations: bool = True,
+    max_locations_per_entry: int = 8,
 ) -> list[dict[str, Any]]:
-    """Serialize a RepetitionReport into the list[dict] expected by AnalysisState.
+    """Serialize a RepetitionReport into analyze ``repetition_data`` rows.
 
-    Converts the top word-frequency and repeated-phrase entries into the
-    simplified ``{phrase, count, chapters, severity}`` format consumed by
-    the prose analyst agent.
+    Includes words, phrases, and sentence patterns with ``kind``. Omits
+    dialogue tags (companion-only). Locations are optional and capped.
     """
     from ghostreader.analyzers import RepetitionReport as _RR  # noqa: F811
 
     entries: list[dict[str, Any]] = []
 
-    for wf in report.word_frequencies[:30]:
+    for wf in report.word_frequencies[:max_words]:
         chapter_nums = sorted({loc.chapter_number for loc in wf.locations})
-        severity = "high" if wf.tfidf_score > 0.3 else (
-            "moderate" if wf.tfidf_score > 0.15 else "low"
-        )
-        entries.append({
+        row: dict[str, Any] = {
             "phrase": wf.term,
+            "kind": "word",
             "count": wf.count,
             "chapters": chapter_nums,
-            "severity": severity,
-        })
+            "severity": _word_severity(wf.tfidf_score),
+        }
+        if include_locations:
+            row["locations"] = _locations_payload(
+                wf.locations, max_locations=max_locations_per_entry
+            )
+        entries.append(row)
 
-    for rp in report.repeated_phrases[:20]:
+    for rp in report.repeated_phrases[:max_phrases]:
         chapter_nums = sorted({loc.chapter_number for loc in rp.locations})
-        severity = "high" if rp.count >= 10 else (
-            "moderate" if rp.count >= 5 else "low"
-        )
-        entries.append({
+        row = {
             "phrase": rp.phrase,
+            "kind": "phrase",
             "count": rp.count,
             "chapters": chapter_nums,
-            "severity": severity,
+            "severity": _phrase_severity(rp.count),
+        }
+        if include_locations:
+            row["locations"] = _locations_payload(
+                rp.locations, max_locations=max_locations_per_entry
+            )
+        entries.append(row)
+
+    pattern_rows: list[dict[str, Any]] = []
+    for pattern in report.sentence_patterns:
+        examples = [ex for ex in (pattern.examples or []) if str(ex).strip()][:3]
+        pattern_rows.append({
+            "phrase": pattern.description or pattern.pattern_type,
+            "kind": "sentence_pattern",
+            "count": max(len(pattern.examples or []), 1),
+            "chapters": [pattern.chapter_number],
+            "severity": _pattern_severity(pattern.similarity_score),
+            "pattern_type": pattern.pattern_type,
+            "examples": examples,
+            "_similarity": pattern.similarity_score,
         })
+
+    pattern_rows.sort(
+        key=lambda e: (
+            _SEVERITY_RANK.get(str(e.get("severity") or "low"), 99),
+            -float(e.get("_similarity") or 0.0),
+        )
+    )
+    for row in pattern_rows[:max_patterns]:
+        row.pop("_similarity", None)
+        entries.append(row)
 
     return entries
 

@@ -63,14 +63,25 @@ def _format_repetition_data(repetition_data: list[dict[str, Any]]) -> str:
     lines = ["Algorithmically-detected repetition patterns:"]
     for entry in repetition_data:
         phrase = entry.get("phrase", "")
+        kind = entry.get("kind") or "phrase"
         count = entry.get("count", 0)
         chapters = entry.get("chapters", [])
         severity = entry.get("severity", "low")
         ch_str = ", ".join(str(c) for c in chapters)
-        lines.append(
-            f"  - \"{phrase}\" × {count} occurrences "
+        line = (
+            f'  - [{kind}] "{phrase}" × {count} occurrences '
             f"(chapters: {ch_str}, severity: {severity})"
         )
+        if kind == "sentence_pattern":
+            examples = [
+                str(ex).strip()
+                for ex in (entry.get("examples") or [])
+                if str(ex).strip()
+            ][:2]
+            if examples:
+                shown = "; ".join(f'"{ex}"' for ex in examples)
+                line = f"{line}; examples: {shown}"
+        lines.append(line)
     return "\n".join(lines)
 
 

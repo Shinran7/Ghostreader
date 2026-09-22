@@ -47,6 +47,19 @@ class GhostreaderConfig(BaseModel):
     # Abort analyze/companion (exit 1) when any chapter fact sheet fails JSON parse.
     # Continuity on empty sheets looks "clean" and must not be trusted.
     abort_on_fact_parse_failure: bool = True
+    # Analyze repetition feed caps (always on; not gated by analyze_grounding_hardening).
+    analyze_repetition_words: int = 50
+    analyze_repetition_phrases: int = 40
+    analyze_repetition_patterns: int = 20
+    # Hit-weighted excerpt ceiling (headers included). Used when hardening is on.
+    analyze_excerpt_total_budget: int = 100000
+    analyze_excerpt_window_chars: int = 900
+    analyze_excerpt_min_per_chapter: int = 400
+    # Continuity enrich/tie-break combined ceiling (sheets + manuscript).
+    analyze_continuity_enrich_total_budget: int = 120000
+    # Master switch for hit-weighted excerpts + empty-evidence policies.
+    # Does NOT gate analyze_repetition_* caps / kind / pattern examples.
+    analyze_grounding_hardening: bool = True
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -135,6 +148,25 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Abort when fact-extraction JSON parse fails (empty sheets poison continuity).",
             f"abort_on_fact_parse_failure: {_fmt(self.abort_on_fact_parse_failure)}",
+            f"",
+            f"# Analyze repetition feed: max word / phrase / sentence-pattern rows.",
+            f"# Always applied (not gated by analyze_grounding_hardening).",
+            f"analyze_repetition_words: {_fmt(self.analyze_repetition_words)}",
+            f"analyze_repetition_phrases: {_fmt(self.analyze_repetition_phrases)}",
+            f"analyze_repetition_patterns: {_fmt(self.analyze_repetition_patterns)}",
+            f"",
+            f"# Hit-weighted manuscript excerpt ceiling (chars, headers included).",
+            f"analyze_excerpt_total_budget: {_fmt(self.analyze_excerpt_total_budget)}",
+            f"analyze_excerpt_window_chars: {_fmt(self.analyze_excerpt_window_chars)}",
+            f"analyze_excerpt_min_per_chapter: {_fmt(self.analyze_excerpt_min_per_chapter)}",
+            f"",
+            f"# Continuity enrich/tie-break combined ceiling (sheets + manuscript).",
+            f"analyze_continuity_enrich_total_budget: {_fmt(self.analyze_continuity_enrich_total_budget)}",
+            f"",
+            f"# Hit-weighted excerpts + empty-evidence retry/fallback/demotion.",
+            f"# false restores legacy flat excerpts and skips those policies.",
+            f"# Does NOT revert analyze_repetition_* caps or kind/pattern examples.",
+            f"analyze_grounding_hardening: {_fmt(self.analyze_grounding_hardening)}",
             f"",
         ]
 
