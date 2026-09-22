@@ -39,18 +39,33 @@ report it. Absence of information is not the same as a contradiction.
 EVALUATION DIMENSIONS:
 1. **Plot holes** — Logical contradictions in the story's events. Things that
    happen that are impossible given previously established facts. Actions or
-   outcomes that violate the story's own rules.
+   outcomes that violate the story's own rules. Impossible presence / travel /
+   outcome given prior location, travel time, or story rules. Do NOT treat
+   tone, emotional framing, or brief understatement of prior conflict as a
+   plot hole when presence is still possible. Do NOT flag presence that prior
+   facts already explain. Soft narrative dissatisfaction without a hard
+   contradiction is not a plot hole.
 2. **Timeline errors** — Events that happen in an impossible order. Age
    contradictions. Seasonal or temporal inconsistencies. Travel times that
-   don't match distances.
+   don't match distances. For countdown / remaining-days markers, the hard
+   defect is a non-monotonic move (value increases when it should only fall,
+   or jumps with zero elapsed time). Emit one concern for that reversal (cite
+   the chapters of the bump). Later lower countdown values after plausible
+   elapsed narrative time are not the same failure as the non-monotonic bump;
+   do not bundle them into an erratic-throughout summary unless no time passed.
 3. **Foreshadowing** — Setups that never pay off (Chekhov's guns left on the
    wall). Payoffs that were never set up. Heavy-handed foreshadowing that
    telegraphs plot points.
 4. **Unresolved threads** — Subplots introduced but never concluded. Characters
    who disappear without explanation. Questions raised but never answered.
-5. **Character consistency** — Characters who know things they shouldn't.
-   Characters in locations they can't logically be. Personality shifts without
-   motivation. Skills or abilities that appear/disappear.
+   Same countdown rule as timeline: hard signal = non-monotonic bump only;
+   later lower values after plausible elapsed time are not the same failure.
+5. **Character consistency** — Knowledge leaks (knows something before they
+   could). Personality / ability / identity flips without motivation.
+   Narration that understates prior established conflict when location /
+   possibility is fine (tone/framing). Do NOT yes-gate merely surprising
+   location when prior facts explain how they got there. Impossible location /
+   travel belongs on plot_holes — do not double-fire it here.
 
 OUTPUT FORMAT:
 Return a JSON array of findings. Each finding must have:
@@ -215,12 +230,26 @@ Only report contradictions where two fact sheets explicitly state conflicting
 details about the same character, object, location, or timeline. Do NOT report
 missing information as a contradiction. Absence is not inconsistency.
 
-Look for:
+Look for (location ownership — no double-fire):
+- Plot holes (consistency.plot_holes): two stated facts conflict; presence /
+  travel / outcome that is impossible given prior location, travel time, or
+  story rules. Do NOT treat tone, emotional framing, or brief understatement
+  as a plot hole when presence is still possible. Do NOT flag presence that
+  prior facts already explain.
+- Character (consistency.character): knowledge leaks; personality / ability /
+  identity flips without motivation; narration that understates prior conflict
+  when location/possibility is fine (tone/framing). Do NOT flag merely
+  surprising location when prior facts explain arrival. Impossible location /
+  travel belongs on plot_holes, not here.
+- Timeline / unresolved: events in impossible order; conflicting time
+  references. For countdown / remaining-days markers, the hard defect is a
+  non-monotonic move (value increases when it should only fall). Emit one
+  concern for that reversal. Later lower countdown values after plausible
+  elapsed narrative time are not the same failure as the non-monotonic bump;
+  do not bundle them into an erratic-throughout summary unless no time passed.
+- Objects that change description (color, condition, location) when two sheets
+  conflict
 - Character details that change (gender, eye color, scars, age, relationships)
-- Objects that change description (color, condition, location)
-- Timeline contradictions (events in impossible order, conflicting time references)
-- Location contradictions (character in two places at once)
-- Knowledge contradictions (character knows something before they could)
 
 OUTPUT FORMAT:
 Return a JSON array of findings. Each finding must have:

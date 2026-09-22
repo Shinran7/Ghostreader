@@ -10,6 +10,15 @@ Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
 `ghostreader_version` on this payload is **`0.2.1`**. It is independent of package `__version__` and of analyze JSON export (those may stay `0.1.0`).
 
+## Shared continuity judgment text (no contract bump)
+
+Companion gate Nouls reuse analyze `_CONSISTENCY_INSTRUCTIONS` (`plot_holes` /
+`character` / `timeline` / `unresolved`). Prompt precision for impossibility vs
+tone, location ownership (no double-fire), and non-monotonic countdown rules
+tightens companion progressive-gate judgment text when those shared instructions
+change. **Brief contract stays `0.2.1`** — judgment wording only; no
+`GHOSTREADER_VERSION` bump for this side effect.
+
 ## Verdict rules
 
 | Band | Flips `verdict` to `watch`? | Exit `2` (`--fail-on-continuity`)? |

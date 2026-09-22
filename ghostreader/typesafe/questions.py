@@ -81,11 +81,26 @@ _NARRATIVE_INSTRUCTIONS: dict[str, str] = {
 _CONSISTENCY_INSTRUCTIONS: dict[str, str] = {
     "consistency.plot_holes": (
         "Is there a plot hole or logical contradiction between established facts "
-        "in the state? Answer yes only when two stated facts conflict."
+        "in the state? Answer yes when two stated facts conflict (appearance, "
+        "object state, outcome vs prior rule), or when presence / travel / "
+        "outcome is impossible given prior location, travel time, or story "
+        "rules. Do NOT answer yes for tone, emotional framing, or brief "
+        "understatement of prior conflict when presence is still possible; for "
+        "presence that prior facts already explain (character arrived from a "
+        "stated prior beat); or for soft narrative dissatisfaction without a "
+        "hard contradiction. Impossible presence belongs here, not on "
+        "consistency.character."
     ),
     "consistency.timeline": (
         "Is there a timeline error, anachronism, or impossible event order in the "
-        "state? Answer yes only for explicit temporal contradictions."
+        "state? Answer yes only for explicit temporal contradictions. When the "
+        "state tracks a countdown or remaining-days marker, the hard defect is a "
+        "non-monotonic move (value increases when it should only fall, or jumps "
+        "with zero elapsed time). Emit one concern for that reversal (cite the "
+        "chapters of the bump). Later lower countdown values after plausible "
+        "elapsed narrative time are not the same failure as the non-monotonic "
+        "bump; do not bundle them into an erratic-throughout summary unless "
+        "sheets show no time passed."
     ),
     "consistency.foreshadowing": (
         "Is there unpaid foreshadowing or a payoff with no setup that hurts "
@@ -93,11 +108,24 @@ _CONSISTENCY_INSTRUCTIONS: dict[str, str] = {
     ),
     "consistency.unresolved": (
         "Is there an unresolved narrative thread or abandoned subplot that the "
-        "state shows was introduced and never concluded?"
+        "state shows was introduced and never concluded? When the state tracks a "
+        "countdown or remaining-days marker, the hard defect is a non-monotonic "
+        "move (value increases when it should only fall, or jumps with zero "
+        "elapsed time). Emit one concern for that reversal (cite the chapters of "
+        "the bump). Later lower countdown values after plausible elapsed "
+        "narrative time are not the same failure as the non-monotonic bump; do "
+        "not bundle them into an erratic-throughout summary unless sheets show "
+        "no time passed."
     ),
     "consistency.character": (
-        "Is there a character consistency contradiction (knowledge, location, "
-        "identity details) between scenes/chapters in the state?"
+        "Is there a character consistency contradiction in the state? Answer yes "
+        "for knowledge leaks (knows something before they could); personality / "
+        "ability / identity detail flips without motivation; or narration that "
+        "understates prior established conflict when location/possibility is "
+        "fine (tone/framing). Do NOT answer yes when location is merely "
+        "surprising but prior facts explain how they got there. Do NOT answer "
+        "yes for impossible location / travel — that belongs on "
+        "consistency.plot_holes, not here (no double-fire)."
     ),
 }
 

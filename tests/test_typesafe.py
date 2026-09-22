@@ -192,3 +192,46 @@ class TestQuestionBanks:
 
     def test_consistency_keys(self) -> None:
         assert set(consistency_questions()) == set(CONSISTENCY_DIMENSIONS)
+
+    def test_consistency_instructions_location_and_countdown(self) -> None:
+        from ghostreader.typesafe.questions import _CONSISTENCY_INSTRUCTIONS
+
+        plot = _CONSISTENCY_INSTRUCTIONS["consistency.plot_holes"].lower()
+        character = _CONSISTENCY_INSTRUCTIONS["consistency.character"].lower()
+        unresolved = _CONSISTENCY_INSTRUCTIONS["consistency.unresolved"].lower()
+        timeline = _CONSISTENCY_INSTRUCTIONS["consistency.timeline"].lower()
+
+        assert "impossible" in plot
+        assert "understatement" in plot or "tone" in plot
+        assert "do not" in plot
+        assert "consistency.character" in plot
+
+        assert "knowledge" in character
+        assert "tone" in character or "framing" in character or "understate" in character
+        assert "do not" in character
+        assert "plot_holes" in character
+        assert "double-fire" in character
+
+        anti_bundle = "not the same failure as the non-monotonic bump"
+        assert "non-monotonic" in unresolved
+        assert anti_bundle in unresolved
+        assert "non-monotonic" in timeline
+        assert anti_bundle in timeline
+
+    def test_scene_and_legacy_prompts_mirror_ownership(self) -> None:
+        from ghostreader.agents.consistency_checker import (
+            _SCENE_CONSISTENCY_PROMPT,
+            _SYSTEM_PROMPT_TEMPLATE,
+        )
+
+        for prompt in (_SCENE_CONSISTENCY_PROMPT, _SYSTEM_PROMPT_TEMPLATE):
+            lower = prompt.lower()
+            assert "impossible" in lower
+            assert "non-monotonic" in lower
+            assert "not the same failure as the non-monotonic bump" in lower
+            assert "plot_holes" in lower or "plot holes" in lower
+            assert "tone" in lower or "framing" in lower or "understatement" in lower
+            # Impossible location owned by plot_holes, not character double-fire
+            assert "belongs on plot_holes" in lower or "belongs here, not on" in lower or (
+                "impossible location" in lower and "plot_holes" in lower
+            )
