@@ -1,4 +1,4 @@
-"""Tests for hit-weighted excerpt helpers (Slice 2a: chapter heads + ceiling)."""
+"""Tests for hit-weighted excerpt helpers (ceiling + position/needle windows)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from ghostreader.agents.prose_analyst import (
 )
 from ghostreader.excerpts import (
     Hit,
+    _merge_intervals,
+    _window_for_hit,
     build_hit_weighted_excerpts,
     hits_from_chapter_numbers,
     hits_from_repetition_data,
@@ -257,3 +259,113 @@ class TestLogFormulaMatchesDesign:
         for count in (1, 9, 10, 99, 100):
             expected = 2 * (1 + math.floor(math.log10(max(count, 1))))
             assert row_weight("moderate", count) == float(expected)
+
+
+class TestWindowPlacement:
+    def test_position_centers_mid_chapter(self) -> None:
+        marker = "UNIQUE_HIT_MARKER"
+        # Place marker so position 0.75 lands inside it.
+        content = ("A" * 1500) + marker + ("B" * 500)
+        pos = (1500 + len(marker) / 2) / len(content)
+        hit = Hit(chapter_number=1, weight=1.0, position=pos)
+        span = _window_for_hit(content, hit, window_chars=200)
+        assert span is not None
+        start, end = span
+        window = content[start:end]
+        assert "UNIQUE_HIT_MARKER" in window
+        # Centered mid-chapter, not a pure chapter head
+        assert start > 0
+        assert window != content[: len(window)]
+
+    def test_needle_locates_case_insensitive(self) -> None:
+        content = ("x" * 1000) + " The Shadow lingered. " + ("y" * 1000)
+        hit = Hit(chapter_number=1, weight=1.0, needle="shadow")
+        span = _window_for_hit(content, hit, window_chars=100)
+        assert span is not None
+        start, end = span
+        assert "Shadow" in content[start:end]
+
+    def test_missing_needle_returns_none(self) -> None:
+        content = "Nothing relevant here at all."
+        hit = Hit(chapter_number=1, weight=1.0, needle="xyzzy")
+        assert _window_for_hit(content, hit, window_chars=100) is None
+
+
+class TestIntervalMerge:
+    def test_overlap_and_adjacent_union(self) -> None:
+        merged = _merge_intervals([(0, 100), (80, 150), (150, 200), (300, 350)])
+        assert merged == [(0, 200), (300, 350)]
+
+    def test_empty(self) -> None:
+        assert _merge_intervals([]) == []
+
+
+class TestPositionNeedleExcerpts:
+    def test_position_window_appears_in_output(self) -> None:
+        marker = "MIDCHAPTER_TOKEN"
+        content = ("H" * 2000) + marker + ("T" * 2000)
+        pos = (2000 + len(marker) / 2) / len(content)
+        chapters = [_chapter(1, content)]
+        hits = [Hit(chapter_number=1, weight=3.0, position=pos)]
+        out = build_hit_weighted_excerpts(
+            chapters,
+            hits,
+            total_budget=5000,
+            window_chars=400,
+            min_per_chapter=400,
+            legacy_per_chapter=4000,
+        )
+        assert "MIDCHAPTER_TOKEN" in out
+        assert len(out) <= 5000
+
+    def test_needle_window_appears_in_output(self) -> None:
+        # Spaces so whole-phrase boundaries match (needle not glued to letters).
+        content = ("a" * 2500) + " whispered softly " + ("b" * 2500)
+        chapters = [_chapter(1, content)]
+        hits = [Hit(chapter_number=1, weight=3.0, needle="whispered softly")]
+        out = build_hit_weighted_excerpts(
+            chapters,
+            hits,
+            total_budget=3000,
+            window_chars=300,
+            min_per_chapter=400,
+            legacy_per_chapter=4000,
+        )
+        assert "whispered softly" in out
+        assert len(out) <= 3000
+
+    def test_overlapping_positions_merge_under_ceiling(self) -> None:
+        # Two close positions → one merged span; still under ceiling.
+        content = "Z" * 5000
+        chapters = [_chapter(1, content)]
+        hits = [
+            Hit(chapter_number=1, weight=2.0, position=0.40),
+            Hit(chapter_number=1, weight=2.0, position=0.42),
+        ]
+        out = build_hit_weighted_excerpts(
+            chapters,
+            hits,
+            total_budget=2000,
+            window_chars=900,
+            min_per_chapter=400,
+            legacy_per_chapter=4000,
+        )
+        assert "Chapter 1" in out
+        assert len(out) <= 2000
+        # Body should be contiguous Z's (merged), not empty
+        assert "Z" in out
+
+    def test_missing_needle_falls_back_to_head(self) -> None:
+        content = "HEADSTART" + ("q" * 3000)
+        chapters = [_chapter(1, content)]
+        hits = [Hit(chapter_number=1, weight=3.0, needle="not-in-text")]
+        out = build_hit_weighted_excerpts(
+            chapters,
+            hits,
+            total_budget=2000,
+            window_chars=400,
+            min_per_chapter=400,
+            legacy_per_chapter=4000,
+        )
+        assert "HEADSTART" in out
+

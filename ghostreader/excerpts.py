@@ -1,8 +1,7 @@
 """Hit-weighted manuscript excerpts for analyze grounding.
 
-Slice 2a: chapter-level allocation + chapter heads only.
-Position/needle windows and overlap merge land in Slice 2b.
-``window_chars`` is accepted for API stability but unused until 2b.
+Allocate by chapter weight under a hard ceiling, then emit merged windows
+centered on hit positions / needles (with optional head pad within alloc).
 """
 
 from __future__ import annotations
@@ -20,8 +19,7 @@ class Hit:
     """A weighted locus for excerpt allocation.
 
     ``position`` is 0.0–1.0 within the chapter when known; ``None`` means
-    chapter-level. Slice 2a aggregates by chapter only; positioned hits still
-    contribute weight (XOR with chapter-level — see ``hits_from_repetition_data``).
+    chapter-level (locate via ``needle`` when placing windows).
     """
 
     chapter_number: int
@@ -81,8 +79,6 @@ def hits_from_repetition_data(repetition_data: Sequence[Mapping[str, Any]]) -> l
       hits (weight split evenly). Do not also emit a chapter-level hit.
     - Else → emit exactly one chapter-level hit (``position=None``,
       ``needle`` = phrase / first pattern example).
-
-    Slice 2a callers aggregate by chapter; positions are reserved for 2b windows.
     """
     hits: list[Hit] = []
     for entry in repetition_data:
@@ -199,6 +195,166 @@ def _alloc_for_hits(
     return dict(mins)
 
 
+def _needle_match(needle: str, text: str) -> re.Match[str] | None:
+    """First case-insensitive whole-phrase match (same spirit as quote_from_text)."""
+    if not needle or not text:
+        return None
+    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", text, re.IGNORECASE)
+
+
+def _centered_window(center: int, length: int, window_chars: int) -> tuple[int, int]:
+    """Window around *center* using the design half-split formula."""
+    half = window_chars // 2
+    start = max(0, center - half)
+    end = min(length, center + window_chars - half)
+    if start >= end:
+        return (0, 0)
+    return (start, end)
+
+
+def _window_for_hit(
+    content: str, hit: Hit, window_chars: int
+) -> tuple[int, int] | None:
+    """Return ``[start, end)`` for a hit, or None if no placeable window."""
+    n = len(content)
+    if n == 0 or window_chars <= 0:
+        return None
+    if hit.position is not None:
+        center = int(float(hit.position) * n)
+        center = max(0, min(n, center))
+        start, end = _centered_window(center, n, window_chars)
+        return (start, end) if end > start else None
+    if hit.needle:
+        match = _needle_match(hit.needle, content)
+        if match is None:
+            return None
+        center = (match.start() + match.end()) // 2
+        start, end = _centered_window(center, n, window_chars)
+        return (start, end) if end > start else None
+    return None
+
+
+def _merge_intervals(intervals: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Union overlapping or adjacent ``[start, end)`` intervals."""
+    if not intervals:
+        return []
+    ordered = sorted((s, e) for s, e in intervals if e > s)
+    if not ordered:
+        return []
+    merged: list[list[int]] = [[ordered[0][0], ordered[0][1]]]
+    for s, e in ordered[1:]:
+        if s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    return [(s, e) for s, e in merged]
+
+
+def _interval_length(intervals: Sequence[tuple[int, int]]) -> int:
+    return sum(e - s for s, e in intervals)
+
+
+def _truncate_intervals(
+    intervals: Sequence[tuple[int, int]], budget: int
+) -> list[tuple[int, int]]:
+    """Keep intervals in order until *budget* chars; truncate the last."""
+    if budget <= 0:
+        return []
+    out: list[tuple[int, int]] = []
+    remaining = budget
+    for s, e in intervals:
+        if remaining <= 0:
+            break
+        length = e - s
+        if length <= remaining:
+            out.append((s, e))
+            remaining -= length
+        else:
+            out.append((s, s + remaining))
+            remaining = 0
+    return out
+
+
+def _select_intervals_by_priority(
+    weighted: Sequence[tuple[int, int, float]], alloc_c: int
+) -> list[tuple[int, int]]:
+    """Keep higher-weight windows first until *alloc_c*; truncate the last."""
+    if alloc_c <= 0 or not weighted:
+        return []
+    ordered = sorted(weighted, key=lambda t: (-t[2], t[0], t[1]))
+    chosen: list[tuple[int, int]] = []
+    for start, end, _w in ordered:
+        trial = _merge_intervals([*chosen, (start, end)])
+        if _interval_length(trial) <= alloc_c:
+            chosen = trial
+            continue
+        if _interval_length(chosen) >= alloc_c:
+            break
+        chosen = _truncate_intervals(
+            _merge_intervals([*chosen, (start, end)]), alloc_c
+        )
+        break
+    return chosen
+
+
+def _head_pad_intervals(
+    intervals: list[tuple[int, int]], alloc_c: int, content_len: int
+) -> list[tuple[int, int]]:
+    """Extend the first window toward chapter start up to *alloc_c*."""
+    if alloc_c <= 0 or content_len <= 0:
+        return []
+    if not intervals:
+        return [(0, min(alloc_c, content_len))]
+    total = _interval_length(intervals)
+    if total >= alloc_c:
+        return intervals
+    need = alloc_c - total
+    first_s, first_e = intervals[0]
+    extend = min(need, first_s)
+    if extend <= 0:
+        return intervals
+    padded = [(first_s - extend, first_e), *intervals[1:]]
+    return _merge_intervals(padded)
+
+
+def _windows_for_chapter(
+    content: str,
+    chapter_hits: Sequence[Hit],
+    *,
+    window_chars: int,
+    alloc_c: int,
+) -> list[tuple[int, int]]:
+    """Place, merge, priority-trim, and optionally head-pad windows."""
+    if alloc_c <= 0 or not content:
+        return []
+
+    weighted: list[tuple[int, int, float]] = []
+    for hit in chapter_hits:
+        if hit.weight <= 0:
+            continue
+        span = _window_for_hit(content, hit, window_chars)
+        if span is None:
+            continue
+        start, end = span
+        weighted.append((start, end, hit.weight))
+
+    if not weighted:
+        # No placeable window (missing needle, etc.) — head within alloc.
+        return [(0, min(alloc_c, len(content)))]
+
+    merged = _merge_intervals([(s, e) for s, e, _ in weighted])
+    if _interval_length(merged) > alloc_c:
+        merged = _select_intervals_by_priority(weighted, alloc_c)
+    else:
+        merged = list(merged)
+
+    return _head_pad_intervals(merged, alloc_c, len(content))
+
+
+def _body_from_intervals(content: str, intervals: Sequence[tuple[int, int]]) -> str:
+    return "".join(content[s:e] for s, e in intervals)
+
+
 def build_hit_weighted_excerpts(
     chapters: Sequence[Mapping[str, Any]],
     hits: Sequence[Hit],
@@ -208,13 +364,13 @@ def build_hit_weighted_excerpts(
     min_per_chapter: int = 400,
     legacy_per_chapter: int = 4000,
 ) -> str:
-    """Allocate excerpt chars under a hard ceiling; emit chapter heads (Slice 2a).
+    """Allocate excerpt chars under a hard ceiling; emit merged hit windows.
 
     Ceiling = ``min(total_budget, legacy_per_chapter * N)`` (hard max, not a
-    fill target). Headers count toward the ceiling. ``window_chars`` is unused
-    until Slice 2b position windows.
+    fill target). Headers count toward the ceiling. Windows center on
+    ``position`` / ``needle``; overlaps are unioned; short chapters may
+    head-pad within ``alloc_c`` only.
     """
-    del window_chars  # Slice 2b
     n = len(chapters)
     if n == 0 or total_budget <= 0:
         return ""
@@ -225,12 +381,19 @@ def build_hit_weighted_excerpts(
         return ""
 
     weights = _aggregate_weights(hits)
+    hits_by_chapter: dict[int, list[Hit]] = {}
+    for h in hits:
+        if h.weight <= 0:
+            continue
+        hits_by_chapter.setdefault(h.chapter_number, []).append(h)
+
     hit_chapters = {c for c in weights if c in by_num and weights[c] > 0}
 
     parts: list[str] = []
     used = 0
 
-    def _emit(ch: Mapping[str, Any], content_chars: int) -> bool:
+    def _emit_head(ch: Mapping[str, Any], content_chars: int) -> bool:
+        """Zero-hit / legacy path: chapter head only."""
         nonlocal used
         if content_chars <= 0:
             return False
@@ -238,7 +401,6 @@ def build_hit_weighted_excerpts(
         title = str(ch.get("title") or f"Chapter {number}")
         header = _header(number, title)
         content = str(ch.get("content") or "")
-        # Cap: alloc, half-ceiling, and content length.
         hard = min(
             content_chars,
             max(min_per_chapter, effective_ceiling // 2),
@@ -255,15 +417,49 @@ def build_hit_weighted_excerpts(
         used += len(block)
         return True
 
+    def _emit_windows(ch: Mapping[str, Any], content_chars: int, c: int) -> bool:
+        nonlocal used
+        if content_chars <= 0:
+            return False
+        number = ch.get("chapter_number", "?")
+        title = str(ch.get("title") or f"Chapter {number}")
+        header = _header(number, title)
+        content = str(ch.get("content") or "")
+        hard = min(
+            content_chars,
+            max(min_per_chapter, effective_ceiling // 2),
+            len(content),
+        )
+        room = effective_ceiling - used - len(header)
+        if room <= 0:
+            return False
+        alloc_c = min(hard, room)
+        if alloc_c <= 0:
+            return False
+        intervals = _windows_for_chapter(
+            content,
+            hits_by_chapter.get(c, []),
+            window_chars=window_chars,
+            alloc_c=alloc_c,
+        )
+        body = _body_from_intervals(content, intervals)
+        if not body:
+            return False
+        # Final clamp if body somehow overshoots room.
+        body = body[:room]
+        block = f"{header}{body}"
+        parts.append(block)
+        used += len(block)
+        return True
+
     if not hit_chapters:
         per = min(legacy_per_chapter, effective_ceiling // max(n, 1))
         for ch in chapters:
             if used >= effective_ceiling:
                 break
-            _emit(ch, per)
+            _emit_head(ch, per)
         return _join_under_ceiling(parts, effective_ceiling)
 
-    # Headers/separators are trimmed at emit/join; ceiling is a hard max.
     alloc = _alloc_for_hits(
         {c: weights[c] for c in hit_chapters},
         content_budget=effective_ceiling,
@@ -273,7 +469,7 @@ def build_hit_weighted_excerpts(
     for c in ordered:
         if used >= effective_ceiling:
             break
-        _emit(by_num[c], alloc[c])
+        _emit_windows(by_num[c], alloc[c], c)
 
     return _join_under_ceiling(parts, effective_ceiling)
 
