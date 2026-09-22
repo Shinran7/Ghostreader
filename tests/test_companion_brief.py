@@ -9,6 +9,7 @@ from ghostreader.companion.brief import (
     CompanionBrief,
     brief_to_payload,
     compute_verdict,
+    compute_verdict_drivers,
     export_brief_json,
     render_brief_markdown,
 )
@@ -46,8 +47,20 @@ class TestVerdict:
         assert compute_verdict([], [craft]) == "watch"
 
     def test_info_only_concern_does_not_flip_verdict(self) -> None:
-        """Info watches stay verdict-neutral (compute_verdict ignores them)."""
         assert compute_verdict([], []) == "ship"
+
+    def test_watch_on_narrative(self) -> None:
+        nar = PrioritizedFinding(
+            rank=1,
+            dimension="narrative.pacing",
+            severity="concern",
+            summary="stall",
+            evidence="Ch 1: x",
+            chapter_ref="1",
+        )
+        assert compute_verdict([], [], [nar]) == "watch"
+        assert compute_verdict_drivers([], [], [nar]) == ["narrative"]
+
 
 
 class TestJsonPayload:
@@ -148,9 +161,7 @@ class TestJsonPayload:
         assert "citations unavailable" in md
         assert "WATCH" in md
 
-
 class TestInfoBriefFields:
-
     def test_info_fields_and_markdown_section(self) -> None:
         info = PrioritizedFinding(
             rank=1,

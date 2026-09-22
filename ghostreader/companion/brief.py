@@ -61,12 +61,35 @@ class CompanionBrief:
 def compute_verdict(
     continuity_findings: list[PrioritizedFinding],
     craft_findings: list[PrioritizedFinding],
+    narrative_findings: list[PrioritizedFinding] | None = None,
 ) -> Literal["ship", "watch"]:
     if any(f.severity == "concern" for f in continuity_findings):
         return "watch"
     if any(f.severity == "concern" for f in craft_findings):
         return "watch"
+    if narrative_findings and any(
+        f.severity == "concern" for f in narrative_findings
+    ):
+        return "watch"
     return "ship"
+
+
+def compute_verdict_drivers(
+    continuity_findings: list[PrioritizedFinding],
+    craft_findings: list[PrioritizedFinding],
+    narrative_findings: list[PrioritizedFinding] | None = None,
+) -> list[str]:
+    """Which bands contributed a concern (continuity / craft / narrative)."""
+    drivers: list[str] = []
+    if any(f.severity == "concern" for f in continuity_findings):
+        drivers.append("continuity")
+    if any(f.severity == "concern" for f in craft_findings):
+        drivers.append("craft")
+    if narrative_findings and any(
+        f.severity == "concern" for f in narrative_findings
+    ):
+        drivers.append("narrative")
+    return drivers
 
 
 def finding_from_dict(raw: dict[str, Any], *, rank: int) -> PrioritizedFinding:
@@ -227,20 +250,30 @@ def render_brief_markdown(brief: CompanionBrief) -> str:
         lines.append("- _(none)_")
     lines.append("")
 
+    # Narrative section only when the light narrative pass ran.
+    if brief.narrative_findings or brief.narrative_ratings:
+        lines.append(f"## Narrative (chapter {brief.chapter_number} — light)")
+        if brief.narrative_findings:
+            lines.extend(_format_finding_md(f) for f in brief.narrative_findings)
+        else:
+            lines.append("- _(none)_")
+        lines.append("")
+
     if brief.warnings:
         lines.append("## Warnings")
         lines.extend(f"- {w}" for w in brief.warnings)
         lines.append("")
 
-    lines.extend(
-        [
-            "## Ship checklist",
-            "- [ ] Continuity concerns for this chapter addressed (or accepted)",
-            "- [ ] Continuity watches acknowledged (foreshadowing / unresolved)",
-            "- [ ] Craft watches acknowledged",
-            "",
-        ]
-    )
+    checklist = [
+        "## Ship checklist",
+        "- [ ] Continuity concerns for this chapter addressed (or accepted)",
+        "- [ ] Continuity watches acknowledged (foreshadowing / unresolved)",
+        "- [ ] Craft watches acknowledged",
+    ]
+    if brief.narrative_findings or brief.narrative_ratings:
+        checklist.append("- [ ] Narrative watches acknowledged (pacing / arcs)")
+    checklist.append("")
+    lines.extend(checklist)
     return "\n".join(lines)
 
 
@@ -302,6 +335,11 @@ def render_brief_terminal(brief: CompanionBrief, *, console: Console | None = No
         )
     _print_findings("Continuity watches (not gating)", brief.info_continuity_findings)
     _print_findings(f"Craft (chapter {brief.chapter_number})", brief.craft_findings)
+    if brief.narrative_findings or brief.narrative_ratings:
+        _print_findings(
+            f"Narrative (chapter {brief.chapter_number} — light)",
+            brief.narrative_findings,
+        )
 
 
 def write_brief_files(
@@ -345,6 +383,7 @@ __all__ = [
     "CompanionBrief",
     "brief_to_payload",
     "compute_verdict",
+    "compute_verdict_drivers",
     "export_brief_json",
     "finding_from_dict",
     "findings_from_dicts",
