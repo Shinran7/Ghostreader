@@ -29,6 +29,12 @@ typesafe_confidence_floor: 0.55
 # Consistency Noul at or above this → concern + enrich. Mid-band always LLM tie-break.
 typesafe_noul_positive_threshold: 0.65
 
+# Prior chapters (excluding N) included in companion repetition detection.
+companion_craft_window: 5
+
+# Master kill switch for cross-chapter craft (false = N-only, v1 behavior).
+companion_cross_chapter_craft: true
+
 # Probe chat model JSON contract at analyze/companion start (model-switch guard).
 llm_json_probe: true
 

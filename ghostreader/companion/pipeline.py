@@ -23,6 +23,7 @@ from ghostreader.companion.brief import (
     compute_verdict,
     findings_from_dicts,
 )
+from ghostreader.companion.craft import run_companion_craft
 from ghostreader.llm import message_text
 from ghostreader.companion.continuity import COMPANION_GATE_DIMS, partition_findings
 from ghostreader.companion.discovery import DiscoveryResult
@@ -32,7 +33,12 @@ from ghostreader.companion.progress import (
     load_progress,
     update_progress_after_run,
 )
-from ghostreader.graph import chapters_to_dicts, repetition_report_to_dicts
+from ghostreader.companion.repetition import (
+    companion_format_repetition_data,
+    companion_repetition_to_dicts,
+    select_craft_chapters,
+)
+from ghostreader.graph import chapters_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.report import DimensionRating, PrioritizedFinding
 from ghostreader.typesafe.routing import prioritization_sort_key
@@ -211,6 +217,8 @@ async def run_companion_pipeline(
     companion_prior: Literal["full", "rolling"] = "full",
     companion_rolling_min_chapters: int = 15,
     companion_fact_chars_budget: int = 48000,
+    companion_craft_window: int = 5,
+    companion_cross_chapter_craft: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     json_mode: bool = False,
@@ -269,6 +277,7 @@ async def run_companion_pipeline(
 
     craft_findings: list[PrioritizedFinding] = []
     craft_ratings: list[DimensionRating] = []
+    craft_window_chapters: list[int] = [discovery.chapter_number]
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
 
@@ -283,17 +292,51 @@ async def run_companion_pipeline(
 
     if not continuity_only:
         _stderr("Running craft (prose) on focus chapter…", quiet_stdout_json=json_mode)
-        detector = RepetitionDetector()
-        rep_report = detector.run(focus_chapters)
-        prose_state: dict[str, Any] = {
-            "chapters": chapters_to_dicts(focus_chapters),
-            "repetition_data": repetition_report_to_dicts(rep_report),
-            "config": config,
-        }
-        from ghostreader.agents.prose_analyst import prose_analyst_node
+        if companion_cross_chapter_craft:
+            craft_chapters = select_craft_chapters(
+                discovery.chapters,
+                focus_n=discovery.chapter_number,
+                window=companion_craft_window,
+            )
+            craft_window_chapters = [c.chapter_number for c in craft_chapters]
+            _stderr(
+                f"Craft window: chapters {craft_window_chapters} "
+                f"(K={companion_craft_window})",
+                quiet_stdout_json=json_mode,
+            )
+        else:
+            craft_chapters = focus_chapters
+            craft_window_chapters = [discovery.chapter_number]
+            _stderr(
+                f"Craft window: chapters {craft_window_chapters} (cross-chapter off)",
+                quiet_stdout_json=json_mode,
+            )
 
-        prose_result = await prose_analyst_node(
-            prose_state, llm, typesafe_client=typesafe_client  # type: ignore[arg-type]
+        detector = RepetitionDetector()
+        rep_report = detector.run(craft_chapters)
+        raw_entry_estimate = (
+            len(rep_report.word_frequencies)
+            + len(rep_report.repeated_phrases)
+            + len(rep_report.dialogue_tags)
+            + len(rep_report.sentence_patterns)
+        )
+        rep_dicts = companion_repetition_to_dicts(
+            rep_report,
+            focus_n=discovery.chapter_number,
+            focus_chapter=focus,
+            max_entries=25,
+        )
+        _stderr(
+            f"Craft repetition: kept {len(rep_dicts)} / {raw_entry_estimate} (cap 25)",
+            quiet_stdout_json=json_mode,
+        )
+        repetition_block = companion_format_repetition_data(rep_dicts)
+        prose_result = await run_companion_craft(
+            focus_chapters=focus_chapters,
+            repetition_block=repetition_block,
+            config=config,
+            llm=llm,
+            typesafe_client=typesafe_client,
         )
         prose_output = prose_result.get("prose_output") or {}
         craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)
@@ -387,6 +430,12 @@ async def run_companion_pipeline(
         craft_findings=craft_findings,
         craft_ratings=craft_ratings,
         continuity_ratings=_ratings_from_map(continuity_ratings_map),
+        craft_window_chapters=craft_window_chapters,
+        info_continuity_findings=[],
+        info_continuity_ratings=[],
+        narrative_findings=[],
+        narrative_ratings=[],
+        verdict_drivers=[],
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,

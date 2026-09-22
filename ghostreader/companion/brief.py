@@ -20,7 +20,7 @@ from ghostreader.report import (
     severity_emoji,
 )
 
-GHOSTREADER_VERSION = "0.1.0"
+GHOSTREADER_VERSION = "0.2.0"
 
 
 @dataclass
@@ -46,6 +46,12 @@ class CompanionBrief:
     craft_findings: list[PrioritizedFinding] = field(default_factory=list)
     craft_ratings: list[DimensionRating] = field(default_factory=list)
     continuity_ratings: list[DimensionRating] = field(default_factory=list)
+    craft_window_chapters: list[int] = field(default_factory=list)
+    info_continuity_findings: list[PrioritizedFinding] = field(default_factory=list)
+    info_continuity_ratings: list[DimensionRating] = field(default_factory=list)
+    narrative_findings: list[PrioritizedFinding] = field(default_factory=list)
+    narrative_ratings: list[DimensionRating] = field(default_factory=list)
+    verdict_drivers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
@@ -112,6 +118,16 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "craft_findings": [asdict(f) for f in brief.craft_findings],
         "continuity_ratings": [asdict(r) for r in brief.continuity_ratings],
         "craft_ratings": [asdict(r) for r in brief.craft_ratings],
+        "craft_window_chapters": list(brief.craft_window_chapters),
+        "info_continuity_findings": [
+            asdict(f) for f in brief.info_continuity_findings
+        ],
+        "info_continuity_ratings": [
+            asdict(r) for r in brief.info_continuity_ratings
+        ],
+        "narrative_findings": [asdict(f) for f in brief.narrative_findings],
+        "narrative_ratings": [asdict(r) for r in brief.narrative_ratings],
+        "verdict_drivers": list(brief.verdict_drivers),
         "warnings": list(brief.warnings),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,

@@ -72,19 +72,49 @@ class TestJsonPayload:
             "preexisting_continuity_findings",
             "ungrounded_continuity_findings",
             "craft_findings",
+            "craft_window_chapters",
+            "info_continuity_findings",
+            "info_continuity_ratings",
+            "narrative_findings",
+            "narrative_ratings",
+            "verdict_drivers",
             "warnings",
             "ungrounded_count",
         ):
             assert key in payload
         assert payload["mode"] == "progressive"
         assert payload["warnings"] == ["gap note"]
+        assert payload["craft_window_chapters"] == []
+        assert payload["info_continuity_findings"] == []
+        assert payload["info_continuity_ratings"] == []
+        assert payload["narrative_findings"] == []
+        assert payload["narrative_ratings"] == []
+        assert payload["verdict_drivers"] == []
 
         buf = io.StringIO()
         text = export_brief_json(brief, output=buf)
         assert buf.getvalue() == text + "\n"
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
-        assert parsed["ghostreader_version"] == "0.1.0"
+        assert parsed["ghostreader_version"] == "0.2.0"
+
+    def test_craft_window_chapters_in_payload(self) -> None:
+        brief = CompanionBrief(
+            manuscript_name="story · Chapter 18",
+            story_slug="story",
+            mode="progressive",
+            chapter_number=18,
+            chapters_considered=[13, 14, 15, 16, 17, 18],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            craft_window_chapters=[13, 14, 15, 16, 17, 18],
+            generated_at="2026-09-19T00:00:00+00:00",
+        )
+        payload = brief_to_payload(brief)
+        assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
+        assert payload["ghostreader_version"] == "0.2.0"
 
     def test_markdown_marks_missing_citations(self) -> None:
         brief = CompanionBrief(

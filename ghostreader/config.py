@@ -33,6 +33,10 @@ class GhostreaderConfig(BaseModel):
     companion_prior: Literal["full", "rolling"] = "full"
     companion_rolling_min_chapters: int = 15
     companion_fact_chars_budget: int = 48000
+    # Prior chapters (excluding N) included in companion repetition detection.
+    companion_craft_window: int = 5
+    # Master kill switch for cross-chapter craft (false = N-only).
+    companion_cross_chapter_craft: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -109,6 +113,12 @@ class GhostreaderConfig(BaseModel):
             f"",
             f"# Auto-roll when formatted fact sheets exceed this many characters.",
             f"companion_fact_chars_budget: {_fmt(self.companion_fact_chars_budget)}",
+            f"",
+            f"# Prior chapters (excluding N) included in companion repetition detection.",
+            f"companion_craft_window: {_fmt(self.companion_craft_window)}",
+            f"",
+            f"# Master kill switch for cross-chapter craft (false = N-only, v1 behavior).",
+            f"companion_cross_chapter_craft: {_fmt(self.companion_cross_chapter_craft)}",
             f"",
             f"# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",
