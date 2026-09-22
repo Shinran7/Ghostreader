@@ -200,6 +200,35 @@ class TestFormatFactSheets:
         assert "Character:" not in result
         assert "Location:" not in result
 
+    def test_formats_string_key_objects_without_crash(self) -> None:
+        facts: list[ChapterFact] = [
+            ChapterFact(
+                chapter_number=3,
+                characters=["Alice"],  # type: ignore[list-item]
+                location="Dock",
+                timeline_markers=["dusk"],
+                established_facts=["Gate locked"],
+                key_objects=["brass key", {"name": "slate", "description": "wet chalk"}],  # type: ignore[list-item]
+            ),
+        ]
+        result = format_fact_sheets(facts)
+        assert "Object: brass key" in result
+        assert "Object: slate — wet chalk" in result
+        assert "Character: Alice" in result
+
+    def test_normalize_string_key_objects_on_parse(self) -> None:
+        chapter = _ch(number=9)
+        raw = (
+            '{"characters": ["Bob"], "location": "Pier", "timeline_markers": ["night"], '
+            '"established_facts": ["Tide high"], "key_objects": ["rope", '
+            '{"name": "lantern", "description": "oil"}]}'
+        )
+        result = _parse_fact_response(raw, chapter)
+        assert result.get("parse_failed") is not True
+        assert result["characters"][0]["name"] == "Bob"
+        assert result["key_objects"][0] == {"name": "rope", "description": ""}
+        assert result["key_objects"][1]["name"] == "lantern"
+
     def test_formats_parse_failed_marker(self) -> None:
         facts: list[ChapterFact] = [
             ChapterFact(

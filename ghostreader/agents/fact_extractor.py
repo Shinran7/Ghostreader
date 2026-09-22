@@ -88,14 +88,70 @@ def parse_failed_warning(failed: int, total: int) -> str:
     )
 
 
+def _as_str_list(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            out.append(text)
+    return out
+
+
+def _normalize_named_entries(
+    raw: object,
+    *,
+    name_key: str = "name",
+    detail_key: str = "details",
+) -> list[dict[str, str]]:
+    """Coerce LLM list items into ``{name, details|description}`` dicts.
+
+    Models sometimes emit bare strings instead of objects; keep those as name.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            name = str(item.get(name_key) or item.get("name") or "").strip()
+            detail = str(
+                item.get(detail_key)
+                or item.get("details")
+                or item.get("description")
+                or ""
+            ).strip()
+            if name or detail:
+                entry = {name_key: name or "?"}
+                if detail_key == "details":
+                    entry["details"] = detail
+                else:
+                    entry["description"] = detail
+                out.append(entry)
+        elif item is not None:
+            text = str(item).strip()
+            if text:
+                if detail_key == "details":
+                    out.append({"name": text, "details": ""})
+                else:
+                    out.append({"name": text, "description": ""})
+    return out
+
+
 def _fact_from_dict(data: dict, chapter: Chapter) -> ChapterFact:
     return ChapterFact(
         chapter_number=chapter.chapter_number,
-        characters=list(data.get("characters") or []),
+        characters=_normalize_named_entries(
+            data.get("characters"), name_key="name", detail_key="details"
+        ),
         location=str(data.get("location") or ""),
-        timeline_markers=list(data.get("timeline_markers") or []),
-        established_facts=list(data.get("established_facts") or []),
-        key_objects=list(data.get("key_objects") or []),
+        timeline_markers=_as_str_list(data.get("timeline_markers")),
+        established_facts=_as_str_list(data.get("established_facts")),
+        key_objects=_normalize_named_entries(
+            data.get("key_objects"), name_key="name", detail_key="description"
+        ),
     )
 
 
@@ -228,13 +284,17 @@ def format_fact_sheets(facts: list[ChapterFact]) -> str:
             lines.append(f"Location: {f['location']}")
 
         if f["timeline_markers"]:
-            markers = "; ".join(f["timeline_markers"])
+            markers = "; ".join(str(m) for m in f["timeline_markers"])
             lines.append(f"Timeline: {markers}")
 
         if f["characters"]:
             for ch in f["characters"]:
-                name = ch.get("name", "?")
-                details = ch.get("details", "")
+                if isinstance(ch, dict):
+                    name = str(ch.get("name") or "?")
+                    details = str(ch.get("details") or "")
+                else:
+                    name = str(ch).strip() or "?"
+                    details = ""
                 lines.append(
                     f"Character: {name} — {details}" if details else f"Character: {name}"
                 )
@@ -245,8 +305,12 @@ def format_fact_sheets(facts: list[ChapterFact]) -> str:
 
         if f["key_objects"]:
             for obj in f["key_objects"]:
-                name = obj.get("name", "?")
-                desc = obj.get("description", "")
+                if isinstance(obj, dict):
+                    name = str(obj.get("name") or "?")
+                    desc = str(obj.get("description") or "")
+                else:
+                    name = str(obj).strip() or "?"
+                    desc = ""
                 lines.append(
                     f"Object: {name} — {desc}" if desc else f"Object: {name}"
                 )
