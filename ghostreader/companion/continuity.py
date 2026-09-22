@@ -61,6 +61,71 @@ def is_grounded_sweep(finding: dict[str, Any]) -> bool:
     return bool(evidence) and bool(counter) and (len(chs) >= 2)
 
 
+def is_grounded_info_progressive(finding: dict[str, Any], *, N: int) -> bool:
+    """Soft grounding: non-empty evidence + involves N (counter optional)."""
+    evidence = str(finding.get("evidence") or "").strip()
+    return bool(evidence) and involves_N(finding, N=N)
+
+
+def is_grounded_info_sweep(finding: dict[str, Any]) -> bool:
+    """Soft grounding: non-empty evidence + ≥1 cited chapter."""
+    evidence = str(finding.get("evidence") or "").strip()
+    return bool(evidence) and bool(cited_chapters(finding))
+
+
+def collect_info_findings(
+    findings: list[dict[str, Any]],
+    *,
+    N: int,
+    mode: Literal["progressive", "sweep"],
+) -> tuple[list[dict[str, Any]], int]:
+    """Collect watch-only info-dim concerns.
+
+    Returns ``(grounded_findings, ungrounded_count)``. Strengths are skipped.
+    Progressive: clearly preexisting info (all cited chapters < N) is omitted
+    from the chapter-N list (not counted as ungrounded). No preexisting_info
+    bucket in v1.
+    """
+    kept: list[dict[str, Any]] = []
+    ungrounded = 0
+
+    for f in findings:
+        if f.get("dimension") not in COMPANION_INFO_DIMS:
+            continue
+        if f.get("severity") != "concern":
+            continue
+        if mode == "progressive" and is_clearly_preexisting(f, N=N):
+            continue
+        if mode == "sweep":
+            if is_grounded_info_sweep(f):
+                kept.append(f)
+            else:
+                ungrounded += 1
+        elif is_grounded_info_progressive(f, N=N):
+            kept.append(f)
+        else:
+            ungrounded += 1
+
+    return kept, ungrounded
+
+
+def ensure_info_ratings(
+    ratings: dict[str, dict[str, str]] | None = None,
+) -> dict[str, dict[str, str]]:
+    """Always both foreshadowing + unresolved (neutral default)."""
+    src = ratings or {}
+    out: dict[str, dict[str, str]] = {}
+    for dim in sorted(COMPANION_INFO_DIMS):
+        if dim in src:
+            out[dim] = {
+                "severity": str(src[dim].get("severity") or "neutral"),
+                "note": str(src[dim].get("note") or ""),
+            }
+        else:
+            out[dim] = {"severity": "neutral", "note": ""}
+    return out
+
+
 @dataclass
 class Partition:
     """Total partition of gate-dim concerns: gate / preexisting / ungrounded."""
@@ -108,7 +173,11 @@ __all__ = [
     "COMPANION_INFO_DIMS",
     "Partition",
     "cited_chapters",
+    "collect_info_findings",
+    "ensure_info_ratings",
     "involves_N",
+    "is_grounded_info_progressive",
+    "is_grounded_info_sweep",
     "is_clearly_preexisting",
     "is_grounded_progressive",
     "is_grounded_sweep",

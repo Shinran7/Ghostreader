@@ -21,13 +21,17 @@ from ghostreader.analyzers.repetition_detector import RepetitionDetector
 from ghostreader.companion.brief import (
     CompanionBrief,
     compute_verdict,
-    compute_verdict_drivers,
     findings_from_dicts,
 )
 from ghostreader.companion.craft import run_companion_craft
 from ghostreader.llm import message_text
-from ghostreader.companion.continuity import COMPANION_GATE_DIMS, partition_findings
-from ghostreader.companion.narrative import run_companion_narrative
+from ghostreader.companion.continuity import (
+    COMPANION_GATE_DIMS,
+    COMPANION_INFO_DIMS,
+    collect_info_findings,
+    ensure_info_ratings,
+    partition_findings,
+)
 from ghostreader.companion.discovery import DiscoveryResult
 from ghostreader.companion.fact_memory import FactMemoryStore
 from ghostreader.companion.progress import (
@@ -140,7 +144,12 @@ async def _run_llm_consistency(
     seed_meta: dict[str, Any],
     chapter_n: int,
     mode: Literal["progressive", "sweep"],
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
+    include_info_dims: bool = True,
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, dict[str, str]],
+    dict[str, dict[str, str]],
+]:
     from ghostreader.agents.consistency_checker import (
         _SCENE_CONSISTENCY_PROMPT,
         _parse_findings,
@@ -173,7 +182,19 @@ async def _run_llm_consistency(
             }
         else:
             ratings[dim] = {"severity": "neutral", "note": ""}
-    return findings, ratings
+
+    info_ratings: dict[str, dict[str, str]] = {}
+    if include_info_dims:
+        raw_info: dict[str, dict[str, str]] = {}
+        for dim in COMPANION_INFO_DIMS:
+            hit = next((f for f in findings if f.get("dimension") == dim), None)
+            if hit:
+                raw_info[dim] = {
+                    "severity": str(hit.get("severity") or "neutral"),
+                    "note": str(hit.get("summary") or ""),
+                }
+        info_ratings = ensure_info_ratings(raw_info)
+    return findings, ratings, info_ratings
 
 
 async def _chapter_note(
@@ -183,20 +204,14 @@ async def _chapter_note(
     continuity: list[PrioritizedFinding],
     craft: list[PrioritizedFinding],
     verdict: str,
-    narrative: list[PrioritizedFinding] | None = None,
 ) -> str:
     cont_summaries = "; ".join(f.summary for f in continuity[:5]) or "none"
     craft_summaries = "; ".join(f.summary for f in craft[:5]) or "none"
-    nar_line = ""
-    if narrative:
-        nar_summaries = "; ".join(f.summary for f in narrative[:5]) or "none"
-        nar_line = f"Narrative findings: {nar_summaries}\n"
     user = (
         f"Chapter {chapter.chapter_number}: {chapter.title}\n"
         f"Verdict so far: {verdict}\n"
         f"Gate continuity concerns: {cont_summaries}\n"
-        f"Craft findings: {craft_summaries}\n"
-        f"{nar_line}\n"
+        f"Craft findings: {craft_summaries}\n\n"
         f"Chapter excerpt (start):\n{chapter.content[:2000]}"
     )
     try:
@@ -227,7 +242,7 @@ async def run_companion_pipeline(
     companion_fact_chars_budget: int = 48000,
     companion_craft_window: int = 5,
     companion_cross_chapter_craft: bool = True,
-    companion_light_narrative: bool = False,
+    companion_info_dims: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     json_mode: bool = False,
@@ -289,8 +304,7 @@ async def run_companion_pipeline(
     craft_window_chapters: list[int] = [discovery.chapter_number]
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
-    narrative_findings: list[PrioritizedFinding] = []
-    narrative_ratings: list[DimensionRating] = []
+    info_ratings_map: dict[str, dict[str, str]] = {}
 
     config: dict[str, Any] = {
         "depth": "standard",
@@ -353,8 +367,10 @@ async def run_companion_pipeline(
         craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)
 
     if not craft_only:
+        info_status = "on" if companion_info_dims else "off"
         _stderr(
-            f"Running continuity ({discovery.mode}, TypeSafe={'on' if typesafe_enabled else 'off'})…",
+            f"Running continuity ({discovery.mode}, TypeSafe="
+            f"{'on' if typesafe_enabled else 'off'}, info dims={info_status})…",
             quiet_stdout_json=json_mode,
         )
         if typesafe_enabled:
@@ -374,56 +390,25 @@ async def run_companion_pipeline(
                 typesafe_client,
                 chapter_n=discovery.chapter_number,
                 mode=discovery.mode,
+                include_info_dims=companion_info_dims,
             )
             continuity_raw = list(
                 (cont_result.get("consistency_output") or {}).get("findings") or []
             )
             continuity_ratings_map = cont_result.get("continuity_ratings") or {}
+            info_ratings_map = cont_result.get("info_continuity_ratings") or {}
         else:
-            continuity_raw, continuity_ratings_map = await _run_llm_consistency(
-                facts=cont_facts,
-                llm=llm,
-                genre=genre,
-                seed_meta=discovery.seed_meta,
-                chapter_n=discovery.chapter_number,
-                mode=discovery.mode,
+            continuity_raw, continuity_ratings_map, info_ratings_map = (
+                await _run_llm_consistency(
+                    facts=cont_facts,
+                    llm=llm,
+                    genre=genre,
+                    seed_meta=discovery.seed_meta,
+                    chapter_n=discovery.chapter_number,
+                    mode=discovery.mode,
+                    include_info_dims=companion_info_dims,
+                )
             )
-
-    # Light narrative: skip under --continuity-only / --craft-only / kill-switch.
-    run_narrative = (
-        companion_light_narrative and not continuity_only and not craft_only
-    )
-    if run_narrative:
-        ts_label = "on" if typesafe_enabled else "off"
-        _stderr(
-            f"Running light narrative (pacing + arcs; TypeSafe={ts_label})…",
-            quiet_stdout_json=json_mode,
-        )
-        nar_raw, nar_ratings_map, nar_dropped = await run_companion_narrative(
-            focus_chapter=focus,
-            focus_n=discovery.chapter_number,
-            prior_facts=cont_facts,
-            genre=genre,
-            seed_meta=discovery.seed_meta,
-            llm=llm,
-            typesafe_client=typesafe_client,
-            typesafe_enabled=typesafe_enabled,
-            typesafe_confidence_floor=typesafe_confidence_floor,
-            log_stderr=False,
-        )
-        if nar_dropped:
-            _stderr(
-                f"Narrative ungrounded drops: {nar_dropped} "
-                f"(kept {len(nar_raw)} grounded concern(s))",
-                quiet_stdout_json=json_mode,
-            )
-        _stderr(
-            f"Narrative dims: {len(nar_ratings_map)} "
-            f"({len(nar_raw)} grounded concern(s))",
-            quiet_stdout_json=json_mode,
-        )
-        narrative_findings = _rank_findings(nar_raw)
-        narrative_ratings = _ratings_from_map(nar_ratings_map)
 
     partition = partition_findings(
         continuity_raw,
@@ -434,6 +419,29 @@ async def run_companion_pipeline(
     preexisting = _rank_findings(partition.preexisting)
     ungrounded = _rank_findings(partition.ungrounded)
     ungrounded_count = len(ungrounded)
+
+    info_findings: list[PrioritizedFinding] = []
+    info_ratings: list[DimensionRating] = []
+    if companion_info_dims and not craft_only:
+        info_raw, info_ungrounded = collect_info_findings(
+            continuity_raw,
+            N=discovery.chapter_number,
+            mode=discovery.mode,
+        )
+        info_findings = _rank_findings(info_raw)
+        info_ratings = _ratings_from_map(
+            info_ratings_map or ensure_info_ratings()
+        )
+        info_concern_total = len(info_raw) + info_ungrounded
+        if info_ungrounded:
+            rate = (
+                info_ungrounded / info_concern_total if info_concern_total else 0.0
+            )
+            _stderr(
+                f"Ungrounded info continuity rate: {info_ungrounded}/"
+                f"{info_concern_total} ({rate:.0%})",
+                quiet_stdout_json=json_mode,
+            )
 
     gate_dim_concern_total = (
         len(partition.gate) + len(partition.preexisting) + len(partition.ungrounded)
@@ -446,8 +454,8 @@ async def run_companion_pipeline(
             quiet_stdout_json=json_mode,
         )
 
-    verdict = compute_verdict(gate, craft_findings, narrative_findings)
-    drivers = compute_verdict_drivers(gate, craft_findings, narrative_findings)
+    # Info findings never feed compute_verdict or --fail-on-continuity.
+    verdict = compute_verdict(gate, craft_findings)
     if failed_facts and not craft_only:
         # Empty fact sheets make "clean continuity" meaningless for Autonomicon.
         verdict = "watch"
@@ -457,7 +465,6 @@ async def run_companion_pipeline(
         continuity=gate,
         craft=craft_findings,
         verdict=verdict,
-        narrative=narrative_findings or None,
     )
 
     for w in warnings:
@@ -480,11 +487,11 @@ async def run_companion_pipeline(
         craft_ratings=craft_ratings,
         continuity_ratings=_ratings_from_map(continuity_ratings_map),
         craft_window_chapters=craft_window_chapters,
-        info_continuity_findings=[],
-        info_continuity_ratings=[],
-        narrative_findings=narrative_findings,
-        narrative_ratings=narrative_ratings,
-        verdict_drivers=drivers,
+        info_continuity_findings=info_findings,
+        info_continuity_ratings=info_ratings,
+        narrative_findings=[],
+        narrative_ratings=[],
+        verdict_drivers=[],
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,

@@ -9,11 +9,10 @@ from ghostreader.companion.brief import (
     CompanionBrief,
     brief_to_payload,
     compute_verdict,
-    compute_verdict_drivers,
     export_brief_json,
     render_brief_markdown,
 )
-from ghostreader.report import PrioritizedFinding
+from ghostreader.report import DimensionRating, PrioritizedFinding
 
 
 def _concern(summary: str = "bad") -> PrioritizedFinding:
@@ -46,18 +45,9 @@ class TestVerdict:
         )
         assert compute_verdict([], [craft]) == "watch"
 
-    def test_watch_on_narrative(self) -> None:
-        nar = PrioritizedFinding(
-            rank=1,
-            dimension="narrative.pacing",
-            severity="concern",
-            summary="stall",
-            evidence="Ch 1: x",
-            chapter_ref="1",
-        )
-        assert compute_verdict([], [], [nar]) == "watch"
-        assert compute_verdict_drivers([], [], [nar]) == ["narrative"]
-
+    def test_info_only_concern_does_not_flip_verdict(self) -> None:
+        """Info watches stay verdict-neutral (compute_verdict ignores them)."""
+        assert compute_verdict([], []) == "ship"
 
 
 class TestJsonPayload:
@@ -157,3 +147,50 @@ class TestJsonPayload:
         md = render_brief_markdown(brief)
         assert "citations unavailable" in md
         assert "WATCH" in md
+
+
+class TestInfoBriefFields:
+
+    def test_info_fields_and_markdown_section(self) -> None:
+        info = PrioritizedFinding(
+            rank=1,
+            dimension="consistency.foreshadowing",
+            severity="concern",
+            summary="unpaid setup",
+            evidence="Ch 18: gun never fires",
+            chapter_ref="18",
+        )
+        brief = CompanionBrief(
+            manuscript_name="story · Chapter 18",
+            story_slug="story",
+            mode="progressive",
+            chapter_number=18,
+            chapters_considered=[18],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            info_continuity_findings=[info],
+            info_continuity_ratings=[
+                DimensionRating(
+                    dimension="consistency.foreshadowing",
+                    severity="concern",
+                    note="unpaid setup",
+                ),
+                DimensionRating(
+                    dimension="consistency.unresolved",
+                    severity="neutral",
+                    note="",
+                ),
+            ],
+            generated_at="2026-09-19T00:00:00+00:00",
+        )
+        payload = brief_to_payload(brief)
+        assert len(payload["info_continuity_findings"]) == 1
+        assert len(payload["info_continuity_ratings"]) == 2
+        assert payload["verdict"] == "ship"
+        md = render_brief_markdown(brief)
+        assert "## Continuity watches (not gating)" in md
+        assert "unpaid setup" in md
+        assert "foreshadowing / unresolved" in md
+

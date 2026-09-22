@@ -35,8 +35,8 @@ companion_craft_window: 5
 # Master kill switch for cross-chapter craft (false = N-only, v1 behavior).
 companion_cross_chapter_craft: true
 
-# Light narrative pacing + character arcs (Slice 3 default false; post-smoke true).
-companion_light_narrative: false
+# Ask foreshadowing/unresolved as watch-only (never flip verdict alone).
+companion_info_dims: true
 
 # Probe chat model JSON contract at analyze/companion start (model-switch guard).
 llm_json_probe: true

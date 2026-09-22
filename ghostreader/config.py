@@ -37,8 +37,8 @@ class GhostreaderConfig(BaseModel):
     companion_craft_window: int = 5
     # Master kill switch for cross-chapter craft (false = N-only).
     companion_cross_chapter_craft: bool = True
-    # Light narrative (pacing + character arcs). Slice 3 lands false; flip after smoke.
-    companion_light_narrative: bool = False
+    # Ask/store foreshadowing + unresolved as watch-only (never flip verdict alone).
+    companion_info_dims: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -122,8 +122,8 @@ class GhostreaderConfig(BaseModel):
             f"# Master kill switch for cross-chapter craft (false = N-only, v1 behavior).",
             f"companion_cross_chapter_craft: {_fmt(self.companion_cross_chapter_craft)}",
             f"",
-            f"# Light narrative pacing + character arcs (Slice 3 default false; post-smoke true).",
-            f"companion_light_narrative: {_fmt(self.companion_light_narrative)}",
+            f"# Ask foreshadowing/unresolved as watch-only (never flip verdict alone).",
+            f"companion_info_dims: {_fmt(self.companion_info_dims)}",
             f"",
             f"# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",
