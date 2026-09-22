@@ -20,6 +20,7 @@ from ghostreader.companion.craft import run_companion_craft
 from ghostreader.companion.repetition import (
     companion_format_repetition_data,
     companion_repetition_to_dicts,
+    repetition_findings_for_brief,
     select_craft_chapters,
 )
 from ghostreader.ingestion import Chapter
@@ -151,25 +152,31 @@ class TestCompanionRepetitionSerialize:
         phrases = {d["phrase"] for d in dicts}
         assert "shimmering" in phrases
         assert "cold iron" in phrases
-        assert "[dialogue tag] said" in phrases
+        assert "said" in phrases
         assert "prioronly" not in phrases
         assert "old habit" not in phrases
-        assert "[dialogue tag] whispered" not in phrases
+        assert "whispered" not in phrases
         assert "Prior chapter opening" not in phrases
 
         by_phrase = {d["phrase"]: d for d in dicts}
         word = by_phrase["shimmering"]
+        assert word["kind"] == "word"
         assert word["scope"] == "cross_chapter"
         assert word["severity"] == "high"
         assert word["focus_count"] >= 1
         assert 18 in word["chapters"]
+        assert word["normalized_key"] == "shimmering"
+        assert word["quote"]
 
         phrase = by_phrase["cold iron"]
+        assert phrase["kind"] == "phrase"
         assert phrase["scope"] == "cross_chapter"
         assert phrase["severity"] == "moderate"
         assert phrase["focus_count"] == 3
+        assert phrase["normalized_key"] == "cold iron"
 
-        tag = by_phrase["[dialogue tag] said"]
+        tag = by_phrase["said"]
+        assert tag["kind"] == "dialogue_tag"
         assert tag["scope"] == "cross_chapter"
         assert tag["severity"] == "high"
         assert tag["focus_count"] == 7
@@ -178,9 +185,11 @@ class TestCompanionRepetitionSerialize:
             d for d in dicts if d.get("pattern_type") == "repeated_opening"
         ]
         assert len(openings) == 1
+        assert openings[0]["kind"] == "sentence_pattern"
         assert openings[0]["scope"] == "local"
         assert "focus_count" not in openings[0]
         assert openings[0]["severity"] == "high"
+        assert openings[0]["quote"] == "Then she walked."
 
         similar = next(d for d in dicts if d.get("pattern_type") == "similar_structure")
         assert similar["severity"] == "moderate"
@@ -189,6 +198,18 @@ class TestCompanionRepetitionSerialize:
         mono = next(d for d in dicts if d.get("pattern_type") == "length_monotony")
         assert mono["severity"] == "low"
         assert "focus_count" not in mono
+
+        brief_rows = repetition_findings_for_brief(dicts)
+        assert all("kind" in r for r in brief_rows)
+        said_row = next(r for r in brief_rows if r["phrase"] == "said")
+        assert said_row["kind"] == "dialogue_tag"
+        assert said_row["focus_count"] == 7
+        opening_row = next(
+            r for r in brief_rows if r["kind"] == "sentence_pattern"
+            and "Then she" in r["phrase"]
+        )
+        assert opening_row["focus_count"] == 0
+        assert opening_row["quote"] == "Then she walked."
 
     def test_cap_25(self) -> None:
         locs = [TermLocation(18, "Ch18", 0.1)]
@@ -207,16 +228,27 @@ class TestCompanionRepetitionSerialize:
         entries = [
             {
                 "phrase": "shimmering",
+                "kind": "word",
                 "count": 4,
                 "chapters": [17, 18],
                 "severity": "high",
                 "scope": "cross_chapter",
                 "focus_count": 2,
-            }
+            },
+            {
+                "phrase": "said",
+                "kind": "dialogue_tag",
+                "count": 12,
+                "chapters": [16, 18],
+                "severity": "high",
+                "scope": "cross_chapter",
+                "focus_count": 7,
+            },
         ]
         text = companion_format_repetition_data(entries)
         assert "scope: cross_chapter" in text
         assert "in N: 2" in text
+        assert '[dialogue tag] said' in text
 
 
 @pytest.mark.asyncio

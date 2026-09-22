@@ -20,7 +20,7 @@ from ghostreader.report import (
     severity_emoji,
 )
 
-GHOSTREADER_VERSION = "0.2.0"
+GHOSTREADER_VERSION = "0.2.1"
 
 
 @dataclass
@@ -52,6 +52,7 @@ class CompanionBrief:
     narrative_findings: list[PrioritizedFinding] = field(default_factory=list)
     narrative_ratings: list[DimensionRating] = field(default_factory=list)
     verdict_drivers: list[str] = field(default_factory=list)
+    repetition_findings: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
@@ -151,6 +152,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "narrative_findings": [asdict(f) for f in brief.narrative_findings],
         "narrative_ratings": [asdict(r) for r in brief.narrative_ratings],
         "verdict_drivers": list(brief.verdict_drivers),
+        "repetition_findings": list(brief.repetition_findings),
         "warnings": list(brief.warnings),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,

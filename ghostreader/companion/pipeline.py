@@ -44,6 +44,7 @@ from ghostreader.companion.progress import (
 from ghostreader.companion.repetition import (
     companion_format_repetition_data,
     companion_repetition_to_dicts,
+    repetition_findings_for_brief,
     select_craft_chapters,
 )
 from ghostreader.graph import chapters_to_dicts
@@ -311,6 +312,7 @@ async def run_companion_pipeline(
     craft_findings: list[PrioritizedFinding] = []
     craft_ratings: list[DimensionRating] = []
     craft_window_chapters: list[int] = [discovery.chapter_number]
+    repetition_findings: list[dict[str, Any]] = []
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
     info_ratings_map: dict[str, dict[str, str]] = {}
@@ -362,6 +364,7 @@ async def run_companion_pipeline(
             focus_chapter=focus,
             max_entries=25,
         )
+        repetition_findings = repetition_findings_for_brief(rep_dicts)
         _stderr(
             f"Craft repetition: kept {len(rep_dicts)} / {raw_entry_estimate} (cap 25)",
             quiet_stdout_json=json_mode,
@@ -540,6 +543,7 @@ async def run_companion_pipeline(
         narrative_findings=narrative_findings,
         narrative_ratings=narrative_ratings,
         verdict_drivers=drivers,
+        repetition_findings=repetition_findings,
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,

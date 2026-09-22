@@ -95,6 +95,7 @@ class TestJsonPayload:
             "narrative_findings",
             "narrative_ratings",
             "verdict_drivers",
+            "repetition_findings",
             "warnings",
             "ungrounded_count",
         ):
@@ -107,13 +108,14 @@ class TestJsonPayload:
         assert payload["narrative_findings"] == []
         assert payload["narrative_ratings"] == []
         assert payload["verdict_drivers"] == []
+        assert payload["repetition_findings"] == []
 
         buf = io.StringIO()
         text = export_brief_json(brief, output=buf)
         assert buf.getvalue() == text + "\n"
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
-        assert parsed["ghostreader_version"] == "0.2.0"
+        assert parsed["ghostreader_version"] == "0.2.1"
 
     def test_craft_window_chapters_in_payload(self) -> None:
         brief = CompanionBrief(
@@ -131,7 +133,37 @@ class TestJsonPayload:
         )
         payload = brief_to_payload(brief)
         assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
-        assert payload["ghostreader_version"] == "0.2.0"
+        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["repetition_findings"] == []
+
+    def test_repetition_findings_in_payload(self) -> None:
+        row = {
+            "phrase": "cold iron",
+            "kind": "phrase",
+            "count": 6,
+            "focus_count": 2,
+            "chapters": [16, 18],
+            "scope": "cross_chapter",
+            "severity": "moderate",
+            "quote": "The cold iron bit his palm.",
+            "normalized_key": "cold iron",
+        }
+        brief = CompanionBrief(
+            manuscript_name="m",
+            story_slug="s",
+            mode="progressive",
+            chapter_number=18,
+            chapters_considered=[18],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            craft_window_chapters=[16, 17, 18],
+            repetition_findings=[row],
+        )
+        payload = brief_to_payload(brief)
+        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["repetition_findings"] == [row]
 
     def test_markdown_marks_missing_citations(self) -> None:
         brief = CompanionBrief(
