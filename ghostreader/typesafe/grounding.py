@@ -2,7 +2,7 @@
 
 Slice 3: ``prose.repetition`` quote guarantee (retry → detector fallback → demote).
 Slice 4: continuity enrich/tie-break context (sheets + hit-weighted manuscript).
-Slice 5 will add ``demote_ungrounded_concerns`` for continuity.
+Slice 5: ``demote_ungrounded_concerns`` for empty-evidence continuity concerns.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 REPETITION_DIM = "prose.repetition"
 DETECTOR_LABEL = "(from repetition detector)"
 _DEMOTE_NOTE = "prose.repetition: insufficient grounded evidence"
+_CONTINUITY_DEMOTE_NOTE = "No grounded chapter evidence after enrich"
 _SEV_RANK = {"high": 0, "moderate": 1, "low": 2}
 _PREFERRED_KINDS = frozenset({"word", "phrase"})
 _DIGIT = re.compile(r"\b(\d+)\b")
@@ -369,6 +370,53 @@ async def apply_repetition_evidence_policy(
     return updated, stats, ratings
 
 
+def demote_ungrounded_concerns(
+    findings: list[AgentFinding],
+    *,
+    ratings: dict[str, dict[str, str]] | None = None,
+    hardening_enabled: bool = True,
+) -> tuple[list[AgentFinding], int, dict[str, dict[str, str]] | None]:
+    """Demote continuity concerns that still lack chapter evidence (KD-6/7/13).
+
+    After enrich (+ focused retry) and mid-band: any ``severity == "concern"``
+    with empty/whitespace ``evidence`` becomes ``neutral``, even when
+    ``chapter_ref`` is set. Does not invent quotes. Kill-switch when
+    ``hardening_enabled`` is false.
+    """
+    if not hardening_enabled:
+        return findings, 0, ratings
+
+    updated = list(findings)
+    demotions = 0
+    for i, finding in enumerate(updated):
+        if str(finding.get("severity", "")) != "concern":
+            continue
+        if not _evidence_empty(finding):
+            continue
+        f: AgentFinding = dict(finding)  # type: ignore[assignment]
+        f["severity"] = "neutral"
+        f["summary"] = _CONTINUITY_DEMOTE_NOTE
+        updated[i] = f
+        demotions += 1
+        dim = str(f.get("dimension") or "")
+        if ratings is not None and dim:
+            entry = ratings.get(dim)
+            if entry is None:
+                ratings[dim] = {
+                    "severity": "neutral",
+                    "note": _CONTINUITY_DEMOTE_NOTE,
+                }
+            else:
+                entry["severity"] = "neutral"
+                entry["note"] = _CONTINUITY_DEMOTE_NOTE
+
+    if demotions:
+        logger.info(
+            "continuity evidence: demoted %s ungrounded concern(s)", demotions
+        )
+    return updated, demotions, ratings
+
+
 __all__ = [
     "DETECTOR_LABEL",
     "REPETITION_DIM",
@@ -376,4 +424,5 @@ __all__ = [
     "build_continuity_enrich_context",
     "build_detector_fallback_evidence",
     "continuity_manuscript_hits",
+    "demote_ungrounded_concerns",
 ]

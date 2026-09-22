@@ -1,4 +1,4 @@
-"""Tests for analyze empty-evidence grounding policies (Slice 3)."""
+"""Tests for analyze empty-evidence grounding policies (Slices 3–5)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from ghostreader.typesafe.grounding import (
     REPETITION_DIM,
     apply_repetition_evidence_policy,
     build_detector_fallback_evidence,
+    demote_ungrounded_concerns,
 )
 
 
@@ -559,8 +560,18 @@ class TestConsistencyTypesafeCallOrder:
 
         stats = json.loads(raw)["stats"] if isinstance(raw, str) else raw["stats"]
         assert stats["continuity_evidence_retries"] == 1
-        assert stats["continuity_demotions"] == 0
+        # Mid-band empty evidence demotes at KD-14 step 4 (no third enrich).
+        assert stats["continuity_demotions"] == 1
         assert stats["noul_tie_breaks"] == 1
+        mid = next(
+            f
+            for f in result["consistency_output"]["findings"]
+            if f.get("dimension") == mid_dim
+        )
+        assert mid["severity"] == "neutral"
+        assert mid["chapter_ref"] == "1"  # chapter_ref alone does not save it
+        assert ratings[mid_dim]["severity"] == "neutral"
+        assert "No grounded chapter evidence" in ratings[mid_dim]["note"]
 
     @pytest.mark.asyncio
     async def test_hardening_off_skips_focused_retry(
@@ -620,7 +631,7 @@ class TestConsistencyTypesafeCallOrder:
             AsyncMock(return_value=([], {}, {}, 0)),
         )
 
-        await _consistency_typesafe_path(
+        result = await _consistency_typesafe_path(
             state,  # type: ignore[arg-type]
             MagicMock(),
             MagicMock(),
@@ -629,3 +640,228 @@ class TestConsistencyTypesafeCallOrder:
         assert enrich.await_count == 1
         ctx = enrich.await_args.kwargs["context_block"]
         assert "## Manuscript Excerpts" not in ctx
+        # Kill-switch skips demotion too.
+        assert result["consistency_output"]["findings"][0]["severity"] == "concern"
+        import json
+
+        raw = result["consistency_output"]["raw_response"]
+        stats = json.loads(raw)["stats"] if isinstance(raw, str) else raw["stats"]
+        assert stats["continuity_demotions"] == 0
+        assert stats["continuity_evidence_retries"] == 0
+
+
+# ── Slice 5: demote ungrounded continuity concerns ────────────────────
+
+
+_CONTINUITY_DEMOTE = "No grounded chapter evidence after enrich"
+
+
+class TestDemoteUngroundedConcerns:
+    def test_demotes_empty_evidence_even_with_chapter_ref(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.character",
+                "severity": "concern",
+                "summary": "Gender flip",
+                "evidence": "",
+                "counter_evidence": "",
+                "chapter_ref": "1 vs 2",
+            },
+            {
+                "dimension": "consistency.timeline",
+                "severity": "concern",
+                "summary": "Order clash",
+                "evidence": "   ",
+                "chapter_ref": "3",
+            },
+            {
+                "dimension": "consistency.plot_holes",
+                "severity": "concern",
+                "summary": "Grounded hole",
+                "evidence": "Ch 1: 'door was locked'",
+                "chapter_ref": "1",
+            },
+            {
+                "dimension": "consistency.foreshadowing",
+                "severity": "strength",
+                "summary": "Setup pays off",
+                "evidence": "",
+                "chapter_ref": "",
+            },
+        ]
+        ratings = {
+            "consistency.character": {"severity": "concern", "note": "Gender flip"},
+            "consistency.timeline": {"severity": "concern", "note": "Order clash"},
+            "consistency.plot_holes": {"severity": "concern", "note": "Grounded hole"},
+            "consistency.foreshadowing": {
+                "severity": "strength",
+                "note": "Setup pays off",
+            },
+        }
+
+        out, count, ratings = demote_ungrounded_concerns(
+            findings,  # type: ignore[arg-type]
+            ratings=ratings,
+            hardening_enabled=True,
+        )
+
+        assert count == 2
+        assert out[0]["severity"] == "neutral"
+        assert out[0]["summary"] == _CONTINUITY_DEMOTE
+        assert out[0]["chapter_ref"] == "1 vs 2"
+        assert out[1]["severity"] == "neutral"
+        assert out[2]["severity"] == "concern"
+        assert out[2]["evidence"] == "Ch 1: 'door was locked'"
+        assert out[3]["severity"] == "strength"
+        assert ratings["consistency.character"]["severity"] == "neutral"
+        assert ratings["consistency.character"]["note"] == _CONTINUITY_DEMOTE
+        assert ratings["consistency.timeline"]["note"] == _CONTINUITY_DEMOTE
+        assert ratings["consistency.plot_holes"]["severity"] == "concern"
+        assert ratings["consistency.foreshadowing"]["severity"] == "strength"
+
+    def test_hardening_off_noop(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.character",
+                "severity": "concern",
+                "summary": "Soft claim",
+                "evidence": "",
+                "chapter_ref": "1",
+            }
+        ]
+        ratings = {
+            "consistency.character": {"severity": "concern", "note": "Soft claim"}
+        }
+        out, count, ratings = demote_ungrounded_concerns(
+            findings,  # type: ignore[arg-type]
+            ratings=ratings,
+            hardening_enabled=False,
+        )
+        assert count == 0
+        assert out[0]["severity"] == "concern"
+        assert ratings["consistency.character"]["severity"] == "concern"
+
+    def test_does_not_invent_quotes(self) -> None:
+        findings = [
+            {
+                "dimension": "consistency.unresolved",
+                "severity": "concern",
+                "summary": "Thread dangling",
+                "evidence": "",
+                "counter_evidence": "",
+                "chapter_ref": "4",
+            }
+        ]
+        out, count, _ = demote_ungrounded_concerns(
+            findings,  # type: ignore[arg-type]
+            hardening_enabled=True,
+        )
+        assert count == 1
+        assert out[0]["evidence"] == ""
+        assert out[0]["severity"] == "neutral"
+
+
+class TestSceneLlmPathDemotion:
+    @pytest.mark.asyncio
+    async def test_post_parse_demotes_empty_evidence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ghostreader.agents.consistency_checker import (
+            scene_consistency_checker_node,
+        )
+
+        llm_payload = """[
+          {
+            "dimension": "consistency.character",
+            "severity": "concern",
+            "summary": "Eye color flip",
+            "evidence": "",
+            "counter_evidence": "",
+            "chapter_ref": "1 vs 2"
+          },
+          {
+            "dimension": "consistency.timeline",
+            "severity": "concern",
+            "summary": "Day/night clash",
+            "evidence": "Ch 1: 'morning light'",
+            "counter_evidence": "Ch 2: 'same morning'",
+            "chapter_ref": "1 vs 2"
+          }
+        ]"""
+
+        class FakeMsg:
+            content = llm_payload
+
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=FakeMsg())
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 1, "title": "One", "content": "a" * 100},
+                {"chapter_number": 2, "title": "Two", "content": "b" * 100},
+            ],
+            "scene_facts": [_fact(1), _fact(2)],
+            "config": {
+                "typesafe_enabled": False,
+                "analyze_grounding_hardening": True,
+                "genre": None,
+                "seed_meta": {},
+            },
+        }
+
+        result = await scene_consistency_checker_node(
+            state,  # type: ignore[arg-type]
+            llm,
+            typesafe_client=None,
+        )
+        findings = result["consistency_output"]["findings"]
+        by_dim = {f["dimension"]: f for f in findings}
+        assert by_dim["consistency.character"]["severity"] == "neutral"
+        assert by_dim["consistency.character"]["chapter_ref"] == "1 vs 2"
+        assert by_dim["consistency.timeline"]["severity"] == "concern"
+        assert "morning light" in by_dim["consistency.timeline"]["evidence"]
+
+    @pytest.mark.asyncio
+    async def test_hardening_off_keeps_empty_concern(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ghostreader.agents.consistency_checker import (
+            scene_consistency_checker_node,
+        )
+
+        llm_payload = """[
+          {
+            "dimension": "consistency.character",
+            "severity": "concern",
+            "summary": "Soft",
+            "evidence": "",
+            "counter_evidence": "",
+            "chapter_ref": "1"
+          }
+        ]"""
+
+        class FakeMsg:
+            content = llm_payload
+
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=FakeMsg())
+
+        state: dict[str, Any] = {
+            "chapters": [
+                {"chapter_number": 1, "title": "One", "content": "hello"}
+            ],
+            "scene_facts": [_fact(1)],
+            "config": {
+                "typesafe_enabled": False,
+                "analyze_grounding_hardening": False,
+                "genre": None,
+                "seed_meta": {},
+            },
+        }
+
+        result = await scene_consistency_checker_node(
+            state,  # type: ignore[arg-type]
+            llm,
+            typesafe_client=None,
+        )
+        assert result["consistency_output"]["findings"][0]["severity"] == "concern"

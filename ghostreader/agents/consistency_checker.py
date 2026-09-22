@@ -261,7 +261,8 @@ async def _consistency_typesafe_path(
     Ask stays fact-sheet-only (``build_consistency_state``). Enrich / tie-break
     use capped sheets + hit-weighted manuscript when grounding hardening is on
     (KD-4 / KD-12 / KD-14). Call order: enrich → focused empty-evidence retry
-    → mid-band tie-break with the original capped context. Demotion is Slice 5.
+    → mid-band tie-break with the original capped context → demote empty
+    evidence (KD-14 step 4 / KD-7).
     """
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
@@ -273,7 +274,10 @@ async def _consistency_typesafe_path(
         consistency_tiebreak_batch,
         enrich_findings_batch,
     )
-    from ghostreader.typesafe.grounding import build_continuity_enrich_context
+    from ghostreader.typesafe.grounding import (
+        build_continuity_enrich_context,
+        demote_ungrounded_concerns,
+    )
     from ghostreader.typesafe.questions import CONSISTENCY_DIMENSIONS, consistency_questions
     from ghostreader.typesafe.state_builders import build_consistency_state
 
@@ -350,7 +354,14 @@ async def _consistency_typesafe_path(
         parse_failures += mid_failures
         noul_tie_breaks = len(mid_dims)
         llm_enrichments += len(mid_dims)
-        # Mid-band empty evidence: no enrich retry (demotion lands in Slice 5).
+        # Mid-band empty evidence: no enrich retry (KD-14); demotion below.
+
+    # KD-14 step 4: demote empty-evidence concerns even with chapter_ref.
+    findings, continuity_demotions, ratings = demote_ungrounded_concerns(
+        findings,
+        ratings=ratings,
+        hardening_enabled=hardening,
+    )
 
     stats = {
         "judgments": len(CONSISTENCY_DIMENSIONS),
@@ -358,7 +369,7 @@ async def _consistency_typesafe_path(
         "enrich_parse_failures": parse_failures,
         "noul_tie_breaks": noul_tie_breaks,
         "continuity_evidence_retries": continuity_evidence_retries,
-        "continuity_demotions": 0,
+        "continuity_demotions": continuity_demotions,
     }
     raw = build_typesafe_raw_response(
         answers=serialize_noul_answers(response),
@@ -422,9 +433,15 @@ async def scene_consistency_checker_node(
     )
 
     from ghostreader.llm import message_text
+    from ghostreader.typesafe.grounding import demote_ungrounded_concerns
 
     raw_text = message_text(response.content)
     findings = _parse_findings(raw_text)
+    # KD-13: empty-evidence demotion only (no chapter-text enrich on this path).
+    hardening = bool(config.get("analyze_grounding_hardening", True))
+    findings, _demotions, _ = demote_ungrounded_concerns(
+        findings, hardening_enabled=hardening
+    )
 
     output: AgentOutput = {
         "agent": "consistency_checker",
