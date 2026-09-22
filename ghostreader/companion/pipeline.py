@@ -11,13 +11,19 @@ from typing import Any, Literal
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from ghostreader.agents.fact_extractor import ChapterFact, format_fact_sheets
+from ghostreader.agents.fact_extractor import (
+    ChapterFact,
+    count_parse_failed,
+    format_fact_sheets,
+    parse_failed_warning,
+)
 from ghostreader.analyzers.repetition_detector import RepetitionDetector
 from ghostreader.companion.brief import (
     CompanionBrief,
     compute_verdict,
     findings_from_dicts,
 )
+from ghostreader.llm import message_text
 from ghostreader.companion.continuity import COMPANION_GATE_DIMS, partition_findings
 from ghostreader.companion.discovery import DiscoveryResult
 from ghostreader.companion.fact_memory import FactMemoryStore
@@ -148,7 +154,7 @@ async def _run_llm_consistency(
     response = await llm.ainvoke(
         [SystemMessage(content=system_prompt), HumanMessage(content=user_message)]
     )
-    findings = _parse_findings(str(response.content).strip())
+    findings = _parse_findings(message_text(response.content))
     ratings: dict[str, dict[str, str]] = {}
     for dim in COMPANION_GATE_DIMS:
         hit = next((f for f in findings if f.get("dimension") == dim), None)
@@ -183,7 +189,7 @@ async def _chapter_note(
         response = await llm.ainvoke(
             [SystemMessage(content=_CHAPTER_NOTE_PROMPT), HumanMessage(content=user)]
         )
-        return str(response.content).strip()
+        return message_text(response.content)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Chapter note LLM failed: %s", exc)
         return (
@@ -256,6 +262,10 @@ async def run_companion_pipeline(
         budget=companion_fact_chars_budget,
     )
     warnings.extend(roll_warnings)
+
+    failed_facts = count_parse_failed(cont_facts)
+    if failed_facts:
+        warnings.append(parse_failed_warning(failed_facts, len(cont_facts)))
 
     craft_findings: list[PrioritizedFinding] = []
     craft_ratings: list[DimensionRating] = []
@@ -347,6 +357,9 @@ async def run_companion_pipeline(
         )
 
     verdict = compute_verdict(gate, craft_findings)
+    if failed_facts and not craft_only:
+        # Empty fact sheets make "clean continuity" meaningless for Autonomicon.
+        verdict = "watch"
     note = await _chapter_note(
         llm,
         chapter=focus,

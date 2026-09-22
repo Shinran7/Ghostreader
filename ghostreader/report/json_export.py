@@ -66,6 +66,7 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
             "strengths_count": report.strengths_count,
             "concerns_count": report.concerns_count,
         },
+        "warnings": list(report.warnings),
         "dimension_ratings": [
             asdict(dr) for dr in report.dimension_ratings
         ],

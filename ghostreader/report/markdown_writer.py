@@ -106,12 +106,18 @@ def _executive_summary(report: ReportOutput) -> str:
 
 
 def _severity_overview(report: ReportOutput) -> str:
-    return (
-        f"\n## Overview\n\n"
-        f"- **Total findings:** {report.total_findings}\n"
-        f"- **Strengths:** {report.strengths_count}\n"
-        f"- **Concerns:** {report.concerns_count}\n"
-    )
+    lines = [
+        "\n## Overview\n",
+        f"- **Total findings:** {report.total_findings}",
+        f"- **Strengths:** {report.strengths_count}",
+        f"- **Concerns:** {report.concerns_count}",
+    ]
+    if report.warnings:
+        lines.append("")
+        lines.append("### Pipeline warnings")
+        lines.extend(f"- {w}" for w in report.warnings)
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _dimension_ratings(report: ReportOutput) -> str:

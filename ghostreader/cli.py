@@ -234,11 +234,21 @@ async def _run_analyze(
     rprint(f"  Found [green]{len(chapters)}[/green] chapter(s)")
 
     # ── 1b. Chapter-level fact extraction for consistency checking ──
-    from ghostreader.agents.fact_extractor import extract_all_facts
+    from ghostreader.agents.fact_extractor import (
+        count_parse_failed,
+        extract_all_facts,
+        parse_failed_warning,
+    )
 
     rprint(f"[cyan]Extracting chapter facts ({len(chapters)} chapters, 10 concurrent)...[/cyan]")
     chapter_facts: list[dict] = list(await extract_all_facts(chapters, llm))
+    failed_facts = count_parse_failed(chapter_facts)  # type: ignore[arg-type]
     rprint(f"  Extracted [green]{len(chapter_facts)}[/green] fact sheet(s)")
+    pipeline_warnings: list[str] = []
+    if failed_facts:
+        warn = parse_failed_warning(failed_facts, len(chapter_facts))
+        pipeline_warnings.append(warn)
+        rprint(f"[bold yellow]Warning:[/bold yellow] {warn}")
 
     rprint("[cyan]Building summary hierarchy...[/cyan]")
     hierarchy = await build_summary_hierarchy(chapters, llm)
@@ -305,7 +315,9 @@ async def _run_analyze(
     # ── 5. Build typed report ──
     manuscript_name = manuscript_display_name(path)
     report = ReportOutput.from_final_report(
-        final_report, manuscript_name=manuscript_name
+        final_report,
+        manuscript_name=manuscript_name,
+        warnings=pipeline_warnings,
     )
 
     # ── 5b. Optional rewrite suggestions ──

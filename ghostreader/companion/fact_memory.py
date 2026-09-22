@@ -126,6 +126,10 @@ class FactMemoryStore:
         record = self.get(chapter_number)
         if record is None:
             return False
+        # Poisoned empty sheets from JSON parse failure must be re-extracted
+        # even when the chapter text hash still matches.
+        if record.fact.get("parse_failed"):
+            return False
         return record.content_hash == chapter_content_hash(content)
 
     def save(self, record: FactRecord) -> None:

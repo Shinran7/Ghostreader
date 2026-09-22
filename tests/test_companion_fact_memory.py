@@ -105,6 +105,42 @@ class TestFactMemoryStore:
         assert store.last_extracted == 0
         assert llm.calls == 0
 
+    def test_parse_failed_sheet_is_not_fresh(self, tmp_path: Path) -> None:
+        store = FactMemoryStore(tmp_path)
+        content = "stable text"
+        failed = _fact(1, location="")
+        failed["parse_failed"] = True
+        store.save(
+            FactRecord(
+                chapter_number=1,
+                content_hash=chapter_content_hash(content),
+                extracted_at="t",
+                fact=failed,
+            )
+        )
+        assert store.is_fresh(1, content) is False
+
+    @pytest.mark.asyncio
+    async def test_ensure_facts_reextracts_parse_failed(self, tmp_path: Path) -> None:
+        store = FactMemoryStore(tmp_path)
+        ch = _chapter(tmp_path, 1, "stable text")
+        failed = _fact(1, location="")
+        failed["parse_failed"] = True
+        store.save(
+            FactRecord(
+                chapter_number=1,
+                content_hash=chapter_content_hash(ch.content),
+                extracted_at="t",
+                fact=failed,
+            )
+        )
+        llm = _StubLLM(location="repaired")
+        facts = await store.ensure_facts([ch], llm)  # type: ignore[arg-type]
+        assert facts[0]["location"] == "repaired"
+        assert store.last_reused == 0
+        assert store.last_extracted == 1
+        assert llm.calls == 1
+
     @pytest.mark.asyncio
     async def test_ensure_facts_reextracts_on_hash_mismatch(self, tmp_path: Path) -> None:
         store = FactMemoryStore(tmp_path)

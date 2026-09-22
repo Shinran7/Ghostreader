@@ -102,6 +102,9 @@ def _render_severity_overview(con: Console, report: ReportOutput) -> None:
     )
 
     con.print(Panel(table, title="Overview", border_style="dim"))
+    if report.warnings:
+        for warning in report.warnings:
+            con.print(f"[bold yellow]Warning:[/bold yellow] {warning}")
 
 
 def _render_dimension_ratings(con: Console, report: ReportOutput) -> None:

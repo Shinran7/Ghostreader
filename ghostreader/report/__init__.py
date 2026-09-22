@@ -66,6 +66,7 @@ class ReportOutput:
     total_findings: int = 0
     rewrite_suggestions: list[RewriteSuggestion] = field(default_factory=list)
     manuscript_name: str = ""
+    warnings: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -74,6 +75,7 @@ class ReportOutput:
         report: dict[str, Any],
         *,
         manuscript_name: str = "",
+        warnings: list[str] | None = None,
     ) -> ReportOutput:
         """Build a ``ReportOutput`` from the synthesis ``final_report`` dict."""
         ratings = [
@@ -98,6 +100,11 @@ class ReportOutput:
             for i, f in enumerate(report.get("prioritized_findings", []))
         ]
 
+        merged_warnings = list(warnings or [])
+        for w in report.get("warnings") or []:
+            if w and w not in merged_warnings:
+                merged_warnings.append(str(w))
+
         return cls(
             executive_summary=report.get("executive_summary", ""),
             dimension_ratings=ratings,
@@ -106,6 +113,7 @@ class ReportOutput:
             concerns_count=report.get("concerns_count", 0),
             total_findings=report.get("total_findings", 0),
             manuscript_name=manuscript_name,
+            warnings=merged_warnings,
             raw=report,
         )
 
