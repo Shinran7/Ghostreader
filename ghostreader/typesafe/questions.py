@@ -51,9 +51,7 @@ _PROSE_INSTRUCTIONS: dict[str, str] = {
         "Rate dialogue naturalness and character voice distinction. Flag "
         "exposition dumps or indistinct voices as concerns."
     ),
-    "prose.vocabulary": (
-        "Rate diction precision and vocabulary fit for tone and genre."
-    ),
+    "prose.vocabulary": ("Rate diction precision and vocabulary fit for tone and genre."),
 }
 
 _NARRATIVE_INSTRUCTIONS: dict[str, str] = {
@@ -62,8 +60,7 @@ _NARRATIVE_INSTRUCTIONS: dict[str, str] = {
         "inconsistent arcs as concerns; earned change as strength."
     ),
     "narrative.pacing": (
-        "Rate pacing and tension across chapters/acts. Flag sags or rushed "
-        "climaxes as concerns."
+        "Rate pacing and tension across chapters/acts. Flag sags or rushed climaxes as concerns."
     ),
     "narrative.themes": (
         "Rate theme and motif development. Flag abandoned motifs as concerns; "
@@ -146,6 +143,44 @@ def narrative_questions() -> dict[str, Any]:
     return {dim: _choice(_NARRATIVE_INSTRUCTIONS[dim]) for dim in NARRATIVE_DIMENSIONS}
 
 
+# Companion register craft dims (#7) — do not overload prose.vocabulary.
+# Soft human-door / jargon-earn only; stock analyze PROSE_DIMENSIONS stay five-pack.
+COMPANION_REGISTER_DIMENSIONS: tuple[str, ...] = (
+    "prose.human_door",
+    "prose.jargon_earn",
+)
+
+_COMPANION_REGISTER_INSTRUCTIONS: dict[str, str] = {
+    "prose.human_door": (
+        "Rate whether THIS CHAPTER opens with a clear human want and a trackable "
+        "physical action the reader can hold BEFORE institutional language, ritual "
+        "procedure, or unexplained coined terms earn weight. Concern = missing or "
+        "late human door (especially chapter 1). Strength = door is clear and early. "
+        "Rich description is allowed; unpaid jargon-before-door is not. "
+        "Named exceptions: short lyric that advances feeling; term taught in use; "
+        "character performing bureaucracy on purpose."
+    ),
+    "prose.jargon_earn": (
+        "Rate whether coined / institutional terms and ritual or auditor procedure "
+        "are taught in use. Concern = unearned jargon dumps, sacred objects without "
+        "frame, or procedure theater as atmosphere. Do not punish earned lore, "
+        "short lyric beats that advance feeling, or a character performing bureaucracy "
+        "on purpose. Align with initiation budget spirit: few unexplained coined "
+        "content nouns in the opening window."
+    ),
+}
+
+COMPANION_PROSE_DIMENSIONS: tuple[str, ...] = PROSE_DIMENSIONS + COMPANION_REGISTER_DIMENSIONS
+
+
+def companion_prose_questions() -> dict[str, Any]:
+    """Base five prose dims + register dims (always merged in S2)."""
+    questions = prose_questions()
+    for dim in COMPANION_REGISTER_DIMENSIONS:
+        questions[dim] = _choice(_COMPANION_REGISTER_INSTRUCTIONS[dim])
+    return questions
+
+
 # Companion light narrative — chapter-N wording only (do not reuse analyze text).
 COMPANION_NARRATIVE_DIMENSIONS: tuple[str, ...] = (
     "narrative.pacing",
@@ -180,6 +215,5 @@ def consistency_questions() -> dict[str, Any]:
     from typesafe_sdk import Noul
 
     return {
-        dim: Noul(instructions=_CONSISTENCY_INSTRUCTIONS[dim])
-        for dim in CONSISTENCY_DIMENSIONS
+        dim: Noul(instructions=_CONSISTENCY_INSTRUCTIONS[dim]) for dim in CONSISTENCY_DIMENSIONS
     }

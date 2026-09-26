@@ -181,9 +181,7 @@ class TestCompanionRepetitionSerialize:
         assert tag["severity"] == "high"
         assert tag["focus_count"] == 7
 
-        openings = [
-            d for d in dicts if d.get("pattern_type") == "repeated_opening"
-        ]
+        openings = [d for d in dicts if d.get("pattern_type") == "repeated_opening"]
         assert len(openings) == 1
         assert openings[0]["kind"] == "sentence_pattern"
         assert openings[0]["scope"] == "local"
@@ -205,8 +203,7 @@ class TestCompanionRepetitionSerialize:
         assert said_row["kind"] == "dialogue_tag"
         assert said_row["focus_count"] == 7
         opening_row = next(
-            r for r in brief_rows if r["kind"] == "sentence_pattern"
-            and "Then she" in r["phrase"]
+            r for r in brief_rows if r["kind"] == "sentence_pattern" and "Then she" in r["phrase"]
         )
         assert opening_row["focus_count"] == 0
         assert opening_row["quote"] == "Then she walked."
@@ -248,7 +245,7 @@ class TestCompanionRepetitionSerialize:
         text = companion_format_repetition_data(entries)
         assert "scope: cross_chapter" in text
         assert "in N: 2" in text
-        assert '[dialogue tag] said' in text
+        assert "[dialogue tag] said" in text
 
 
 @pytest.mark.asyncio
@@ -294,7 +291,7 @@ async def test_run_companion_craft_injects_formatted_string() -> None:
             return_value={},
         ),
         patch(
-            "ghostreader.typesafe.questions.prose_questions",
+            "ghostreader.typesafe.questions.companion_prose_questions",
             return_value={},
         ),
     ):
@@ -315,7 +312,9 @@ async def test_run_companion_craft_injects_formatted_string() -> None:
     # LLM path: user message contains the same markers
     llm = AsyncMock()
     llm.ainvoke = AsyncMock(
-        return_value=MagicMock(content='[{"dimension":"prose.repetition","severity":"neutral","summary":"ok","evidence":"","chapter_ref":"18"}]')
+        return_value=MagicMock(
+            content='[{"dimension":"prose.repetition","severity":"neutral","summary":"ok","evidence":"","chapter_ref":"18"}]'
+        )
     )
     await run_companion_craft(
         focus_chapters=focus,

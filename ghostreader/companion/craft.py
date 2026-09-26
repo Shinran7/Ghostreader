@@ -23,25 +23,86 @@ _COMPANION_REP_BIAS = (
     "chapter. Flag unintentional stacking; do not punish intentional motif."
 )
 
+# Companion-local register dims (stock analyze _SYSTEM_PROMPT_TEMPLATE stays five-pack).
+_COMPANION_REGISTER_DIM_FRAGMENT = """
+ADDITIONAL COMPANION REGISTER DIMENSIONS (always judge these for companion craft):
+6. **Human door** (`prose.human_door`) — Does THIS CHAPTER open with a clear human
+   want and a trackable physical action before institutional language / ritual /
+   unexplained coined terms take the page? Concern = missing or late human door
+   (especially chapter 1). Rich description is allowed; unpaid jargon-before-door
+   is not.
+7. **Jargon earn** (`prose.jargon_earn`) — Are coined / institutional terms and
+   ritual or auditor procedure taught in use? Concern = unearned jargon dumps or
+   procedure theater as atmosphere. Do not punish earned lore, short lyric that
+   advances feeling, or a character performing bureaucracy on purpose.
+
+When emitting findings, "dimension" may also be "prose.human_door" or
+"prose.jargon_earn" in addition to the five stock prose dimensions above.
+"""
+
+_COMPANION_REGISTER_BIAS = (
+    "Register heuristic rows (if any) are machine signals about initiation budget "
+    "and unearned jargon in the opening window. Use them as bias; soft literary "
+    "judgment still owns human door and earned jargon. Named exceptions: short "
+    "lyric that advances feeling; term taught in use; bureaucracy on purpose."
+)
+
 
 def _companion_prose_typesafe_state(
-    state: AnalysisState, *, repetition_block: str
+    state: AnalysisState,
+    *,
+    repetition_block: str,
+    register_block: str = "",
 ) -> dict[str, Any]:
     """Build TypeSafe prose state with companion-formatted repetition string."""
     config = state.get("config", {})
     seed_meta = config.get("seed_meta", {}) or {}
     chapters = state.get("chapters", [])
+    mode_bias = _COMPANION_REP_BIAS
+    if register_block:
+        mode_bias = f"{mode_bias}\n{_COMPANION_REGISTER_BIAS}"
     return {
         "genre": config.get("genre"),
         "author_intent": build_author_intent_block(seed_meta) or None,
         "repetition_data": repetition_block,
+        "register_data": register_block or None,
         "manuscript": _format_chapter_excerpts(chapters),
-        "mode_bias": _COMPANION_REP_BIAS,
+        "mode_bias": mode_bias,
     }
 
 
+def _companion_craft_context(
+    *,
+    repetition_block: str,
+    register_block: str,
+    chapter_block: str,
+) -> str:
+    parts = [
+        _COMPANION_REP_BIAS,
+        "",
+        f"## Repetition Data\n{repetition_block}",
+    ]
+    if register_block:
+        parts.extend(
+            [
+                "",
+                _COMPANION_REGISTER_BIAS,
+                "",
+                register_block
+                if register_block.lstrip().startswith("#")
+                else f"## Register heuristic\n{register_block}",
+            ]
+        )
+    parts.extend(["", f"## Manuscript Text\n{chapter_block}"])
+    return "\n".join(parts)
+
+
 async def _companion_prose_llm_path(
-    state: AnalysisState, llm: BaseChatModel, *, repetition_block: str
+    state: AnalysisState,
+    llm: BaseChatModel,
+    *,
+    repetition_block: str,
+    register_block: str = "",
 ) -> dict[str, Any]:
     config = state.get("config", {})
     genre = config.get("genre")
@@ -49,16 +110,19 @@ async def _companion_prose_llm_path(
     seed_meta = config.get("seed_meta", {})
     author_intent = build_author_intent_block(seed_meta)
 
-    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
-        genre_preamble=get_genre_preamble(genre),
-        author_intent=author_intent,
+    # Stock five-dim template + companion-local register dim naming (analyze unchanged).
+    system_prompt = (
+        _SYSTEM_PROMPT_TEMPLATE.format(
+            genre_preamble=get_genre_preamble(genre),
+            author_intent=author_intent,
+        )
+        + _COMPANION_REGISTER_DIM_FRAGMENT
     )
     chapter_block = _format_chapter_excerpts(chapters)
-    user_message = (
-        f"{_COMPANION_REP_BIAS}\n\n"
-        f"Analyze the prose quality of this manuscript.\n\n"
-        f"## Repetition Data\n{repetition_block}\n\n"
-        f"## Manuscript Text\n{chapter_block}"
+    user_message = _companion_craft_context(
+        repetition_block=repetition_block,
+        register_block=register_block,
+        chapter_block=chapter_block,
     )
     response = await llm.ainvoke(
         [
@@ -82,6 +146,7 @@ async def _companion_prose_typesafe_path(
     typesafe_client: Any,
     *,
     repetition_block: str,
+    register_block: str = "",
 ) -> dict[str, Any]:
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
@@ -90,18 +155,23 @@ async def _companion_prose_typesafe_path(
     )
     from ghostreader.typesafe.client import ask
     from ghostreader.typesafe.enrich import enrich_findings_batch
-    from ghostreader.typesafe.questions import PROSE_DIMENSIONS, prose_questions
+    from ghostreader.typesafe.questions import (
+        COMPANION_PROSE_DIMENSIONS,
+        companion_prose_questions,
+    )
     from ghostreader.typesafe.routing import needs_choice_enrich
 
     config = state.get("config", {})
     floor = float(config.get("typesafe_confidence_floor", 0.55))
 
-    ts_state = _companion_prose_typesafe_state(state, repetition_block=repetition_block)
-    response = await ask(
-        typesafe_client, state=ts_state, questions=prose_questions()
+    ts_state = _companion_prose_typesafe_state(
+        state,
+        repetition_block=repetition_block,
+        register_block=register_block,
     )
+    response = await ask(typesafe_client, state=ts_state, questions=companion_prose_questions())
     findings, ratings = choices_to_findings(
-        response, PROSE_DIMENSIONS, confidence_floor=floor
+        response, COMPANION_PROSE_DIMENSIONS, confidence_floor=floor
     )
 
     enrich_dims = [
@@ -115,10 +185,10 @@ async def _companion_prose_typesafe_path(
     ]
 
     chapters = state.get("chapters", [])
-    context = (
-        f"{_COMPANION_REP_BIAS}\n\n"
-        f"## Repetition Data\n{repetition_block}\n\n"
-        f"## Manuscript Text\n{_format_chapter_excerpts(chapters)}"
+    context = _companion_craft_context(
+        repetition_block=repetition_block,
+        register_block=register_block,
+        chapter_block=_format_chapter_excerpts(chapters),
     )
 
     enrich_raw: dict[str, Any] = {}
@@ -138,12 +208,10 @@ async def _companion_prose_typesafe_path(
         for dim in enrich_dims:
             f = by_dim.get(dim)
             if f and dim in ratings:
-                ratings[dim]["note"] = str(
-                    f.get("summary", ratings[dim].get("note", ""))
-                )
+                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
 
     stats = {
-        "judgments": len(PROSE_DIMENSIONS),
+        "judgments": len(COMPANION_PROSE_DIMENSIONS),
         "llm_enrichments": llm_enrichments,
         "low_confidence_enriches": low_conf,
         "enrich_parse_failures": parse_failures,
@@ -169,11 +237,15 @@ async def run_companion_craft(
     config: dict[str, Any],
     llm: BaseChatModel,
     typesafe_client: Any | None = None,
+    register_block: str = "",
 ) -> dict[str, Any]:
     """Run companion prose craft with a pre-formatted repetition string.
 
     Does not call stock ``prose_analyst_node`` / ``build_prose_state`` (those
     re-format via analyze helpers and drop scope / focus_count).
+
+    When *register_block* is non-empty it is injected as craft bias. S2 always
+    asks companion register dims (TypeSafe + LLM naming); S3 owns kill switches.
     """
     state: AnalysisState = {  # type: ignore[assignment]
         "chapters": chapters_to_dicts(focus_chapters),
@@ -183,10 +255,17 @@ async def run_companion_craft(
     if config.get("typesafe_enabled"):
         assert typesafe_client is not None
         return await _companion_prose_typesafe_path(
-            state, llm, typesafe_client, repetition_block=repetition_block
+            state,
+            llm,
+            typesafe_client,
+            repetition_block=repetition_block,
+            register_block=register_block,
         )
     return await _companion_prose_llm_path(
-        state, llm, repetition_block=repetition_block
+        state,
+        llm,
+        repetition_block=repetition_block,
+        register_block=register_block,
     )
 
 

@@ -64,9 +64,7 @@ class TestEnsureKey:
 
 
 class TestEnsureSdk:
-    def test_missing_sdk_raises_actionable_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_sdk_raises_actionable_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import builtins
 
         real_import = builtins.__import__
@@ -77,9 +75,7 @@ class TestEnsureSdk:
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", _fake_import)
-        monkeypatch.setattr(
-            "ghostreader.paths.package_project_root", lambda: None
-        )
+        monkeypatch.setattr("ghostreader.paths.package_project_root", lambda: None)
         with pytest.raises(TypesafeConfigError, match="typesafe_sdk package") as exc_info:
             ensure_typesafe_sdk()
         msg = str(exc_info.value)
@@ -108,17 +104,13 @@ class TestRouting:
 
     def test_enrich_high_conf_strength_when_flag_on(self) -> None:
         assert (
-            needs_choice_enrich(
-                "strength", 0.9, confidence_floor=0.55, enrich_strengths=True
-            )
+            needs_choice_enrich("strength", 0.9, confidence_floor=0.55, enrich_strengths=True)
             is True
         )
 
     def test_skip_enrich_high_conf_strength_when_flag_off(self) -> None:
         assert (
-            needs_choice_enrich(
-                "strength", 0.9, confidence_floor=0.55, enrich_strengths=False
-            )
+            needs_choice_enrich("strength", 0.9, confidence_floor=0.55, enrich_strengths=False)
             is False
         )
 
@@ -147,9 +139,7 @@ class TestAdapters:
         assert set(ratings) == set(PROSE_DIMENSIONS)
 
     def test_consistency_clear_negative_is_neutral(self) -> None:
-        nouls = {
-            dim: SimpleNamespace(noul=0.1) for dim in CONSISTENCY_DIMENSIONS
-        }
+        nouls = {dim: SimpleNamespace(noul=0.1) for dim in CONSISTENCY_DIMENSIONS}
         response = SimpleNamespace(nouls=nouls)
         findings, ratings, enrich, mid = consistency_from_nouls(response)
         assert findings == []
@@ -231,6 +221,26 @@ class TestQuestionBanks:
     def test_prose_keys(self) -> None:
         assert set(prose_questions()) == set(PROSE_DIMENSIONS)
 
+    def test_companion_prose_includes_register_dims(self) -> None:
+        from ghostreader.typesafe.questions import (
+            COMPANION_PROSE_DIMENSIONS,
+            COMPANION_REGISTER_DIMENSIONS,
+            companion_prose_questions,
+        )
+
+        assert COMPANION_REGISTER_DIMENSIONS == (
+            "prose.human_door",
+            "prose.jargon_earn",
+        )
+        bank = companion_prose_questions()
+        assert set(bank) == set(COMPANION_PROSE_DIMENSIONS)
+        assert set(PROSE_DIMENSIONS).issubset(set(bank))
+        assert "prose.human_door" in bank
+        assert "prose.jargon_earn" in bank
+        # Stock analyze five-pack unchanged.
+        assert set(prose_questions()) == set(PROSE_DIMENSIONS)
+        assert len(PROSE_DIMENSIONS) == 5
+
     def test_narrative_keys(self) -> None:
         assert set(narrative_questions()) == set(NARRATIVE_DIMENSIONS)
 
@@ -276,8 +286,10 @@ class TestQuestionBanks:
             assert "plot_holes" in lower or "plot holes" in lower
             assert "tone" in lower or "framing" in lower or "understatement" in lower
             # Impossible location owned by plot_holes, not character double-fire
-            assert "belongs on plot_holes" in lower or "belongs here, not on" in lower or (
-                "impossible location" in lower and "plot_holes" in lower
+            assert (
+                "belongs on plot_holes" in lower
+                or "belongs here, not on" in lower
+                or ("impossible location" in lower and "plot_holes" in lower)
             )
             assert "signal_kind" in lower
 
