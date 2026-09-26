@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.1)
+# Companion JSON hook (0.2.2)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.1`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.2`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.1`**). Independent of analyze JSON (`0.2.0`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.2`**). Independent of analyze JSON (`0.2.0`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -23,23 +23,24 @@ Companion gate Nouls reuse analyze `_CONSISTENCY_INSTRUCTIONS` (`plot_holes` /
 `character` / `timeline` / `unresolved`). Prompt precision for impossibility vs
 tone, location ownership (no double-fire), and non-monotonic countdown rules
 tightens companion progressive-gate judgment text when those shared instructions
-change. **Brief contract stays `0.2.1`** — judgment wording only; no
-`GHOSTREADER_VERSION` bump for this side effect.
+change. Judgment wording only; **no** extra `GHOSTREADER_VERSION` bump for that
+side effect beyond the current contract.
 
 ## Verdict rules
 
 | Band | Flips `verdict` to `watch`? | Exit `2` (`--fail-on-continuity`)? |
 | --- | --- | --- |
 | Gate continuity (`character` / `timeline` / `plot_holes`) | Yes | Yes (continuity concerns only) |
-| Craft | Yes | No |
+| Craft (incl. soft `prose.human_door` / `prose.jargon_earn`) | Yes | No |
 | Info continuity (`foreshadowing` / `unresolved`) | **Never** alone | No |
 | Light narrative (`pacing` / `character_arcs`) | Only when narrative is **on** and the finding is **grounded to chapter N** | No |
+| Machine `register_findings` alone | **No** | No |
 
-`info` never flips ship by itself. Craft can. Narrative flips only when enabled and grounded.
+`info` never flips ship by itself. Soft craft can. Narrative flips only when enabled and grounded. Algorithmic `register_findings` never flip `watch` or exit `2` by themselves.
 
-`verdict_drivers` lists which bands caused `watch`: `"continuity"`, `"craft"`, `"narrative"`. Prefer this (and the finding arrays) over guessing from `verdict` alone.
+`verdict_drivers` lists which bands caused `watch`: `"continuity"`, `"craft"`, `"narrative"`. Prefer this (and the finding arrays) over guessing from `verdict` alone. Soft register concerns stay under **`"craft"`** (no `"register"` driver in v1).
 
-Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter repetition for avoid/governor promotion lives in **`repetition_findings`** (algorithmic; empty list OK).
+Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter repetition for avoid/governor promotion lives in **`repetition_findings`** (algorithmic; empty list OK). Machine register / initiation rows live in **`register_findings`** (algorithmic; empty list OK; **JSON-primary** — markdown/terminal may omit machine rows in v1).
 
 ## Config knobs
 
@@ -67,10 +68,6 @@ Always present (empty lists until filled):
 
 - `repetition_findings` — algorithmic craft-window rows from `companion_repetition_to_dicts` (cap 25). Always present; empty when craft is skipped (`--continuity-only`) or nothing N-relevant was found.
 
-### Additive (no contract bump)
-
-- `package_version` — install version string. Same meaning as on analyze JSON. Brief stays **`0.2.1`**.
-
 | Field | Type | Notes |
 | --- | --- | --- |
 | `phrase` | string | Exact/near-exact text. Dialogue tags are the lemma only (e.g. `said`), not a `[dialogue tag]` prefix |
@@ -83,6 +80,29 @@ Always present (empty lists until filled):
 | `quote` | string \| null | One short verbatim span from N when available |
 | `normalized_key` | string \| null | Lowercased, collapsed whitespace (Autonomicon dedup key) |
 
+### Since 0.2.2
+
+- `register_findings` — algorithmic opening-window register rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/register is skipped (`--continuity-only` / kill switch) or nothing fired. Kinds are only `unearned_jargon` \| `initiation_budget` — **no** `missing_human_door` machine rows (human door is soft `prose.human_door` craft only). Soft craft dims `prose.human_door` / `prose.jargon_earn` may also appear under `craft_findings` / `craft_ratings`.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `kind` | `unearned_jargon` \| `initiation_budget` | Detector bucket |
+| `severity` | `high` \| `moderate` \| `low` | Machine bands |
+| `summary` | string | One-line human summary |
+| `quote` | string \| null | Verbatim span (preferred; required spirit for `high`) |
+| `span_start_word` | int \| null | 0-based word offset over **stripped** body tokens |
+| `span_end_word` | int \| null | Exclusive end word offset |
+| `term` | string \| null | Coined/institutional term when `kind=unearned_jargon` |
+| `window_words` | int | Window used (default 300) |
+| `coined_count` | int \| null | Unexplained count for `initiation_budget` |
+| `budget` | int \| null | Allowed unexplained count (default 3) |
+| `chapter` | int | Focus chapter number |
+| `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
+
+### Additive (no contract bump)
+
+- `package_version` — install version string. Same meaning as on analyze JSON.
+
 Older keys keep their names and meaning for Autonomicon parsers.
 
 ## Minimal example payload
@@ -91,7 +111,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 
 ```json
 {
-  "ghostreader_version": "0.2.1",
+  "ghostreader_version": "0.2.2",
   "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
@@ -134,6 +154,7 @@ Shape Autonomicon should accept (unknown keys ignored):
       "normalized_key": "cold iron"
     }
   ],
+  "register_findings": [],
   "warnings": [],
   "ungrounded_count": 0,
   "typesafe_enabled": true
@@ -148,10 +169,11 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.1`; additive keys exist including `repetition_findings` and `package_version`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.2`; additive keys exist including `repetition_findings`, `register_findings`, and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.
 7. Confirm cross-chapter phrase rows in `repetition_findings` carry `kind`, `scope`, `chapters`, `focus_count` (empty list is fine).
+8. Confirm `register_findings` is always present (empty OK) and kinds are only `unearned_jargon` / `initiation_budget`.
 
 Repeat a short A/B with TypeSafe on and off if both paths matter for the hook.

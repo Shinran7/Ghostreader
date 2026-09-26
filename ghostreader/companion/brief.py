@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.1"
+GHOSTREADER_VERSION = "0.2.2"
 
 
 @dataclass
@@ -39,12 +39,8 @@ class CompanionBrief:
     verdict: Literal["ship", "watch"]
     chapter_note: str
     continuity_findings: list[PrioritizedFinding] = field(default_factory=list)
-    preexisting_continuity_findings: list[PrioritizedFinding] = field(
-        default_factory=list
-    )
-    ungrounded_continuity_findings: list[PrioritizedFinding] = field(
-        default_factory=list
-    )
+    preexisting_continuity_findings: list[PrioritizedFinding] = field(default_factory=list)
+    ungrounded_continuity_findings: list[PrioritizedFinding] = field(default_factory=list)
     craft_findings: list[PrioritizedFinding] = field(default_factory=list)
     craft_ratings: list[DimensionRating] = field(default_factory=list)
     continuity_ratings: list[DimensionRating] = field(default_factory=list)
@@ -55,6 +51,9 @@ class CompanionBrief:
     narrative_ratings: list[DimensionRating] = field(default_factory=list)
     verdict_drivers: list[str] = field(default_factory=list)
     repetition_findings: list[dict[str, Any]] = field(default_factory=list)
+    # Machine register / initiation rows (JSON-primary; empty OK). Kinds:
+    # unearned_jargon | initiation_budget only (no missing_human_door).
+    register_findings: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
@@ -70,9 +69,7 @@ def compute_verdict(
         return "watch"
     if any(f.severity == "concern" for f in craft_findings):
         return "watch"
-    if narrative_findings and any(
-        f.severity == "concern" for f in narrative_findings
-    ):
+    if narrative_findings and any(f.severity == "concern" for f in narrative_findings):
         return "watch"
     return "ship"
 
@@ -88,9 +85,7 @@ def compute_verdict_drivers(
         drivers.append("continuity")
     if any(f.severity == "concern" for f in craft_findings):
         drivers.append("craft")
-    if narrative_findings and any(
-        f.severity == "concern" for f in narrative_findings
-    ):
+    if narrative_findings and any(f.severity == "concern" for f in narrative_findings):
         drivers.append("narrative")
     return drivers
 
@@ -139,23 +134,18 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "preexisting_continuity_findings": [
             asdict(f) for f in brief.preexisting_continuity_findings
         ],
-        "ungrounded_continuity_findings": [
-            asdict(f) for f in brief.ungrounded_continuity_findings
-        ],
+        "ungrounded_continuity_findings": [asdict(f) for f in brief.ungrounded_continuity_findings],
         "craft_findings": [asdict(f) for f in brief.craft_findings],
         "continuity_ratings": [asdict(r) for r in brief.continuity_ratings],
         "craft_ratings": [asdict(r) for r in brief.craft_ratings],
         "craft_window_chapters": list(brief.craft_window_chapters),
-        "info_continuity_findings": [
-            asdict(f) for f in brief.info_continuity_findings
-        ],
-        "info_continuity_ratings": [
-            asdict(r) for r in brief.info_continuity_ratings
-        ],
+        "info_continuity_findings": [asdict(f) for f in brief.info_continuity_findings],
+        "info_continuity_ratings": [asdict(r) for r in brief.info_continuity_ratings],
         "narrative_findings": [asdict(f) for f in brief.narrative_findings],
         "narrative_ratings": [asdict(r) for r in brief.narrative_ratings],
         "verdict_drivers": list(brief.verdict_drivers),
         "repetition_findings": list(brief.repetition_findings),
+        "register_findings": list(brief.register_findings),
         "warnings": list(brief.warnings),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,
@@ -185,9 +175,9 @@ def _format_finding_md(f: PrioritizedFinding, *, ungrounded: bool = False) -> st
         lines.append("  _(citations unavailable — not used for ship gate)_")
     else:
         if ev:
-            lines.append(f'  > {ev}')
+            lines.append(f"  > {ev}")
         if counter:
-            lines.append(f'  > **vs.** {counter}')
+            lines.append(f"  > **vs.** {counter}")
     return "\n".join(lines)
 
 
@@ -197,9 +187,7 @@ def render_brief_markdown(brief: CompanionBrief) -> str:
     reused = brief.facts_reused
     extracted = brief.facts_extracted
     chs = brief.chapters_considered
-    ch_span = (
-        f"chapters {chs[0]}–{chs[-1]}" if chs else "no chapters"
-    )
+    ch_span = f"chapters {chs[0]}–{chs[-1]}" if chs else "no chapters"
     lines = [
         f"# Companion — {brief.manuscript_name}",
         "",
@@ -224,8 +212,7 @@ def render_brief_markdown(brief: CompanionBrief) -> str:
     lines.append("## Continuity (ungrounded — not gating)")
     if brief.ungrounded_continuity_findings:
         lines.extend(
-            _format_finding_md(f, ungrounded=True)
-            for f in brief.ungrounded_continuity_findings
+            _format_finding_md(f, ungrounded=True) for f in brief.ungrounded_continuity_findings
         )
     else:
         lines.append("- _(none)_")
@@ -234,9 +221,7 @@ def render_brief_markdown(brief: CompanionBrief) -> str:
     if brief.mode == "progressive":
         lines.append("## Pre-existing continuity (not this chapter’s gate)")
         if brief.preexisting_continuity_findings:
-            lines.extend(
-                _format_finding_md(f) for f in brief.preexisting_continuity_findings
-            )
+            lines.extend(_format_finding_md(f) for f in brief.preexisting_continuity_findings)
         else:
             lines.append("- _(none)_")
         lines.append("")
@@ -290,8 +275,7 @@ def render_brief_terminal(brief: CompanionBrief, *, console: Console | None = No
         ("Verdict: ", "bold"),
         (brief.verdict.upper(), f"bold {color}"),
         (
-            f"  ·  {brief.facts_reused} facts reused, "
-            f"{brief.facts_extracted} extracted",
+            f"  ·  {brief.facts_reused} facts reused, {brief.facts_extracted} extracted",
             "dim",
         ),
     )
@@ -303,7 +287,9 @@ def render_brief_terminal(brief: CompanionBrief, *, console: Console | None = No
 
     console.print(f"\n[bold]Chapter note[/bold]\n{brief.chapter_note or '(none)'}\n")
 
-    def _print_findings(title: str, findings: list[PrioritizedFinding], *, ungrounded: bool = False) -> None:
+    def _print_findings(
+        title: str, findings: list[PrioritizedFinding], *, ungrounded: bool = False
+    ) -> None:
         console.print(f"[bold]{title}[/bold]")
         if not findings:
             console.print("  (none)")
@@ -311,21 +297,21 @@ def render_brief_terminal(brief: CompanionBrief, *, console: Console | None = No
         for f in findings:
             style = severity_color(f.severity)
             ref = f" {f.chapter_ref}" if f.chapter_ref else ""
-            console.print(f"  [{style}]{severity_emoji(f.severity)} [{f.severity}]{ref}:[/{style}] {f.summary}")
+            console.print(
+                f"  [{style}]{severity_emoji(f.severity)} [{f.severity}]{ref}:[/{style}] {f.summary}"
+            )
             if ungrounded and (
                 not (f.evidence or "").strip() or not (f.counter_evidence or "").strip()
             ):
                 console.print("    [dim](citations unavailable — not used for ship gate)[/dim]")
             else:
                 if f.evidence:
-                    console.print(f'    > {f.evidence}')
+                    console.print(f"    > {f.evidence}")
                 if f.counter_evidence:
-                    console.print(f'    > vs. {f.counter_evidence}')
+                    console.print(f"    > vs. {f.counter_evidence}")
 
     cont_title = (
-        "Continuity (this chapter)"
-        if brief.mode == "progressive"
-        else "Continuity (full story)"
+        "Continuity (this chapter)" if brief.mode == "progressive" else "Continuity (full story)"
     )
     _print_findings(cont_title, brief.continuity_findings)
     _print_findings(

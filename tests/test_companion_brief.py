@@ -62,7 +62,6 @@ class TestVerdict:
         assert compute_verdict_drivers([], [], [nar]) == ["narrative"]
 
 
-
 class TestJsonPayload:
     def test_required_fields_and_stdout_purity(self) -> None:
         brief = CompanionBrief(
@@ -97,6 +96,7 @@ class TestJsonPayload:
             "narrative_ratings",
             "verdict_drivers",
             "repetition_findings",
+            "register_findings",
             "warnings",
             "ungrounded_count",
         ):
@@ -113,8 +113,9 @@ class TestJsonPayload:
         assert payload["narrative_ratings"] == []
         assert payload["verdict_drivers"] == []
         assert payload["repetition_findings"] == []
-        assert GHOSTREADER_VERSION == "0.2.1"
-        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["register_findings"] == []
+        assert GHOSTREADER_VERSION == "0.2.2"
+        assert payload["ghostreader_version"] == "0.2.2"
         assert payload["package_version"] == pkg_ver
 
         buf = io.StringIO()
@@ -122,8 +123,9 @@ class TestJsonPayload:
         assert buf.getvalue() == text + "\n"
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
-        assert parsed["ghostreader_version"] == "0.2.1"
+        assert parsed["ghostreader_version"] == "0.2.2"
         assert parsed["package_version"] == pkg_ver
+        assert parsed["register_findings"] == []
 
     def test_craft_window_chapters_in_payload(self) -> None:
         brief = CompanionBrief(
@@ -141,8 +143,9 @@ class TestJsonPayload:
         )
         payload = brief_to_payload(brief)
         assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
-        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["ghostreader_version"] == "0.2.2"
         assert payload["repetition_findings"] == []
+        assert payload["register_findings"] == []
         from ghostreader import __version__ as pkg_ver
 
         assert payload["package_version"] == pkg_ver
@@ -173,8 +176,45 @@ class TestJsonPayload:
             repetition_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.1"
+        assert payload["ghostreader_version"] == "0.2.2"
         assert payload["repetition_findings"] == [row]
+        assert payload["register_findings"] == []
+
+    def test_register_findings_in_payload(self) -> None:
+        row = {
+            "kind": "unearned_jargon",
+            "severity": "moderate",
+            "summary": "Coined term appears before teach-in: tobhandari",
+            "quote": "The wind was tobhandari, wet soot",
+            "span_start_word": 90,
+            "span_end_word": 98,
+            "term": "tobhandari",
+            "window_words": 300,
+            "coined_count": None,
+            "budget": None,
+            "chapter": 1,
+            "normalized_key": "tobhandari",
+        }
+        brief = CompanionBrief(
+            manuscript_name="m",
+            story_slug="s",
+            mode="progressive",
+            chapter_number=1,
+            chapters_considered=[1],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            register_findings=[row],
+        )
+        payload = brief_to_payload(brief)
+        assert payload["ghostreader_version"] == "0.2.2"
+        assert payload["register_findings"] == [row]
+        assert all(
+            r["kind"] in {"unearned_jargon", "initiation_budget"}
+            for r in payload["register_findings"]
+        )
+        assert "missing_human_door" not in {r["kind"] for r in payload["register_findings"]}
 
     def test_markdown_marks_missing_citations(self) -> None:
         brief = CompanionBrief(
@@ -203,6 +243,7 @@ class TestJsonPayload:
         md = render_brief_markdown(brief)
         assert "citations unavailable" in md
         assert "WATCH" in md
+
 
 class TestInfoBriefFields:
     def test_info_fields_and_markdown_section(self) -> None:
@@ -247,4 +288,3 @@ class TestInfoBriefFields:
         assert "## Continuity watches (not gating)" in md
         assert "unpaid setup" in md
         assert "foreshadowing / unresolved" in md
-
