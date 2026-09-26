@@ -55,6 +55,21 @@ Write results to `results/result-batch-NNN.json`.
 
 ⊗ Skip reading source → invalid verdict.
 
+
+## Phase 2a — Zero-fix second-pass (mandatory tripwire)
+
+After Phase 2 results are on disk, before Phase 2b/3:
+
+1. Tally fix-bucket rows (`confirmed-bug` / `likely-bug`) and pending severity mix from `batches/` + `results/`.
+2. **Tripwire:** fix count is **0** AND the pending/verified bag has **any P1** or **≥5 P2** → run an adversarial second-pass on the full pending set (or all Phase 2 rows).
+3. Second-pass prompt: `verifier-prompt.md` § Adversarial second-pass. Preserve first-pass results under `results-first-pass/`; write new results into `results/` (and optionally `second-pass/`).
+4. Re-tally. Proceed to 2b/3 with the second-pass verdicts.
+
+⊗ Merge/export a non-trivial P1/P2 bag as 0 bugs without running this tripwire.
+⊗ Skip the tripwire when the bag is only scripts CLI / appendix / P3-only.
+
+Operator may also say **second-pass** / **hostile re-check** to force 2a even when the tripwire is quiet.
+
 ## Phase 2b — Defer resolution (mandatory when defer > 0)
 
 See `defer-resolution.md`. Summary:

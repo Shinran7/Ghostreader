@@ -78,6 +78,7 @@ defaults to **markdown findingIds** from ingest.
 | 0 Ingest | `python scripts/audit-triage-ingest.py --report <md> [--commit <prefix>]` | `.tmp/audit-triage/<id>/ledger.json`, `batches/batch-*.json` |
 | 1 Rule pre-pass | (inside ingest) | appendix-noise, obvious wontfix auto-classified |
 | 2 Verify | Dispatch Meeseeks per `references/verifier-prompt.md` (~20 findings/batch, parallel) | `results/result-batch-*.json` |
+| 2a Zero-fix tripwire | If 0 fix and bag has any P1 or ≥5 P2 → adversarial second-pass (`orchestrator-protocol.md`) | `results-first-pass/`, updated `results/` |
 | 2b Defer resolve | Split defer → wave Meeseeks per `references/defer-resolution.md`; merge | `defer-waves/result-wave-*.json`, updated `ledger.json` |
 | 3 Merge | `python scripts/audit-triage-merge.py --dir <triage-dir>` | `outcome.md`, updated `ledger.json` |
 | 4 Export | `python scripts/audit-triage-export-buckets.py --dir <triage-dir> --id <id>` | `history/audit-triage/<id>/buckets/*.json` |
@@ -99,12 +100,14 @@ python scripts/audit-triage-ingest.py --report C:\Users\shinr\Projects\ghostread
 
 1. **Read source before verdict** — verifiers must read `filePath:line` ±30 lines.
 2. **Markers are hints** — `gated-assumed`, `reanchored`, `systemic`, `corroborated` are not ground truth.
-3. **CLI / scripts context → often wontfix** — `scripts/**` and one-off diagnostics are accepted risk unless proven exploitable on the product path (`ghostreader/**` package code, especially `cli.py`, `companion/`, `agents/`, `typesafe/`).
-4. **Test appendix → appendix-noise** — `tests/**`, `test_*.py`; default unless message names a real test defect.
-5. **No pending defer at export** — run Phase 2b before merge/export; ⊗ ship bucket 6 with rows still `defer`.
-6. **Scratch only** — ⊗ `git add` under `.tmp/audit-triage/` except exported `history/audit-triage/` copies.
-7. **Suppressions must land on git** — after Phase 5, commit `.slizard/suppressions.yml` (tracked carve-out). SLizard reads it from the default branch.
-8. **Cluster systemic duplicates** — one issue / one suppress for a repeated pattern, not one ticket per file.
+3. **Production-harm paths stay in fix** — intentional fail-soft / gates that can still hurt users on the default product path → `likely-bug` / `confirmed-bug`, not overstated. Full bar: `references/verifier-prompt.md`.
+4. **CLI / scripts context → often wontfix** — `scripts/**` and one-off diagnostics are accepted risk unless proven exploitable on the product path (`ghostreader/**` package code, especially `cli.py`, `companion/`, `agents/`, `typesafe/`).
+5. **Test appendix → appendix-noise** — `tests/**`, `test_*.py`; default unless message names a real test defect.
+6. **Zero-fix tripwire** — after Phase 2, if fix count is 0 and the bag has any P1 or ≥5 P2, run Phase 2a adversarial second-pass before merge (`references/orchestrator-protocol.md`). ⊗ Export 0 bugs on a non-trivial P1/P2 bag without it.
+7. **No pending defer at export** — run Phase 2b before merge/export; ⊗ ship bucket 6 with rows still `defer`.
+8. **Scratch only** — ⊗ `git add` under `.tmp/audit-triage/` except exported `history/audit-triage/` copies.
+9. **Suppressions must land on git** — after Phase 5, commit `.slizard/suppressions.yml` (tracked carve-out). SLizard reads it from the default branch.
+10. **Cluster systemic duplicates** — one issue / one suppress for a repeated pattern, not one ticket per file.
 
 ## Sub-agent dispatch
 

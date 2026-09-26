@@ -9,7 +9,7 @@ Every finding gets exactly one verdict and one bucket.
 | confirmed-bug | fix | Code read proves defect; ship fix in Ghostreader |
 | likely-bug | fix / defer | Plausible; fix or short follow-up |
 | false-positive | reporting | Claim does not hold on inspection |
-| overstated | reporting | Real niggle, wrong severity or framing |
+| overstated | reporting | Real niggle, wrong severity or framing, **and** production harm is negligible. Intentional fail-soft / gates that can still hurt users on the default product path → `likely-bug`, not overstated |
 | speculative | reporting | Hypothetical; no concrete failure path |
 | bad-anchor | reporting | Wrong line/symbol; undermines trust |
 | duplicate | reporting | Systemic cluster / also-at sibling |
