@@ -27,6 +27,7 @@ class TestGhostreaderConfig:
         assert cfg.companion_cross_chapter_craft is True
         assert cfg.companion_info_dims is True
         assert cfg.companion_light_narrative is True
+        assert cfg.companion_register_watch is True
         assert cfg.analyze_repetition_words == 50
         assert cfg.analyze_repetition_phrases == 40
         assert cfg.analyze_repetition_patterns == 20
@@ -39,6 +40,7 @@ class TestGhostreaderConfig:
         assert cfg.analyze_repetition_findings_cap == 40
         assert cfg.analyze_enrich_strengths is True
         assert cfg.analyze_omit_empty_strengths is True
+        assert cfg.analyze_register_watch is True
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -53,6 +55,7 @@ class TestGhostreaderConfig:
         assert "companion_cross_chapter_craft: true" in text
         assert "companion_info_dims: true" in text
         assert "companion_light_narrative: true" in text
+        assert "companion_register_watch: true" in text
         assert "analyze_repetition_words: 50" in text
         assert "analyze_repetition_phrases: 40" in text
         assert "analyze_repetition_patterns: 20" in text
@@ -65,6 +68,7 @@ class TestGhostreaderConfig:
         assert "analyze_repetition_findings_cap: 40" in text
         assert "analyze_enrich_strengths: true" in text
         assert "analyze_omit_empty_strengths: true" in text
+        assert "analyze_register_watch: true" in text
         assert "Does NOT revert analyze_repetition_*" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
@@ -73,6 +77,7 @@ class TestGhostreaderConfig:
         assert loaded.companion_cross_chapter_craft is True
         assert loaded.companion_info_dims is True
         assert loaded.companion_light_narrative is True
+        assert loaded.companion_register_watch is True
         assert loaded.analyze_repetition_words == 50
         assert loaded.analyze_repetition_phrases == 40
         assert loaded.analyze_repetition_patterns == 20
@@ -81,6 +86,7 @@ class TestGhostreaderConfig:
         assert loaded.analyze_repetition_findings_cap == 40
         assert loaded.analyze_enrich_strengths is True
         assert loaded.analyze_omit_empty_strengths is True
+        assert loaded.analyze_register_watch is True
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

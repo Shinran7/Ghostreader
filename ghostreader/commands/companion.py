@@ -125,6 +125,7 @@ async def run_companion(
                     companion_cross_chapter_craft=cfg.companion_cross_chapter_craft,
                     companion_info_dims=cfg.companion_info_dims,
                     companion_light_narrative=cfg.companion_light_narrative,
+                    companion_register_watch=cfg.companion_register_watch,
                     typesafe_confidence_floor=cfg.typesafe_confidence_floor,
                     typesafe_noul_positive_threshold=cfg.typesafe_noul_positive_threshold,
                     json_mode=json_mode,
@@ -147,6 +148,7 @@ async def run_companion(
                 companion_cross_chapter_craft=cfg.companion_cross_chapter_craft,
                 companion_info_dims=cfg.companion_info_dims,
                 companion_light_narrative=cfg.companion_light_narrative,
+                companion_register_watch=cfg.companion_register_watch,
                 typesafe_confidence_floor=cfg.typesafe_confidence_floor,
                 typesafe_noul_positive_threshold=cfg.typesafe_noul_positive_threshold,
                 json_mode=json_mode,
@@ -172,11 +174,7 @@ async def run_companion(
     fact_parse_poisoned = any(
         w.startswith("Fact extraction JSON parse failed") for w in brief.warnings
     )
-    if (
-        fact_parse_poisoned
-        and cfg.abort_on_fact_parse_failure
-        and not craft_only
-    ):
+    if fact_parse_poisoned and cfg.abort_on_fact_parse_failure and not craft_only:
         _ERR.print(
             "[bold red]Exiting 1:[/bold red] Fact extraction JSON parse failures "
             "poisoned continuity. Brief was still written (verdict=watch). "
@@ -184,9 +182,7 @@ async def run_companion(
         )
         return 1
 
-    if fail_on_continuity and any(
-        f.severity == "concern" for f in brief.continuity_findings
-    ):
+    if fail_on_continuity and any(f.severity == "concern" for f in brief.continuity_findings):
         return 2
     return 0
 

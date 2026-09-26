@@ -26,18 +26,30 @@ def sample_report() -> ReportOutput:
     return ReportOutput(
         executive_summary="A well-crafted manuscript with some pacing issues.",
         dimension_ratings=[
-            DimensionRating(dimension="prose.repetition", severity="concern", note="Overuse of 'the'"),
+            DimensionRating(
+                dimension="prose.repetition", severity="concern", note="Overuse of 'the'"
+            ),
             DimensionRating(dimension="narrative.pacing", severity="neutral"),
-            DimensionRating(dimension="consistency.timeline", severity="strength", note="Consistent"),
+            DimensionRating(
+                dimension="consistency.timeline", severity="strength", note="Consistent"
+            ),
         ],
         prioritized_findings=[
             PrioritizedFinding(
-                rank=1, dimension="prose.repetition", severity="concern",
-                summary="Word 'the' overused", evidence="the the the", chapter_ref="1-3",
+                rank=1,
+                dimension="prose.repetition",
+                severity="concern",
+                summary="Word 'the' overused",
+                evidence="the the the",
+                chapter_ref="1-3",
             ),
             PrioritizedFinding(
-                rank=2, dimension="narrative.pacing", severity="strength",
-                summary="Good tension build", evidence="The tension rises in ch5", chapter_ref="5",
+                rank=2,
+                dimension="narrative.pacing",
+                severity="strength",
+                summary="Good tension build",
+                evidence="The tension rises in ch5",
+                chapter_ref="5",
             ),
         ],
         strengths_count=1,
@@ -56,8 +68,12 @@ def sample_final_report() -> dict:
         },
         "prioritized_findings": [
             {
-                "rank": 1, "dimension": "prose.repetition", "severity": "concern",
-                "summary": "Adverb overuse", "evidence": "said quietly", "chapter_ref": "2",
+                "rank": 1,
+                "dimension": "prose.repetition",
+                "severity": "concern",
+                "summary": "Adverb overuse",
+                "evidence": "said quietly",
+                "chapter_ref": "2",
             },
         ],
         "strengths_count": 0,
@@ -109,10 +125,7 @@ class TestReportOutput:
         )
         assert report.prioritized_findings[0].signal_kind == "tone_understatement"
         payload = _build_payload(report)
-        assert (
-            payload["prioritized_findings"][0]["signal_kind"]
-            == "tone_understatement"
-        )
+        assert payload["prioritized_findings"][0]["signal_kind"] == "tone_understatement"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -199,6 +212,7 @@ class TestJsonExport:
         assert data["overview"]["total_findings"] == 2
         assert data["ghostreader_version"] == "0.2.0"
         assert data["repetition_findings"] == []
+        assert data["register_findings"] == []
         from ghostreader import __version__ as pkg_ver
 
         assert data["package_version"] == pkg_ver
@@ -222,7 +236,51 @@ class TestJsonExport:
         assert payload["ghostreader_version"] == "0.2.0"
         assert "repetition_findings" in payload
         assert payload["repetition_findings"] == []
+        assert "register_findings" in payload
+        assert payload["register_findings"] == []
         assert payload["package_version"] == pkg_ver
+
+
+# ── Algorithmic register export (#7) ───────────────────────────────────
+
+
+class TestAnalyzeRegisterFindings:
+    def test_fixture_emits_rows_when_enabled(self) -> None:
+        from pathlib import Path
+
+        from ghostreader.report.register_export import analyze_register_findings
+
+        fixture = (
+            Path(__file__).resolve().parent
+            / "fixtures"
+            / "register"
+            / "shatterbound-ch1-opening.md"
+        )
+        chapters = [
+            {
+                "chapter_number": 1,
+                "content": fixture.read_text(encoding="utf-8"),
+            }
+        ]
+        rows = analyze_register_findings(chapters, enabled=True)
+        assert rows
+        assert all(r["kind"] in {"unearned_jargon", "initiation_budget"} for r in rows)
+        assert analyze_register_findings(chapters, enabled=False) == []
+
+    def test_json_includes_populated_register_findings(self, sample_report: ReportOutput) -> None:
+        from ghostreader.report.json_export import _build_payload
+
+        row = {
+            "kind": "initiation_budget",
+            "severity": "high",
+            "summary": "6 unexplained nouns",
+            "quote": "writ-day",
+            "chapter": 1,
+            "normalized_key": "initiation_budget:1",
+        }
+        sample_report.register_findings = [row]
+        payload = _build_payload(sample_report)
+        assert payload["register_findings"] == [row]
 
 
 # ── Algorithmic repetition export ─────────────────────────────────────
@@ -346,9 +404,7 @@ class TestAnalyzeRepetitionFindings:
         content = path.read_text(encoding="utf-8")
         assert "Algorithmic repetition" not in content
 
-    def test_json_includes_populated_repetition_findings(
-        self, sample_report: ReportOutput
-    ) -> None:
+    def test_json_includes_populated_repetition_findings(self, sample_report: ReportOutput) -> None:
         from ghostreader.report.json_export import _build_payload
 
         row = {

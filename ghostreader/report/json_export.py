@@ -83,16 +83,13 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
             "concerns_count": report.concerns_count,
         },
         "warnings": list(report.warnings),
-        "dimension_ratings": [
-            asdict(dr) for dr in report.dimension_ratings
-        ],
-        "prioritized_findings": [
-            asdict(f) for f in report.prioritized_findings
-        ],
+        "dimension_ratings": [asdict(dr) for dr in report.dimension_ratings],
+        "prioritized_findings": [asdict(f) for f in report.prioritized_findings],
         "repetition_findings": list(report.repetition_findings),
-        "rewrite_suggestions": [
-            asdict(s) for s in report.rewrite_suggestions
-        ] if report.rewrite_suggestions else [],
+        "register_findings": list(report.register_findings),
+        "rewrite_suggestions": [asdict(s) for s in report.rewrite_suggestions]
+        if report.rewrite_suggestions
+        else [],
     }
 
 

@@ -41,6 +41,10 @@ from ghostreader.companion.progress import (
     load_progress,
     update_progress_after_run,
 )
+from ghostreader.companion.register import (
+    register_block as format_register_block,
+    register_findings_for_chapter,
+)
 from ghostreader.companion.repetition import (
     companion_format_repetition_data,
     companion_repetition_to_dicts,
@@ -91,8 +95,10 @@ def _apply_rolling(
     keep = chapters[-rolling_min:]
     keep_nums = {c.chapter_number for c in keep}
     keep_facts = [f for f in facts if f["chapter_number"] in keep_nums]
-    reason = "config companion_prior=rolling" if prior == "rolling" else (
-        f"fact sheets {len(formatted)} chars exceeded budget {budget}"
+    reason = (
+        "config companion_prior=rolling"
+        if prior == "rolling"
+        else (f"fact sheets {len(formatted)} chars exceeded budget {budget}")
     )
     warnings.append(
         f"Rolling prior: using last {rolling_min} chapters only ({reason}); "
@@ -117,9 +123,9 @@ def _ratings_from_map(ratings: dict[str, dict[str, str]]) -> list[DimensionRatin
     ]
 
 
-def _craft_findings_and_ratings(prose_output: dict[str, Any]) -> tuple[
-    list[PrioritizedFinding], list[DimensionRating]
-]:
+def _craft_findings_and_ratings(
+    prose_output: dict[str, Any],
+) -> tuple[list[PrioritizedFinding], list[DimensionRating]]:
     findings_raw = list(prose_output.get("findings") or [])
     # Prefer concern/strength findings; keep all for craft list ranking
     ranked = _rank_findings(findings_raw)
@@ -168,9 +174,7 @@ async def _run_llm_consistency(
         author_intent=author_intent,
     )
     facts_block = format_fact_sheets(facts)
-    user_message = soft_bias_user_message(
-        mode=mode, chapter_n=chapter_n, facts_block=facts_block
-    )
+    user_message = soft_bias_user_message(mode=mode, chapter_n=chapter_n, facts_block=facts_block)
     response = await llm.ainvoke(
         [SystemMessage(content=system_prompt), HumanMessage(content=user_message)]
     )
@@ -230,9 +234,7 @@ async def _chapter_note(
         return message_text(response.content)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Chapter note LLM failed: %s", exc)
-        return (
-            f"Chapter {chapter.chapter_number} companioned with verdict {verdict}."
-        )
+        return f"Chapter {chapter.chapter_number} companioned with verdict {verdict}."
 
 
 async def run_companion_pipeline(
@@ -253,6 +255,7 @@ async def run_companion_pipeline(
     companion_cross_chapter_craft: bool = True,
     companion_info_dims: bool = True,
     companion_light_narrative: bool = True,
+    companion_register_watch: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     json_mode: bool = False,
@@ -276,9 +279,7 @@ async def run_companion_pipeline(
         f"{' (force re-extract)' if no_cache else ''}…",
         quiet_stdout_json=json_mode,
     )
-    all_facts = await store.ensure_facts(
-        discovery.chapters, llm, force=no_cache
-    )
+    all_facts = await store.ensure_facts(discovery.chapters, llm, force=no_cache)
     facts_reused = store.last_reused
     facts_extracted = store.last_extracted
     _stderr(
@@ -287,13 +288,9 @@ async def run_companion_pipeline(
     )
 
     # Focus chapter for craft
-    focus_chapters = [
-        c for c in discovery.chapters if c.chapter_number == discovery.chapter_number
-    ]
+    focus_chapters = [c for c in discovery.chapters if c.chapter_number == discovery.chapter_number]
     if not focus_chapters:
-        raise ValueError(
-            f"Focus chapter {discovery.chapter_number} not in loaded set"
-        )
+        raise ValueError(f"Focus chapter {discovery.chapter_number} not in loaded set")
     focus = focus_chapters[0]
 
     cont_chapters, cont_facts, roll_warnings = _apply_rolling(
@@ -313,6 +310,7 @@ async def run_companion_pipeline(
     craft_ratings: list[DimensionRating] = []
     craft_window_chapters: list[int] = [discovery.chapter_number]
     repetition_findings: list[dict[str, Any]] = []
+    register_findings: list[dict[str, Any]] = []
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
     info_ratings_map: dict[str, dict[str, str]] = {}
@@ -338,8 +336,7 @@ async def run_companion_pipeline(
             )
             craft_window_chapters = [c.chapter_number for c in craft_chapters]
             _stderr(
-                f"Craft window: chapters {craft_window_chapters} "
-                f"(K={companion_craft_window})",
+                f"Craft window: chapters {craft_window_chapters} (K={companion_craft_window})",
                 quiet_stdout_json=json_mode,
             )
         else:
@@ -370,12 +367,35 @@ async def run_companion_pipeline(
             quiet_stdout_json=json_mode,
         )
         repetition_block = companion_format_repetition_data(rep_dicts)
+
+        include_register = companion_register_watch
+        reg_block = ""
+        if include_register:
+            _stderr("Running register watch…", quiet_stdout_json=json_mode)
+            register_findings = register_findings_for_chapter(focus)
+            reg_block = format_register_block(
+                register_findings,
+                chapter_number=discovery.chapter_number,
+            )
+            _stderr(
+                f"Register watch: kept {len(register_findings)} row(s)",
+                quiet_stdout_json=json_mode,
+            )
+        else:
+            register_findings = []
+            _stderr(
+                "Register watch: off (kill switch)",
+                quiet_stdout_json=json_mode,
+            )
+
         prose_result = await run_companion_craft(
             focus_chapters=focus_chapters,
             repetition_block=repetition_block,
             config=config,
             llm=llm,
             typesafe_client=typesafe_client,
+            register_block=reg_block,
+            include_register_dims=include_register,
         )
         prose_output = prose_result.get("prose_output") or {}
         craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)
@@ -412,22 +432,18 @@ async def run_companion_pipeline(
             continuity_ratings_map = cont_result.get("continuity_ratings") or {}
             info_ratings_map = cont_result.get("info_continuity_ratings") or {}
         else:
-            continuity_raw, continuity_ratings_map, info_ratings_map = (
-                await _run_llm_consistency(
-                    facts=cont_facts,
-                    llm=llm,
-                    genre=genre,
-                    seed_meta=discovery.seed_meta,
-                    chapter_n=discovery.chapter_number,
-                    mode=discovery.mode,
-                    include_info_dims=companion_info_dims,
-                )
+            continuity_raw, continuity_ratings_map, info_ratings_map = await _run_llm_consistency(
+                facts=cont_facts,
+                llm=llm,
+                genre=genre,
+                seed_meta=discovery.seed_meta,
+                chapter_n=discovery.chapter_number,
+                mode=discovery.mode,
+                include_info_dims=companion_info_dims,
             )
 
     # Light narrative: skip under --continuity-only / --craft-only / kill-switch.
-    run_narrative = (
-        companion_light_narrative and not continuity_only and not craft_only
-    )
+    run_narrative = companion_light_narrative and not continuity_only and not craft_only
     if run_narrative:
         ts_label = "on" if typesafe_enabled else "off"
         _stderr(
@@ -453,8 +469,7 @@ async def run_companion_pipeline(
                 quiet_stdout_json=json_mode,
             )
         _stderr(
-            f"Narrative dims: {len(nar_ratings_map)} "
-            f"({len(nar_raw)} grounded concern(s))",
+            f"Narrative dims: {len(nar_ratings_map)} ({len(nar_raw)} grounded concern(s))",
             quiet_stdout_json=json_mode,
         )
         narrative_findings = _rank_findings(nar_raw)
@@ -479,14 +494,10 @@ async def run_companion_pipeline(
             mode=discovery.mode,
         )
         info_findings = _rank_findings(info_raw)
-        info_ratings = _ratings_from_map(
-            info_ratings_map or ensure_info_ratings()
-        )
+        info_ratings = _ratings_from_map(info_ratings_map or ensure_info_ratings())
         info_concern_total = len(info_raw) + info_ungrounded
         if info_ungrounded:
-            rate = (
-                info_ungrounded / info_concern_total if info_concern_total else 0.0
-            )
+            rate = info_ungrounded / info_concern_total if info_concern_total else 0.0
             _stderr(
                 f"Ungrounded info continuity rate: {info_ungrounded}/"
                 f"{info_concern_total} ({rate:.0%})",
@@ -499,8 +510,7 @@ async def run_companion_pipeline(
     if gate_dim_concern_total:
         rate = ungrounded_count / gate_dim_concern_total
         _stderr(
-            f"Ungrounded continuity rate: {ungrounded_count}/{gate_dim_concern_total} "
-            f"({rate:.0%})",
+            f"Ungrounded continuity rate: {ungrounded_count}/{gate_dim_concern_total} ({rate:.0%})",
             quiet_stdout_json=json_mode,
         )
 
@@ -544,13 +554,16 @@ async def run_companion_pipeline(
         narrative_ratings=narrative_ratings,
         verdict_drivers=drivers,
         repetition_findings=repetition_findings,
+        register_findings=register_findings,
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
 
-    max_in_run = max((c.chapter_number for c in discovery.chapters), default=discovery.chapter_number)
+    max_in_run = max(
+        (c.chapter_number for c in discovery.chapters), default=discovery.chapter_number
+    )
     update_progress_after_run(
         story_state_dir,
         mode=discovery.mode,

@@ -50,7 +50,10 @@ DepthOption = Annotated[
 ]
 GenreOption = Annotated[
     Optional[str],
-    typer.Option("--genre", help="Genre lens for prompts (e.g. literary, fantasy, thriller, romance, sci-fi)."),
+    typer.Option(
+        "--genre",
+        help="Genre lens for prompts (e.g. literary, fantasy, thriller, romance, sci-fi).",
+    ),
 ]
 ModelOption = Annotated[
     Optional[str],
@@ -98,15 +101,21 @@ def init(
     cfg = GhostreaderConfig()
     written = cfg.save(directory)
 
-    rprint(Panel(f"[green]Config created:[/green] {written}\n"
-                 "  Default model is gemini-3.8-flash. Override with --model or edit config.yaml\n"
-                 "  (e.g. accounts/fireworks/models/minimax-m3, gpt-4o, ollama:llama3).",
-                 title="ghostreader init"))
+    rprint(
+        Panel(
+            f"[green]Config created:[/green] {written}\n"
+            "  Default model is gemini-3.8-flash. Override with --model or edit config.yaml\n"
+            "  (e.g. accounts/fireworks/models/minimax-m3, gpt-4o, ollama:llama3).",
+            title="ghostreader init",
+        )
+    )
 
 
 @app.command()
 def analyze(
-    path: Annotated[Path, typer.Argument(help="Manuscript path: .md/.epub file, or directory of chapter files.")],
+    path: Annotated[
+        Path, typer.Argument(help="Manuscript path: .md/.epub file, or directory of chapter files.")
+    ],
     depth: DepthOption = None,
     genre: GenreOption = None,
     model: ModelOption = None,
@@ -169,6 +178,7 @@ async def _run_analyze(
     from ghostreader.report import ReportOutput
     from ghostreader.report.json_export import export_json
     from ghostreader.report.markdown_writer import write_markdown_report
+    from ghostreader.report.register_export import analyze_register_findings
     from ghostreader.report.repetition_export import analyze_repetition_findings
     from ghostreader.report.rewrites import generate_rewrites
     from ghostreader.report.terminal_output import render_report
@@ -208,10 +218,7 @@ async def _run_analyze(
             )
             raise typer.Exit(code=1)
         floor = cfg.typesafe_confidence_floor
-        rprint(
-            f"[cyan]TypeSafe judgments: on[/cyan] "
-            f"(jev-latest, confidence floor {floor})"
-        )
+        rprint(f"[cyan]TypeSafe judgments: on[/cyan] (jev-latest, confidence floor {floor})")
 
     if cfg.llm_json_probe:
         from ghostreader.llm import probe_json_contract
@@ -288,7 +295,10 @@ async def _run_analyze(
 
     rprint(f"[cyan]Indexing into LanceDB (embeddings: {cfg.embedding_model})...[/cyan]")
     chunk_count, db_path = index_manuscript(
-        chapters, hierarchy, state, embedding_model=cfg.embedding_model,
+        chapters,
+        hierarchy,
+        state,
+        embedding_model=cfg.embedding_model,
     )
     rprint(f"  Indexed [green]{chunk_count}[/green] chunks → {db_path}")
 
@@ -367,6 +377,7 @@ async def _run_analyze(
 
     # ── 5. Build typed report ──
     manuscript_name = manuscript_display_name(path)
+    register_enabled = cfg.analyze_register_watch and analysis_depth in {"standard", "deep"}
     report = ReportOutput.from_final_report(
         final_report,
         manuscript_name=manuscript_name,
@@ -376,14 +387,16 @@ async def _run_analyze(
             chapter_dicts,
             cap=cfg.analyze_repetition_findings_cap,
         ),
+        register_findings=analyze_register_findings(
+            chapter_dicts,
+            enabled=register_enabled,
+        ),
     )
 
     # ── 5b. Optional rewrite suggestions ──
     if show_rewrites and report.prioritized_findings:
         rprint("[cyan]Generating rewrite suggestions...[/cyan]")
-        report.rewrite_suggestions = await generate_rewrites(
-            report.prioritized_findings, llm
-        )
+        report.rewrite_suggestions = await generate_rewrites(report.prioritized_findings, llm)
 
     # ── 6. Render output ──
     if fmt == "json":
@@ -393,6 +406,7 @@ async def _run_analyze(
 
     # ── 6b. Always persist a markdown report ──
     from ghostreader.paths import next_report_path
+
     md_path = next_report_path(state)
     write_markdown_report(
         report,
@@ -582,10 +596,7 @@ def config_set(
 
     root = find_project_root()
     if root is None:
-        rprint(
-            "[red]Error:[/red] No config.yaml found. "
-            "Run [cyan]ghostreader init[/cyan] first."
-        )
+        rprint("[red]Error:[/red] No config.yaml found. Run [cyan]ghostreader init[/cyan] first.")
         raise typer.Exit(code=1)
 
     cfg = GhostreaderConfig.load()

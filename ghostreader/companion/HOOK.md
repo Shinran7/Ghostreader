@@ -50,6 +50,7 @@ Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter re
 | `companion_cross_chapter_craft` | `true` | `false` = N-only craft (v1 behavior) |
 | `companion_info_dims` | `true` | Ask/store foreshadowing + unresolved (watch-only) |
 | `companion_light_narrative` | **`true`** | Pacing + character arcs; set `false` to roll back |
+| `companion_register_watch` | **`true`** | Heuristic `register_findings` + soft register dims; `false` → `[]` + stock five prose dims |
 
 Steady state is narrative **on**. Kill switch remains for rollback.
 

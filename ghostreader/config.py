@@ -41,6 +41,8 @@ class GhostreaderConfig(BaseModel):
     companion_info_dims: bool = True
     # Light narrative (pacing + character arcs). Default on; set false to disable.
     companion_light_narrative: bool = True
+    # Companion register / initiation watch (heuristic rows + soft dims). Default on.
+    companion_register_watch: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -68,6 +70,8 @@ class GhostreaderConfig(BaseModel):
     analyze_enrich_strengths: bool = True
     # Drop empty-evidence strengths from prioritized findings after synthesis.
     analyze_omit_empty_strengths: bool = True
+    # Analyze heuristic register_findings export (standard/deep only). Default on.
+    analyze_register_watch: bool = True
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -151,6 +155,9 @@ class GhostreaderConfig(BaseModel):
             f"# Light narrative pacing + character arcs (default on; false = kill switch).",
             f"companion_light_narrative: {_fmt(self.companion_light_narrative)}",
             f"",
+            f"# Companion register / initiation watch (heuristic + soft dims; false = off).",
+            f"companion_register_watch: {_fmt(self.companion_register_watch)}",
+            f"",
             f"# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",
             f"",
@@ -190,6 +197,9 @@ class GhostreaderConfig(BaseModel):
             f"# Drop empty-evidence strengths from findings lists after prioritize.",
             f"# Dimension ratings still show strength; TypeSafe-off summary prose unchanged.",
             f"analyze_omit_empty_strengths: {_fmt(self.analyze_omit_empty_strengths)}",
+            f"",
+            f"# Analyze heuristic register_findings on standard/deep (false = always []).",
+            f"analyze_register_watch: {_fmt(self.analyze_register_watch)}",
             f"",
         ]
 

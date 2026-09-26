@@ -70,6 +70,8 @@ class ReportOutput:
     warnings: list[str] = field(default_factory=list)
     # Algorithmic book-wide rows for analyze JSON (KD-5 / KD-6); empty OK.
     repetition_findings: list[dict[str, Any]] = field(default_factory=list)
+    # Opening-window register / initiation rows (#7); empty OK; additive.
+    register_findings: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -80,6 +82,7 @@ class ReportOutput:
         manuscript_name: str = "",
         warnings: list[str] | None = None,
         repetition_findings: list[dict[str, Any]] | None = None,
+        register_findings: list[dict[str, Any]] | None = None,
     ) -> ReportOutput:
         """Build a ``ReportOutput`` from the synthesis ``final_report`` dict."""
         ratings = [
@@ -120,6 +123,7 @@ class ReportOutput:
             manuscript_name=manuscript_name,
             warnings=merged_warnings,
             repetition_findings=list(repetition_findings or []),
+            register_findings=list(register_findings or []),
             raw=report,
         )
 

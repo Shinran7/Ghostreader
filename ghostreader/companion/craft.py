@@ -103,6 +103,7 @@ async def _companion_prose_llm_path(
     *,
     repetition_block: str,
     register_block: str = "",
+    include_register_dims: bool = True,
 ) -> dict[str, Any]:
     config = state.get("config", {})
     genre = config.get("genre")
@@ -110,18 +111,18 @@ async def _companion_prose_llm_path(
     seed_meta = config.get("seed_meta", {})
     author_intent = build_author_intent_block(seed_meta)
 
-    # Stock five-dim template + companion-local register dim naming (analyze unchanged).
-    system_prompt = (
-        _SYSTEM_PROMPT_TEMPLATE.format(
-            genre_preamble=get_genre_preamble(genre),
-            author_intent=author_intent,
-        )
-        + _COMPANION_REGISTER_DIM_FRAGMENT
+    # Stock five-dim template; companion-local register naming when watch is on.
+    system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
+        genre_preamble=get_genre_preamble(genre),
+        author_intent=author_intent,
     )
+    effective_register = register_block if include_register_dims else ""
+    if include_register_dims:
+        system_prompt = system_prompt + _COMPANION_REGISTER_DIM_FRAGMENT
     chapter_block = _format_chapter_excerpts(chapters)
     user_message = _companion_craft_context(
         repetition_block=repetition_block,
-        register_block=register_block,
+        register_block=effective_register,
         chapter_block=chapter_block,
     )
     response = await llm.ainvoke(
@@ -147,6 +148,7 @@ async def _companion_prose_typesafe_path(
     *,
     repetition_block: str,
     register_block: str = "",
+    include_register_dims: bool = True,
 ) -> dict[str, Any]:
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
@@ -157,22 +159,25 @@ async def _companion_prose_typesafe_path(
     from ghostreader.typesafe.enrich import enrich_findings_batch
     from ghostreader.typesafe.questions import (
         COMPANION_PROSE_DIMENSIONS,
+        PROSE_DIMENSIONS,
         companion_prose_questions,
+        prose_questions,
     )
     from ghostreader.typesafe.routing import needs_choice_enrich
 
     config = state.get("config", {})
     floor = float(config.get("typesafe_confidence_floor", 0.55))
+    effective_register = register_block if include_register_dims else ""
+    dims = COMPANION_PROSE_DIMENSIONS if include_register_dims else PROSE_DIMENSIONS
+    questions = companion_prose_questions() if include_register_dims else prose_questions()
 
     ts_state = _companion_prose_typesafe_state(
         state,
         repetition_block=repetition_block,
-        register_block=register_block,
+        register_block=effective_register,
     )
-    response = await ask(typesafe_client, state=ts_state, questions=companion_prose_questions())
-    findings, ratings = choices_to_findings(
-        response, COMPANION_PROSE_DIMENSIONS, confidence_floor=floor
-    )
+    response = await ask(typesafe_client, state=ts_state, questions=questions)
+    findings, ratings = choices_to_findings(response, dims, confidence_floor=floor)
 
     enrich_dims = [
         f["dimension"]
@@ -187,7 +192,7 @@ async def _companion_prose_typesafe_path(
     chapters = state.get("chapters", [])
     context = _companion_craft_context(
         repetition_block=repetition_block,
-        register_block=register_block,
+        register_block=effective_register,
         chapter_block=_format_chapter_excerpts(chapters),
     )
 
@@ -211,7 +216,7 @@ async def _companion_prose_typesafe_path(
                 ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
 
     stats = {
-        "judgments": len(COMPANION_PROSE_DIMENSIONS),
+        "judgments": len(dims),
         "llm_enrichments": llm_enrichments,
         "low_confidence_enriches": low_conf,
         "enrich_parse_failures": parse_failures,
@@ -238,14 +243,16 @@ async def run_companion_craft(
     llm: BaseChatModel,
     typesafe_client: Any | None = None,
     register_block: str = "",
+    include_register_dims: bool = True,
 ) -> dict[str, Any]:
     """Run companion prose craft with a pre-formatted repetition string.
 
     Does not call stock ``prose_analyst_node`` / ``build_prose_state`` (those
     re-format via analyze helpers and drop scope / focus_count).
 
-    When *register_block* is non-empty it is injected as craft bias. S2 always
-    asks companion register dims (TypeSafe + LLM naming); S3 owns kill switches.
+    When *include_register_dims* is true (default), companion asks
+    ``prose.human_door`` / ``prose.jargon_earn``. Kill switch / ``--continuity-only``
+    callers pass false for stock five-pack only.
     """
     state: AnalysisState = {  # type: ignore[assignment]
         "chapters": chapters_to_dicts(focus_chapters),
@@ -260,12 +267,14 @@ async def run_companion_craft(
             typesafe_client,
             repetition_block=repetition_block,
             register_block=register_block,
+            include_register_dims=include_register_dims,
         )
     return await _companion_prose_llm_path(
         state,
         llm,
         repetition_block=repetition_block,
         register_block=register_block,
+        include_register_dims=include_register_dims,
     )
 
 
