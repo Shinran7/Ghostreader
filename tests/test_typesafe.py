@@ -231,12 +231,14 @@ class TestQuestionBanks:
         assert COMPANION_REGISTER_DIMENSIONS == (
             "prose.human_door",
             "prose.jargon_earn",
+            "prose.earth_anachronism",
         )
         bank = companion_prose_questions()
         assert set(bank) == set(COMPANION_PROSE_DIMENSIONS)
         assert set(PROSE_DIMENSIONS).issubset(set(bank))
         assert "prose.human_door" in bank
         assert "prose.jargon_earn" in bank
+        assert "prose.earth_anachronism" in bank
         # Stock analyze five-pack unchanged.
         assert set(prose_questions()) == set(PROSE_DIMENSIONS)
         assert len(PROSE_DIMENSIONS) == 5

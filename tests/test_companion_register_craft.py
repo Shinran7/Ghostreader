@@ -35,12 +35,13 @@ class TestCompanionRegisterQuestions:
         assert "prose.human_door" in bank
         assert "prose.jargon_earn" in bank
         assert set(COMPANION_REGISTER_DIMENSIONS).issubset(set(bank))
-        assert len(COMPANION_PROSE_DIMENSIONS) == 7
+        assert len(COMPANION_PROSE_DIMENSIONS) == 8
         assert len(PROSE_DIMENSIONS) == 5
 
     def test_llm_fragment_names_both_dims(self) -> None:
         assert "prose.human_door" in _COMPANION_REGISTER_DIM_FRAGMENT
         assert "prose.jargon_earn" in _COMPANION_REGISTER_DIM_FRAGMENT
+        assert "prose.earth_anachronism" in _COMPANION_REGISTER_DIM_FRAGMENT
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ side effect beyond the current contract.
 | Band | Flips `verdict` to `watch`? | Exit `2` (`--fail-on-continuity`)? |
 | --- | --- | --- |
 | Gate continuity (`character` / `timeline` / `plot_holes`) | Yes | Yes (continuity concerns only) |
-| Craft (incl. soft `prose.human_door` / `prose.jargon_earn`) | Yes | No |
+| Craft (incl. soft `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism`) | Yes | No |
 | Info continuity (`foreshadowing` / `unresolved`) | **Never** alone | No |
 | Light narrative (`pacing` / `character_arcs`) | Only when narrative is **on** and the finding is **grounded to chapter N** | No |
 | Machine `register_findings` alone | **No** | No |
@@ -83,7 +83,7 @@ Always present (empty lists until filled):
 
 ### Since 0.2.2
 
-- `register_findings` — algorithmic opening-window register rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/register is skipped (`--continuity-only` / kill switch) or nothing fired. Kinds are only `unearned_jargon` \| `initiation_budget` — **no** `missing_human_door` machine rows (human door is soft `prose.human_door` craft only). Soft craft dims `prose.human_door` / `prose.jargon_earn` may also appear under `craft_findings` / `craft_ratings`.
+- `register_findings` — algorithmic opening-window register rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/register is skipped (`--continuity-only` / kill switch) or nothing fired. Kinds are only `unearned_jargon` \| `initiation_budget` — **no** `missing_human_door` or Earth-anachronism machine rows (human door is soft `prose.human_door`; Earth timeline/culture is soft `prose.earth_anachronism` craft only). Soft craft dims `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism` may also appear under `craft_findings` / `craft_ratings`. Contract stays **0.2.2** (no new register kind; no HOOK bump for this soft dim).
 
 | Field | Type | Notes |
 | --- | --- | --- |

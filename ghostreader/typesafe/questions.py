@@ -143,11 +143,13 @@ def narrative_questions() -> dict[str, Any]:
     return {dim: _choice(_NARRATIVE_INSTRUCTIONS[dim]) for dim in NARRATIVE_DIMENSIONS}
 
 
-# Companion register craft dims (#7) — do not overload prose.vocabulary.
-# Soft human-door / jargon-earn only; stock analyze PROSE_DIMENSIONS stay five-pack.
+# Companion soft craft dims (#7 + #274 T2) — do not overload prose.vocabulary.
+# Soft human-door / jargon-earn / earth-anachronism; stock analyze PROSE_DIMENSIONS stay five-pack.
+# register_findings kinds remain unearned_jargon | initiation_budget only (HOOK 0.2.2).
 COMPANION_REGISTER_DIMENSIONS: tuple[str, ...] = (
     "prose.human_door",
     "prose.jargon_earn",
+    "prose.earth_anachronism",
 )
 
 _COMPANION_REGISTER_INSTRUCTIONS: dict[str, str] = {
@@ -167,6 +169,14 @@ _COMPANION_REGISTER_INSTRUCTIONS: dict[str, str] = {
         "short lyric beats that advance feeling, or a character performing bureaucracy "
         "on purpose. Align with initiation budget spirit: few unexplained coined "
         "content nouns in the opening window."
+    ),
+    "prose.earth_anachronism": (
+        "Rate whether THIS CHAPTER uses Earth timeline or Earth-culture labels "
+        "(eon/era names like pre-Cambrian, Earth infrastructure similes like "
+        "telephone pole) as if universal on a non-Earth setting. Concern = Earth "
+        "chronostratigraphy or Earth-only culture images on alien/fantasy worlds. "
+        "Strength = world-local chronology or clearly intentional Earth POV. "
+        "Advisory soft craft only; do not invent a register_findings kind."
     ),
 }
 

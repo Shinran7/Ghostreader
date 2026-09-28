@@ -35,9 +35,15 @@ ADDITIONAL COMPANION REGISTER DIMENSIONS (always judge these for companion craft
    ritual or auditor procedure taught in use? Concern = unearned jargon dumps or
    procedure theater as atmosphere. Do not punish earned lore, short lyric that
    advances feeling, or a character performing bureaucracy on purpose.
+8. **Earth anachronism** (`prose.earth_anachronism`) — Does THIS CHAPTER treat Earth
+   timeline/culture labels (pre-Cambrian, telephone pole, etc.) as universal on a
+   non-Earth setting? Concern = Earth chronostratigraphy or Earth-only images on
+   alien/fantasy worlds. Strength = world-local time language or intentional Earth POV.
+   Soft craft only — do not invent a register_findings kind.
 
-When emitting findings, "dimension" may also be "prose.human_door" or
-"prose.jargon_earn" in addition to the five stock prose dimensions above.
+When emitting findings, "dimension" may also be "prose.human_door",
+"prose.jargon_earn", or "prose.earth_anachronism" in addition to the five stock
+prose dimensions above.
 """
 
 _COMPANION_REGISTER_BIAS = (
@@ -251,7 +257,8 @@ async def run_companion_craft(
     re-format via analyze helpers and drop scope / focus_count).
 
     When *include_register_dims* is true (default), companion asks
-    ``prose.human_door`` / ``prose.jargon_earn``. Kill switch / ``--continuity-only``
+    ``prose.human_door`` / ``prose.jargon_earn`` / ``prose.earth_anachronism``.
+    Kill switch / ``--continuity-only``
     callers pass false for stock five-pack only.
     """
     state: AnalysisState = {  # type: ignore[assignment]
