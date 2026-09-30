@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -74,7 +74,7 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
     return {
         "ghostreader_version": ANALYZE_JSON_VERSION,
         "package_version": PACKAGE_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "manuscript_name": report.manuscript_name,
         "executive_summary": report.executive_summary,
         "overview": {
@@ -87,6 +87,7 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
         "prioritized_findings": [asdict(f) for f in report.prioritized_findings],
         "repetition_findings": list(report.repetition_findings),
         "register_findings": list(report.register_findings),
+        "thrash_findings": list(report.thrash_findings),
         "rewrite_suggestions": [asdict(s) for s in report.rewrite_suggestions]
         if report.rewrite_suggestions
         else [],

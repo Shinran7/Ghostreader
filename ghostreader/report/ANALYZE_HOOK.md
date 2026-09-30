@@ -23,12 +23,31 @@ Always present:
 
 - `repetition_findings` — book-wide algorithmic rows (empty list OK). Prefer these for surgical avoid-lists. Soft `prose.repetition` in `prioritized_findings` remains the craft judgment note.
 - `register_findings` — additive opening-window register / initiation rows (empty list OK). Emitted on **`standard` and `deep`** when `analyze_register_watch` is on; `quick` / kill-off → `[]`. Kinds: `unearned_jargon` \| `initiation_budget` only. Soft `prose.human_door` / `prose.jargon_earn` stay **companion-only** in v1 (stock analyze prose stays five-pack).
+- `thrash_findings` — additive Zipf uncommon-noun thrash rows (empty list OK). Emitted on **`standard` and `deep`** when `analyze_thrash_watch` is on; `quick` / kill-off → `[]`. Kinds: `within_scene` \| `cross_chapter` only. Machine rows are the v1 action surface for Autonomicon end-of-book cleanup. Soft `prose.uncommon_thrash` is **deferred** (not shipped in v1). Do not overload `prose.vocabulary` / `prose.repetition` for Zipf thrash.
 - `prioritized_findings` — ranked findings. Empty-evidence **strengths** are omitted after enrich (ratings may still show strength).
 - Continuity findings may carry additive `signal_kind` when enrich provided it.
 
 Repetition row notes vs companion: always `"focus_count": 0`; never `kind: dialogue_tag`; scope is whole-book chapter cardinality.
 
-Markdown reports include a thin “Algorithmic repetition” subsection when rows are non-empty. JSON is the machine contract. `register_findings` is JSON-primary (no markdown subsection required in v1).
+Markdown reports include a thin “Algorithmic repetition” subsection when rows are non-empty. JSON is the machine contract. `register_findings` and `thrash_findings` are JSON-primary (no markdown subsection required in v1).
+
+### `thrash_findings` row shape
+
+| Field | Notes |
+| --- | --- |
+| `kind` | `within_scene` (C1 leftover) or `cross_chapter` (C2 motif rollup) |
+| `lemma` | Normalized uncommon lemma |
+| `count` | Hit count (within-scene local, or sum for cross_chapter) |
+| `chapters` | Chapter numbers involved |
+| `chapter` | Primary chapter for `within_scene`; null for `cross_chapter` |
+| `scene_index` | 0-based scene within chapter when known |
+| `severity` | `high` (≥4) / `moderate` (2–3) by local or rolled count |
+| `quote` | Verbatim span for surgical search; for `cross_chapter`, from the chapter with max within-scene count (ties → lowest chapter), then that chapter’s worst scene (ties → lowest `scene_index`) |
+| `normalized_key` | Usually same as `lemma` |
+| `foothold_token` | First surface form (keep this) |
+| `later_surfaces` | Later surface forms to vary |
+
+Consumers that do not know `thrash_findings` ignore the key. Missing key ≡ `[]`.
 
 ## Minimal version keys
 
@@ -37,6 +56,7 @@ Markdown reports include a thin “Algorithmic repetition” subsection when row
   "ghostreader_version": "0.2.0",
   "package_version": "0.1.0",
   "repetition_findings": [],
-  "register_findings": []
+  "register_findings": [],
+  "thrash_findings": []
 }
 ```

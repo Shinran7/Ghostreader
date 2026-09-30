@@ -17,11 +17,10 @@ from ghostreader.report import (
     severity_emoji,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_report() -> ReportOutput:
     return ReportOutput(
         executive_summary="A well-crafted manuscript with some pacing issues.",
@@ -59,7 +58,7 @@ def sample_report() -> ReportOutput:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_final_report() -> dict:
     return {
         "executive_summary": "Good manuscript.",
@@ -201,8 +200,9 @@ class TestMarkdownWriter:
 
 class TestJsonExport:
     def test_export_json_to_file(self, sample_report: ReportOutput, tmp_path: Path) -> None:
-        from ghostreader.report.json_export import export_json
         import json
+
+        from ghostreader.report.json_export import export_json
 
         out = tmp_path / "report.json"
         text = export_json(sample_report, output_path=out)
@@ -213,12 +213,14 @@ class TestJsonExport:
         assert data["ghostreader_version"] == "0.2.0"
         assert data["repetition_findings"] == []
         assert data["register_findings"] == []
+        assert data["thrash_findings"] == []
         from ghostreader import __version__ as pkg_ver
 
         assert data["package_version"] == pkg_ver
 
     def test_export_json_to_stdout(self, sample_report: ReportOutput) -> None:
         from io import StringIO
+
         from ghostreader.report.json_export import export_json
 
         buf = StringIO()
@@ -238,7 +240,86 @@ class TestJsonExport:
         assert payload["repetition_findings"] == []
         assert "register_findings" in payload
         assert payload["register_findings"] == []
+        assert "thrash_findings" in payload
+        assert payload["thrash_findings"] == []
         assert payload["package_version"] == pkg_ver
+
+
+# ── Algorithmic thrash export (#285) ───────────────────────────────────
+
+
+class TestAnalyzeThrashFindings:
+    def test_within_scene_and_kill_switch(self) -> None:
+        from ghostreader.analyzers.thrash_detector import reset_zipf_cache_for_tests
+        from ghostreader.report.thrash_export import analyze_thrash_findings
+
+        reset_zipf_cache_for_tests()
+        chapters = [
+            {
+                "chapter_number": 1,
+                "content": ("The firn cracked. She kicked the firn aside. Firn dust rose."),
+            }
+        ]
+        rows = analyze_thrash_findings(chapters, enabled=True)
+        within = [r for r in rows if r["kind"] == "within_scene" and r["lemma"] == "firn"]
+        assert len(within) == 1
+        assert within[0]["count"] == 3
+        assert within[0]["chapter"] == 1
+        assert within[0]["foothold_token"]
+        assert analyze_thrash_findings(chapters, enabled=False) == []
+
+    def test_cross_chapter_quote_kd19(self) -> None:
+        from ghostreader.analyzers.thrash_detector import reset_zipf_cache_for_tests
+        from ghostreader.report.thrash_export import analyze_thrash_findings
+
+        reset_zipf_cache_for_tests()
+        # Ch2 has more firn hits than ch1 → KD-19 picks ch2 quote.
+        chapters = [
+            {
+                "chapter_number": 1,
+                "content": "The firn cracked. She crossed the firn carefully.",
+            },
+            {
+                "chapter_number": 2,
+                "content": (
+                    "Firn under the hatch. More firn on the ladder. "
+                    "She brushed firn from her glove. Firn again at the seal."
+                ),
+            },
+        ]
+        rows = analyze_thrash_findings(chapters, enabled=True)
+        cross = [r for r in rows if r["kind"] == "cross_chapter" and r["lemma"] == "firn"]
+        assert len(cross) == 1
+        assert cross[0]["chapters"] == [1, 2]
+        assert cross[0]["count"] >= 6
+        assert cross[0]["quote"]
+        # Quote should come from the denser chapter (2).
+        assert (
+            "hatch" in (cross[0]["quote"] or "").lower()
+            or "ladder" in (cross[0]["quote"] or "").lower()
+            or "glove" in (cross[0]["quote"] or "").lower()
+            or "seal" in (cross[0]["quote"] or "").lower()
+        )
+
+    def test_json_includes_populated_thrash_findings(self, sample_report: ReportOutput) -> None:
+        from ghostreader.report.json_export import _build_payload
+
+        row = {
+            "kind": "within_scene",
+            "lemma": "firn",
+            "severity": "moderate",
+            "count": 3,
+            "chapters": [1],
+            "chapter": 1,
+            "scene_index": 0,
+            "quote": "The firn cracked.",
+            "normalized_key": "firn",
+            "foothold_token": "firn",
+            "later_surfaces": ["firn", "Firn"],
+        }
+        sample_report.thrash_findings = [row]
+        payload = _build_payload(sample_report)
+        assert payload["thrash_findings"] == [row]
 
 
 # ── Algorithmic register export (#7) ───────────────────────────────────

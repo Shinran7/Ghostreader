@@ -41,6 +41,8 @@ class TestGhostreaderConfig:
         assert cfg.analyze_enrich_strengths is True
         assert cfg.analyze_omit_empty_strengths is True
         assert cfg.analyze_register_watch is True
+        assert cfg.analyze_thrash_watch is True
+        assert cfg.analyze_thrash_findings_cap == 40
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -69,6 +71,8 @@ class TestGhostreaderConfig:
         assert "analyze_enrich_strengths: true" in text
         assert "analyze_omit_empty_strengths: true" in text
         assert "analyze_register_watch: true" in text
+        assert "analyze_thrash_watch: true" in text
+        assert "analyze_thrash_findings_cap: 40" in text
         assert "Does NOT revert analyze_repetition_*" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
@@ -87,6 +91,8 @@ class TestGhostreaderConfig:
         assert loaded.analyze_enrich_strengths is True
         assert loaded.analyze_omit_empty_strengths is True
         assert loaded.analyze_register_watch is True
+        assert loaded.analyze_thrash_watch is True
+        assert loaded.analyze_thrash_findings_cap == 40
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

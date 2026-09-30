@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich import print as rprint
@@ -42,25 +42,25 @@ app.add_typer(config_app, name="config")
 # ── Common option types ──────────────────────────────────────────────
 
 DepthOption = Annotated[
-    Optional[str],
+    str | None,
     typer.Option(
         "--depth",
         help="Analysis depth: quick, standard, or deep. [default: standard]",
     ),
 ]
 GenreOption = Annotated[
-    Optional[str],
+    str | None,
     typer.Option(
         "--genre",
         help="Genre lens for prompts (e.g. literary, fantasy, thriller, romance, sci-fi).",
     ),
 ]
 ModelOption = Annotated[
-    Optional[str],
+    str | None,
     typer.Option("--model", help="LLM model override. Takes precedence over config.yaml."),
 ]
 FormatOption = Annotated[
-    Optional[str],
+    str | None,
     typer.Option("--format", help="Terminal output format: terminal (default) or json."),
 ]
 NoCacheOption = Annotated[
@@ -68,11 +68,11 @@ NoCacheOption = Annotated[
     typer.Option("--no-cache", help="Skip cached results and re-analyze from scratch."),
 ]
 OutputOption = Annotated[
-    Optional[Path],
+    Path | None,
     typer.Option("--output", "-o", help="Write an additional copy of the report to this path."),
 ]
 TypesafeOption = Annotated[
-    Optional[bool],
+    bool | None,
     typer.Option(
         "--typesafe/--no-typesafe",
         help="Use TypeSafe for judgments (overrides config.yaml). Default: config or off.",
@@ -182,6 +182,7 @@ async def _run_analyze(
     from ghostreader.report.repetition_export import analyze_repetition_findings
     from ghostreader.report.rewrites import generate_rewrites
     from ghostreader.report.terminal_output import render_report
+    from ghostreader.report.thrash_export import analyze_thrash_findings
     from ghostreader.typesafe import (
         ensure_typesafe_api_key,
         ensure_typesafe_sdk,
@@ -378,6 +379,7 @@ async def _run_analyze(
     # ── 5. Build typed report ──
     manuscript_name = manuscript_display_name(path)
     register_enabled = cfg.analyze_register_watch and analysis_depth in {"standard", "deep"}
+    thrash_enabled = cfg.analyze_thrash_watch and analysis_depth in {"standard", "deep"}
     report = ReportOutput.from_final_report(
         final_report,
         manuscript_name=manuscript_name,
@@ -390,6 +392,11 @@ async def _run_analyze(
         register_findings=analyze_register_findings(
             chapter_dicts,
             enabled=register_enabled,
+        ),
+        thrash_findings=analyze_thrash_findings(
+            chapter_dicts,
+            cap=cfg.analyze_thrash_findings_cap,
+            enabled=thrash_enabled,
         ),
     )
 
@@ -452,7 +459,7 @@ def companion(
         ),
     ],
     chapter: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--chapter",
             help="When PATH is a chapters directory, craft focus chapter (sweep continuity still uses full set).",

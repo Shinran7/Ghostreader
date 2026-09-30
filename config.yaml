@@ -86,3 +86,9 @@ analyze_omit_empty_strengths: true
 
 # Analyze heuristic register_findings on standard/deep (false = always []).
 analyze_register_watch: true
+
+# Analyze Zipf thrash_findings on standard/deep (false = always []).
+analyze_thrash_watch: true
+
+# Max algorithmic thrash_findings rows in analyze JSON export.
+analyze_thrash_findings_cap: 40

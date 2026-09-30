@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ── Severity constants ───────────────────────────────────────────────
 
 SEVERITY_STRENGTH = "strength"
@@ -72,6 +71,8 @@ class ReportOutput:
     repetition_findings: list[dict[str, Any]] = field(default_factory=list)
     # Opening-window register / initiation rows (#7); empty OK; additive.
     register_findings: list[dict[str, Any]] = field(default_factory=list)
+    # Zipf uncommon-noun thrash rows (#285); empty OK; additive; machine only.
+    thrash_findings: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -83,6 +84,7 @@ class ReportOutput:
         warnings: list[str] | None = None,
         repetition_findings: list[dict[str, Any]] | None = None,
         register_findings: list[dict[str, Any]] | None = None,
+        thrash_findings: list[dict[str, Any]] | None = None,
     ) -> ReportOutput:
         """Build a ``ReportOutput`` from the synthesis ``final_report`` dict."""
         ratings = [
@@ -124,6 +126,7 @@ class ReportOutput:
             warnings=merged_warnings,
             repetition_findings=list(repetition_findings or []),
             register_findings=list(register_findings or []),
+            thrash_findings=list(thrash_findings or []),
             raw=report,
         )
 
