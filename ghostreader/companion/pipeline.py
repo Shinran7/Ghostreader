@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,8 +24,6 @@ from ghostreader.companion.brief import (
     compute_verdict_drivers,
     findings_from_dicts,
 )
-from ghostreader.companion.craft import run_companion_craft
-from ghostreader.llm import message_text
 from ghostreader.companion.continuity import (
     COMPANION_GATE_DIMS,
     COMPANION_INFO_DIMS,
@@ -33,16 +31,19 @@ from ghostreader.companion.continuity import (
     ensure_info_ratings,
     partition_findings,
 )
-from ghostreader.companion.narrative import run_companion_narrative
-from ghostreader.companion.discovery import DiscoveryResult
+from ghostreader.companion.craft import run_companion_craft
+from ghostreader.companion.discovery import DiscoveryResult, max_chapter_on_disk
 from ghostreader.companion.fact_memory import FactMemoryStore
+from ghostreader.companion.narrative import run_companion_narrative
 from ghostreader.companion.progress import (
+    clamp_progress_to_disk,
     compute_order_warnings,
-    load_progress,
     update_progress_after_run,
 )
 from ghostreader.companion.register import (
     register_block as format_register_block,
+)
+from ghostreader.companion.register import (
     register_findings_for_chapter,
 )
 from ghostreader.companion.repetition import (
@@ -53,6 +54,7 @@ from ghostreader.companion.repetition import (
 )
 from ghostreader.graph import chapters_to_dicts
 from ghostreader.ingestion import Chapter
+from ghostreader.llm import message_text
 from ghostreader.report import DimensionRating, PrioritizedFinding
 from ghostreader.typesafe.routing import prioritization_sort_key
 
@@ -263,13 +265,15 @@ async def run_companion_pipeline(
     """Facts → craft → continuity → partition → brief; update progress cursor."""
     warnings: list[str] = list(discovery.warnings)
 
-    progress = load_progress(story_state_dir)
+    disk_max = max_chapter_on_disk(discovery.chapters_dir)
+    progress = clamp_progress_to_disk(story_state_dir, disk_max)
     warnings.extend(
         compute_order_warnings(
             mode=discovery.mode,
             chapter_number=discovery.chapter_number,
             gaps=discovery.gaps,
             progress=progress,
+            max_chapter_on_disk=disk_max,
         )
     )
 
@@ -558,7 +562,7 @@ async def run_companion_pipeline(
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(UTC).isoformat(),
     )
 
     max_in_run = max(
@@ -570,6 +574,7 @@ async def run_companion_pipeline(
         chapter_number=discovery.chapter_number,
         gaps=discovery.gaps,
         max_chapter_in_run=max_in_run,
+        max_chapter_on_disk=disk_max,
     )
     return brief
 

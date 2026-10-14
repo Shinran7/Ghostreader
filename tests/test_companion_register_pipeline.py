@@ -10,6 +10,7 @@ import pytest
 
 from ghostreader.companion.discovery import DiscoveryResult
 from ghostreader.companion.pipeline import run_companion_pipeline
+from ghostreader.companion.progress import ProgressState
 from ghostreader.ingestion import Chapter
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "register" / "shatterbound-ch1-opening.md"
@@ -104,8 +105,8 @@ async def test_register_watch_on_emits_rows_and_dims(tmp_path: Path) -> None:
             return_value=None,
         ),
         patch(
-            "ghostreader.companion.pipeline.load_progress",
-            return_value={},
+            "ghostreader.companion.pipeline.clamp_progress_to_disk",
+            return_value=ProgressState(),
         ),
         patch(
             "ghostreader.companion.pipeline.compute_order_warnings",
@@ -196,8 +197,8 @@ async def test_register_kill_switch_empties_and_stock_dims(tmp_path: Path) -> No
             return_value=None,
         ),
         patch(
-            "ghostreader.companion.pipeline.load_progress",
-            return_value={},
+            "ghostreader.companion.pipeline.clamp_progress_to_disk",
+            return_value=ProgressState(),
         ),
         patch(
             "ghostreader.companion.pipeline.compute_order_warnings",
@@ -253,8 +254,8 @@ async def test_continuity_only_skips_register(tmp_path: Path) -> None:
             return_value=None,
         ),
         patch(
-            "ghostreader.companion.pipeline.load_progress",
-            return_value={},
+            "ghostreader.companion.pipeline.clamp_progress_to_disk",
+            return_value=ProgressState(),
         ),
         patch(
             "ghostreader.companion.pipeline.compute_order_warnings",

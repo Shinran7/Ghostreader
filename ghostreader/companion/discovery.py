@@ -45,6 +45,12 @@ def _list_chapter_files(chapters_dir: Path) -> dict[int, Path]:
     return found
 
 
+def max_chapter_on_disk(chapters_dir: Path) -> int | None:
+    """Highest numbered chapter-*.md present under chapters_dir, or None."""
+    files = _list_chapter_files(chapters_dir)
+    return max(files) if files else None
+
+
 def _load_up_to(chapters_dir: Path, n: int) -> tuple[list[Chapter], list[int]]:
     """Load chapter-*.md with number <= n; report missing numbers in 1…n."""
     files = _list_chapter_files(chapters_dir)
@@ -91,9 +97,7 @@ def discover(
         if not chapters:
             raise ValueError(f"No chapter-*.md files found under {chapters_dir}")
         if gaps:
-            warnings.append(
-                f"Gap: missing chapter file(s) in 1…{n}: {gaps}"
-            )
+            warnings.append(f"Gap: missing chapter file(s) in 1…{n}: {gaps}")
         manuscript_name = manuscript_display_name(path)
         seed_meta = load_seed_meta(path)
         return DiscoveryResult(
@@ -128,8 +132,7 @@ def discover(
     focus = chapter_override if chapter_override is not None else max_n
     if focus not in files:
         raise ValueError(
-            f"Chapter {focus} not found under {chapters_dir} "
-            f"(available: {sorted(files)})"
+            f"Chapter {focus} not found under {chapters_dir} (available: {sorted(files)})"
         )
     # Sweep continuity uses full loaded set ≤ max present; craft focus = override or max.
     chapters, gaps = _load_up_to(chapters_dir, max_n)
@@ -156,4 +159,4 @@ def discover(
     )
 
 
-__all__ = ["DiscoveryResult", "discover"]
+__all__ = ["DiscoveryResult", "discover", "max_chapter_on_disk"]

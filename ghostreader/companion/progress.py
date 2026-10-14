@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -15,7 +15,14 @@ _PROGRESS_VERSION = 1
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _clamp_last(last: int | None, max_chapter_on_disk: int | None) -> int | None:
+    """Lower high-water cursor to max chapter still on disk when truncated."""
+    if last is None or max_chapter_on_disk is None:
+        return last
+    return min(last, max_chapter_on_disk)
 
 
 @dataclass
@@ -75,16 +82,47 @@ def save_progress(story_state_dir: Path, state: ProgressState) -> None:
     path.write_text(json.dumps(state.to_dict(), indent=2) + "\n", encoding="utf-8")
 
 
+def clamp_progress_to_disk(
+    story_state_dir: Path,
+    max_chapter_on_disk: int | None,
+) -> ProgressState:
+    """Persist cursor clamp when later chapters were removed (restore/truncate)."""
+    current = load_progress(story_state_dir)
+    clamped = _clamp_last(current.last_chapter_companioned, max_chapter_on_disk)
+    if clamped == current.last_chapter_companioned:
+        return current
+    updated = ProgressState(
+        version=current.version,
+        last_chapter_companioned=clamped,
+        last_run_at=current.last_run_at,
+        last_mode=current.last_mode,
+        gaps_known=list(current.gaps_known),
+    )
+    save_progress(story_state_dir, updated)
+    logger.info(
+        "Clamped companion progress cursor %s → %s (max on disk %s)",
+        current.last_chapter_companioned,
+        clamped,
+        max_chapter_on_disk,
+    )
+    return updated
+
+
 def compute_order_warnings(
     *,
     mode: Literal["progressive", "sweep"],
     chapter_number: int,
     gaps: list[int],
     progress: ProgressState,
+    max_chapter_on_disk: int | None = None,
 ) -> list[str]:
-    """Regression / skip warnings (still run). Does not mutate progress."""
+    """Regression / skip warnings (still run). Does not mutate progress.
+
+    When ``max_chapter_on_disk`` is set, the high-water cursor is clamped before
+    comparing so phantom later chapters (post-restore truncate) do not warn.
+    """
     warnings: list[str] = []
-    last = progress.last_chapter_companioned
+    last = _clamp_last(progress.last_chapter_companioned, max_chapter_on_disk)
 
     if mode == "progressive":
         if last is not None and chapter_number < last:
@@ -118,23 +156,29 @@ def update_progress_after_run(
     chapter_number: int,
     gaps: list[int],
     max_chapter_in_run: int | None = None,
+    max_chapter_on_disk: int | None = None,
 ) -> ProgressState:
     """Persist cursor after a successful companion run.
 
-    Progressive rewrite of an earlier chapter does not lower the cursor.
-    Sweep sets cursor to max chapter in the run.
+    Progressive rewrite of an earlier chapter does not lower the cursor while
+    later chapters still exist. When the story was truncated, clamp down to
+    ``max_chapter_on_disk``. Sweep sets cursor to max chapter in the run.
     """
     current = load_progress(story_state_dir)
     if mode == "sweep":
         n = max_chapter_in_run if max_chapter_in_run is not None else chapter_number
-        new_last = n if current.last_chapter_companioned is None else max(
-            current.last_chapter_companioned, n
+        new_last = (
+            n
+            if current.last_chapter_companioned is None
+            else max(current.last_chapter_companioned, n)
         )
     else:
         if current.last_chapter_companioned is None:
             new_last = chapter_number
         else:
             new_last = max(current.last_chapter_companioned, chapter_number)
+
+    new_last = _clamp_last(new_last, max_chapter_on_disk)
 
     updated = ProgressState(
         version=_PROGRESS_VERSION,
@@ -149,6 +193,7 @@ def update_progress_after_run(
 
 __all__ = [
     "ProgressState",
+    "clamp_progress_to_disk",
     "compute_order_warnings",
     "load_progress",
     "progress_path",
