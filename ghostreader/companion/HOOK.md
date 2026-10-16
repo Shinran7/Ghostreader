@@ -12,7 +12,7 @@ Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.2`**). Independent of analyze JSON (`0.2.0`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.2`**). Independent of analyze JSON (`0.2.1`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -16,6 +18,8 @@ from ghostreader.analyzers.thrash_detector import (
     detect_thrash_in_chapter,
     finding_to_dict,
 )
+
+logger = logging.getLogger(__name__)
 
 _SEVERITY_RANK = {"high": 0, "moderate": 1, "low": 2}
 _ALLOWED_KINDS = frozenset(
@@ -82,12 +86,26 @@ def analyze_thrash_findings(
         sev = _SEVERITY_RANK.get(str(row.get("severity") or "low"), 99)
         kind_rank = _KIND_PRIORITY.get(str(row.get("kind") or ""), 99)
         count = -int(row.get("count") or 0)
-        key = str(row.get("normalized_key") or row.get("lemma") or "")
+        key = str(row.get("normalized_key") or row.get("lemma") or row.get("phrase") or "")
         return (sev, kind_rank, count, key)
 
     cleaned.sort(key=_sort_key)
     limit = max(0, int(cap))
-    return cleaned[:limit]
+    capped = cleaned[:limit]
+
+    counts = Counter(str(r.get("kind") or "") for r in capped)
+    logger.info(
+        "thrash_findings: within=%d chapter_rare=%d common=%d phrase=%d "
+        "dialogue_tag=%d cross=%d capped=%d",
+        counts.get("within_scene", 0),
+        counts.get("chapter_rare", 0),
+        counts.get("common_word", 0),
+        counts.get("phrase", 0),
+        counts.get("dialogue_tag", 0),
+        counts.get("cross_chapter", 0),
+        len(capped),
+    )
+    return capped
 
 
 __all__ = ["DEFAULT_THRASH_FINDINGS_CAP", "analyze_thrash_findings"]

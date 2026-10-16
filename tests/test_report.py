@@ -210,7 +210,7 @@ class TestJsonExport:
         data = json.loads(text)
         assert data["manuscript_name"] == "Test Manuscript"
         assert data["overview"]["total_findings"] == 2
-        assert data["ghostreader_version"] == "0.2.0"
+        assert data["ghostreader_version"] == "0.2.1"
         assert data["repetition_findings"] == []
         assert data["register_findings"] == []
         assert data["thrash_findings"] == []
@@ -227,15 +227,15 @@ class TestJsonExport:
         export_json(sample_report, output=buf)
         assert "Test Manuscript" in buf.getvalue()
 
-    def test_contract_0_2_0_always_emits_repetition_findings(
+    def test_contract_0_2_1_always_emits_repetition_findings(
         self, sample_report: ReportOutput
     ) -> None:
         from ghostreader import __version__ as pkg_ver
         from ghostreader.report.json_export import ANALYZE_JSON_VERSION, _build_payload
 
-        assert ANALYZE_JSON_VERSION == "0.2.0"
+        assert ANALYZE_JSON_VERSION == "0.2.1"
         payload = _build_payload(sample_report)
-        assert payload["ghostreader_version"] == "0.2.0"
+        assert payload["ghostreader_version"] == "0.2.1"
         assert "repetition_findings" in payload
         assert payload["repetition_findings"] == []
         assert "register_findings" in payload
@@ -307,6 +307,7 @@ class TestAnalyzeThrashFindings:
         row = {
             "kind": "within_scene",
             "lemma": "firn",
+            "phrase": None,
             "severity": "moderate",
             "count": 3,
             "chapters": [1],
@@ -320,6 +321,64 @@ class TestAnalyzeThrashFindings:
         sample_report.thrash_findings = [row]
         payload = _build_payload(sample_report)
         assert payload["thrash_findings"] == [row]
+
+    def test_mixed_kinds_cap_and_sort_priority(self) -> None:
+        from ghostreader.analyzers.thrash_detector import reset_zipf_cache_for_tests
+        from ghostreader.report.thrash_export import analyze_thrash_findings
+
+        reset_zipf_cache_for_tests()
+        # Mix: within_scene firn, chapter_rare basalt spread, common rim, phrase, dialogue.
+        content = (
+            "The firn cracked. She kicked the firn aside.\n\n"
+            "Basalt under the hatch.\n\n"
+            "Cold basalt at the seal.\n\n"
+            "She stood on the rim. The rim was ice-slick. Boots found the rim again. "
+            "He pointed at the rim. Frost clung to the rim. She cleared the rim of snow.\n\n"
+            "Boots crunching into the coarse blue ice. Later she scraped blue ice away.\n\n"
+            "Cold, Hollis muttered from the stove. Still, he muttered under the hatch. "
+            "Quiet, she muttered at the seal. Fine, she said.\n"
+        )
+        rows = analyze_thrash_findings(
+            [{"chapter_number": 1, "content": content}],
+            enabled=True,
+            cap=40,
+        )
+        kinds = {r["kind"] for r in rows}
+        assert "within_scene" in kinds
+        assert "chapter_rare" in kinds
+        assert "common_word" in kinds
+        assert "phrase" in kinds
+        assert "dialogue_tag" in kinds
+        # Cap respected.
+        assert len(rows) <= 40
+        # Kind priority: within_scene before chapter_rare before phrase before
+        # dialogue_tag before common_word (among equal severity bands).
+        kind_order = {
+            "within_scene": 0,
+            "chapter_rare": 1,
+            "phrase": 2,
+            "dialogue_tag": 3,
+            "common_word": 4,
+            "cross_chapter": 5,
+        }
+        sev_rank = {"high": 0, "moderate": 1, "low": 2}
+        for a, b in zip(rows, rows[1:], strict=False):
+            ka = (
+                sev_rank.get(str(a.get("severity") or "low"), 99),
+                kind_order.get(str(a.get("kind") or ""), 99),
+                -int(a.get("count") or 0),
+            )
+            kb = (
+                sev_rank.get(str(b.get("severity") or "low"), 99),
+                kind_order.get(str(b.get("kind") or ""), 99),
+                -int(b.get("count") or 0),
+            )
+            assert ka <= kb
+        # Phrase row shape.
+        phrase_rows = [r for r in rows if r["kind"] == "phrase"]
+        assert phrase_rows
+        assert all(r.get("lemma") is None for r in phrase_rows)
+        assert all(r.get("phrase") for r in phrase_rows)
 
 
 # ── Algorithmic register export (#7) ───────────────────────────────────
@@ -502,7 +561,7 @@ class TestAnalyzeRepetitionFindings:
         sample_report.repetition_findings = [row]
         payload = _build_payload(sample_report)
         assert payload["repetition_findings"] == [row]
-        assert payload["ghostreader_version"] == "0.2.0"
+        assert payload["ghostreader_version"] == "0.2.1"
         from ghostreader import __version__ as pkg_ver
 
         assert payload["package_version"] == pkg_ver

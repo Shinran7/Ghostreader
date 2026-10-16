@@ -26,9 +26,10 @@ from ghostreader import __version__ as PACKAGE_VERSION
 from ghostreader.report import ReportOutput
 
 # Analyze JSON contract version (independent of package __version__).
-# Bumped to 0.2.0 when always-present repetition_findings landed.
-# package_version is additive and does not bump this contract.
-ANALYZE_JSON_VERSION = "0.2.0"
+# 0.2.0: always-present repetition_findings.
+# 0.2.1: additive thrash kinds (chapter_rare / common_word / phrase / dialogue_tag)
+#        + nullable lemma / phrase field on thrash rows (#10).
+ANALYZE_JSON_VERSION = "0.2.1"
 
 
 def export_json(
