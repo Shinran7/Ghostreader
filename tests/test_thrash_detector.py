@@ -95,18 +95,67 @@ def test_frontmatter_stripped() -> None:
     assert any(f.lemma == "firn" for f in findings)
 
 
-def test_s1_common_phrase_dialogue_stubs_return_empty() -> None:
-    """#10 S1 leftovers: common/phrase/dialogue stubs still identity until S3/S4."""
+def test_s1_phrase_stub_still_empty() -> None:
+    """#10 S1 leftover: phrase stub identity until S4."""
+    from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
+
+    text = "The firn cracked. She kicked the firn aside. Firn dust rose."
+    assert detect_phrase_thrash(text, chapter_number=1) == []
+
+
+def test_rim_carpet_common_word_said_and_names_quiet() -> None:
+    from ghostreader.analyzers.common_word_thrash import detect_common_word_thrash
+    from ghostreader.report.thrash_export import analyze_thrash_findings
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "rim-carpet.md"
+    text = fixture.read_text(encoding="utf-8")
+    rows = detect_common_word_thrash(text, chapter_number=1)
+    rim = [f for f in rows if f.lemma == "rim" and f.kind == "common_word"]
+    assert len(rim) == 1
+    assert rim[0].count >= 6
+    assert rim[0].severity in {"moderate", "high"}
+    assert all(f.lemma not in {"said", "says", "say"} for f in rows)
+    # Mid-sentence Title Case names must not crown common_word.
+    assert all(f.lemma not in {"hollis", "mira"} for f in rows)
+    export = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+    )
+    assert any(r["kind"] == "common_word" and r["lemma"] == "rim" for r in export)
+    assert all(r.get("lemma") not in {"said", "says", "say"} for r in export)
+
+
+def test_muttered_dialogue_tag_not_common_word() -> None:
     from ghostreader.analyzers.common_word_thrash import (
         detect_common_word_thrash,
         detect_dialogue_tag_thrash,
     )
-    from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
+    from ghostreader.report.thrash_export import analyze_thrash_findings
 
-    text = "The firn cracked. She kicked the firn aside. Firn dust rose."
-    assert detect_common_word_thrash(text, chapter_number=1) == []
-    assert detect_phrase_thrash(text, chapter_number=1) == []
-    assert detect_dialogue_tag_thrash(text, chapter_number=1) == []
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "muttered-tags.md"
+    text = fixture.read_text(encoding="utf-8")
+    tags = detect_dialogue_tag_thrash(text, chapter_number=1)
+    muttered = [f for f in tags if f.lemma == "muttered" and f.kind == "dialogue_tag"]
+    assert len(muttered) == 1
+    assert muttered[0].count >= 3
+    common = detect_common_word_thrash(text, chapter_number=1)
+    assert all(f.lemma != "muttered" for f in common)
+    export = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+    )
+    assert any(r["kind"] == "dialogue_tag" and r["lemma"] == "muttered" for r in export)
+    assert all(not (r["kind"] == "common_word" and r.get("lemma") == "muttered") for r in export)
+    assert all(r.get("lemma") not in {"said", "says", "say"} for r in export)
+
+
+def test_si_noise_meters_not_primary_common_word() -> None:
+    from ghostreader.analyzers.common_word_thrash import detect_common_word_thrash
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "si-noise.md"
+    text = fixture.read_text(encoding="utf-8")
+    rows = detect_common_word_thrash(text, chapter_number=1)
+    assert all(f.lemma not in {"meter", "meters", "metre"} for f in rows)
 
 
 def test_chapter_spread_firn_fires_chapter_rare() -> None:
