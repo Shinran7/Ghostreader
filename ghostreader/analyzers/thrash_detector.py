@@ -484,12 +484,12 @@ _zipf_path_override: Path | None = None
 
 @dataclass
 class ThrashFinding:
-    """One uncommon-noun thrash row before analyze JSON projection."""
+    """One thrash row before analyze JSON projection (#285 / #10)."""
 
-    kind: str  # within_scene | cross_chapter
-    lemma: str
-    severity: str  # high | moderate | low
-    count: int
+    kind: str  # within_scene | cross_chapter | chapter_rare | common_word | phrase | dialogue_tag
+    lemma: str | None = None
+    severity: str = "low"  # high | moderate | low
+    count: int = 0
     chapters: list[int] = field(default_factory=list)
     chapter: int | None = None
     scene_index: int | None = None
@@ -497,6 +497,7 @@ class ThrashFinding:
     normalized_key: str = ""
     foothold_token: str | None = None
     later_surfaces: list[str] = field(default_factory=list)
+    phrase: str | None = None
 
 
 def _zipf_path() -> Path:
@@ -883,16 +884,18 @@ def detect_thrash(
 
 def finding_to_dict(finding: ThrashFinding) -> dict:
     """Project a ThrashFinding to analyze JSON row shape."""
+    key = finding.normalized_key or finding.phrase or finding.lemma or ""
     return {
         "kind": finding.kind,
         "lemma": finding.lemma,
+        "phrase": finding.phrase,
         "severity": finding.severity,
         "count": finding.count,
         "chapters": list(finding.chapters),
         "chapter": finding.chapter,
         "scene_index": finding.scene_index,
         "quote": finding.quote,
-        "normalized_key": finding.normalized_key or finding.lemma,
+        "normalized_key": key,
         "foothold_token": finding.foothold_token,
         "later_surfaces": list(finding.later_surfaces),
     }

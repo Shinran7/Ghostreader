@@ -95,12 +95,41 @@ def test_frontmatter_stripped() -> None:
     assert any(f.lemma == "firn" for f in findings)
 
 
-def test_s1_phrase_stub_still_empty() -> None:
-    """#10 S1 leftover: phrase stub identity until S4."""
+def test_blue_ice_phrase_and_nonadjacent_quiet() -> None:
+    from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
+    from ghostreader.report.thrash_export import analyze_thrash_findings
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "blue-ice-phrase.md"
+    text = fixture.read_text(encoding="utf-8")
+    rows = detect_phrase_thrash(text, chapter_number=1)
+    blue = [f for f in rows if f.phrase == "blue ice" and f.kind == "phrase"]
+    assert len(blue) == 1
+    assert blue[0].count >= 2
+    assert blue[0].lemma is None
+    assert blue[0].normalized_key == "blue ice"
+    # Non-adjacent split blue … ice must not invent a third hit beyond the two adjacent.
+    assert blue[0].count == 2
+    export = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+    )
+    hit = [r for r in export if r["kind"] == "phrase" and r.get("phrase") == "blue ice"]
+    assert len(hit) == 1
+    assert hit[0]["lemma"] is None
+
+
+def test_si_procedural_phrase_demoted() -> None:
     from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
 
-    text = "The firn cracked. She kicked the firn aside. Firn dust rose."
-    assert detect_phrase_thrash(text, chapter_number=1) == []
+    text = (
+        "They crossed forty meters of ice. "
+        "Another forty meters waited. "
+        "Then five minutes of silence. Five minutes more."
+    )
+    rows = detect_phrase_thrash(text, chapter_number=1)
+    phrases = {f.phrase for f in rows}
+    assert "forty meter" not in phrases
+    assert "five minute" not in phrases
 
 
 def test_rim_carpet_common_word_said_and_names_quiet() -> None:
