@@ -95,17 +95,65 @@ def test_frontmatter_stripped() -> None:
     assert any(f.lemma == "firn" for f in findings)
 
 
-def test_s1_additive_stubs_return_empty() -> None:
-    """#10 S1: additive entrypoints are identity stubs (never NotImplemented)."""
+def test_s1_common_phrase_dialogue_stubs_return_empty() -> None:
+    """#10 S1 leftovers: common/phrase/dialogue stubs still identity until S3/S4."""
     from ghostreader.analyzers.common_word_thrash import (
         detect_common_word_thrash,
         detect_dialogue_tag_thrash,
     )
     from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
-    from ghostreader.analyzers.thrash_detector import detect_chapter_rare
 
     text = "The firn cracked. She kicked the firn aside. Firn dust rose."
-    assert detect_chapter_rare(text, chapter_number=1) == []
     assert detect_common_word_thrash(text, chapter_number=1) == []
     assert detect_phrase_thrash(text, chapter_number=1) == []
     assert detect_dialogue_tag_thrash(text, chapter_number=1) == []
+
+
+def test_chapter_spread_firn_fires_chapter_rare() -> None:
+    """1× firn in two blank-line scenes → chapter_rare; no within_scene."""
+    from ghostreader.analyzers.thrash_detector import detect_chapter_rare
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "chapter-spread-firn.md"
+    text = fixture.read_text(encoding="utf-8")
+    within = detect_thrash_in_chapter(text, chapter_number=1)
+    assert within == []
+    rare = detect_chapter_rare(text, chapter_number=1)
+    firn = [f for f in rare if f.lemma == "firn" and f.kind == "chapter_rare"]
+    assert len(firn) == 1
+    assert firn[0].count == 2
+    assert firn[0].severity == "moderate"
+    assert firn[0].chapter == 1
+
+
+def test_within_scene_wins_over_chapter_rare_export() -> None:
+    """≥2/scene → within_scene; export drops duplicate chapter_rare."""
+    from ghostreader.report.thrash_export import analyze_thrash_findings
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "thrash" / "within-scene-firn.md"
+    text = fixture.read_text(encoding="utf-8")
+    rows = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+    )
+    within = [r for r in rows if r["kind"] == "within_scene" and r["lemma"] == "firn"]
+    rare = [r for r in rows if r["kind"] == "chapter_rare" and r["lemma"] == "firn"]
+    assert len(within) == 1
+    assert rare == []
+
+
+def test_chapter_rare_orphan_cross_chapter_rollup() -> None:
+    """chapter_rare in ≥2 chapters → cross_chapter when no within_scene rollup."""
+    from ghostreader.analyzers.thrash_detector import (
+        aggregate_cross_chapter,
+        detect_chapter_rare,
+    )
+
+    ch1 = "The basalt rim held.\n\nLater she tapped the basalt again."
+    ch2 = "Basalt under the boot.\n\nCold basalt at the hatch."
+    rare = detect_chapter_rare(ch1, chapter_number=1) + detect_chapter_rare(ch2, chapter_number=2)
+    assert all(r.kind == "chapter_rare" for r in rare)
+    cross = aggregate_cross_chapter([], chapter_rare=rare)
+    basalt = [r for r in cross if r.lemma == "basalt" and r.kind == "cross_chapter"]
+    assert len(basalt) == 1
+    assert basalt[0].chapters == [1, 2]
+    assert basalt[0].count >= 4

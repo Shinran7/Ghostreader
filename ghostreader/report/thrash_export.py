@@ -18,7 +18,6 @@ from ghostreader.analyzers.thrash_detector import (
 )
 
 _SEVERITY_RANK = {"high": 0, "moderate": 1, "low": 2}
-# Additive kinds allowed; S1 detectors return [] so only within/cross emit today.
 _ALLOWED_KINDS = frozenset(
     {
         "within_scene",
@@ -51,25 +50,32 @@ def analyze_thrash_findings(
     Soft ``prose.uncommon_thrash`` is deferred (KD-4). Callers gate *enabled*
     on ``analyze_thrash_watch`` and depth ∈ ``{standard, deep}`` (not ``quick``).
     Kill switch / disabled → ``[]``.
-
-    S1: additive detectors are identity stubs (``[]``); payload stays within/cross.
     """
     if not enabled:
         return []
 
     within_rows = []
-    additive_rows = []
+    chapter_rare_rows = []
+    other_additive = []
     for ch in chapters:
         content = str(ch.get("content") or "")
         chapter_number = int(ch.get("chapter_number") or 0)
         within_rows.extend(detect_thrash_in_chapter(content, chapter_number=chapter_number))
-        additive_rows.extend(detect_chapter_rare(content, chapter_number=chapter_number))
-        additive_rows.extend(detect_common_word_thrash(content, chapter_number=chapter_number))
-        additive_rows.extend(detect_phrase_thrash(content, chapter_number=chapter_number))
-        additive_rows.extend(detect_dialogue_tag_thrash(content, chapter_number=chapter_number))
+        chapter_rare_rows.extend(detect_chapter_rare(content, chapter_number=chapter_number))
+        other_additive.extend(detect_common_word_thrash(content, chapter_number=chapter_number))
+        other_additive.extend(detect_phrase_thrash(content, chapter_number=chapter_number))
+        other_additive.extend(detect_dialogue_tag_thrash(content, chapter_number=chapter_number))
 
-    cross_rows = aggregate_cross_chapter(within_rows)
-    merged = [finding_to_dict(r) for r in within_rows + additive_rows + cross_rows]
+    # KD-3: within_scene wins — drop chapter_rare for same lemma+chapter.
+    within_keys = {(r.lemma, int(r.chapter or 0)) for r in within_rows if r.kind == "within_scene"}
+    chapter_rare_rows = [
+        r for r in chapter_rare_rows if (r.lemma, int(r.chapter or 0)) not in within_keys
+    ]
+
+    cross_rows = aggregate_cross_chapter(within_rows, chapter_rare=chapter_rare_rows)
+    merged = [
+        finding_to_dict(r) for r in within_rows + chapter_rare_rows + other_additive + cross_rows
+    ]
     cleaned = [r for r in merged if str(r.get("kind") or "") in _ALLOWED_KINDS]
 
     def _sort_key(row: dict[str, Any]) -> tuple[int, int, int, str]:

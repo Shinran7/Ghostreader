@@ -707,16 +707,62 @@ def detect_chapter_rare(
     *,
     chapter_number: int,
     threshold: float = DEFAULT_ZIPF_THRESHOLD,
+    cap_per_chapter: int = _WITHIN_SCENE_CAP_PER_CHAPTER,
 ) -> list[ThrashFinding]:
-    """Chapter-scope Zipf rare (≥2 across chapter). S1 no-op wire — returns []."""
-    _ = (content, chapter_number, threshold)
-    return []
+    """Chapter-scope Zipf rare: uncommon lemma ≥2 across full chapter (KD-3).
+
+    First single hit stays quiet. Prefer within_scene when the same lemma
+    already fires ≥2 inside one scene (dedup owned by thrash_export).
+    """
+    body = strip_chapter_body(content or "")
+    if not body.strip():
+        return []
+    scores = ensure_zipf_loaded()
+    # lemma -> list of (surface, scene_idx, scene_text)
+    by_lemma: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
+    for scene_idx, scene in enumerate(_split_scenes(body)):
+        for lem, tok, _start, _end in _iter_candidate_tokens(
+            scene, scores=scores, threshold=threshold
+        ):
+            by_lemma[lem].append((tok, scene_idx, scene))
+
+    findings: list[ThrashFinding] = []
+    for lem, occurrences in by_lemma.items():
+        if len(occurrences) < 2:
+            continue
+        surfaces = [tok for tok, _, _ in occurrences]
+        later = list(dict.fromkeys(surfaces[1:]))
+        foothold = surfaces[0]
+        first_scene_idx = occurrences[0][1]
+        first_scene = occurrences[0][2]
+        findings.append(
+            ThrashFinding(
+                kind="chapter_rare",
+                lemma=lem,
+                severity=_severity_for_count(len(occurrences)),
+                count=len(occurrences),
+                chapters=[chapter_number],
+                chapter=chapter_number,
+                scene_index=first_scene_idx,
+                quote=_quote_for_scene(first_scene, foothold),
+                normalized_key=lem,
+                foothold_token=foothold,
+                later_surfaces=later,
+            )
+        )
+    findings.sort(key=lambda f: (-f.count, f.lemma, f.scene_index or 0))
+    return findings[: max(0, int(cap_per_chapter))]
 
 
 def aggregate_cross_chapter(
     within: list[ThrashFinding],
+    chapter_rare: list[ThrashFinding] | None = None,
 ) -> list[ThrashFinding]:
-    """Roll up lemmas thrashing in ≥2 chapters (KD-19 quote selection)."""
+    """Roll up lemmas thrashing in ≥2 chapters (KD-19 quote selection).
+
+    Primary rollup uses within_scene rows. KD-10: also roll chapter_rare
+    orphans when the lemma has no within_scene cross_chapter yet.
+    """
     # lemma -> chapter -> best within_scene row (max count; ties lowest scene_index)
     best: dict[str, dict[int, ThrashFinding]] = defaultdict(dict)
     for row in within:
@@ -736,12 +782,51 @@ def aggregate_cross_chapter(
             best[lem][ch] = row
 
     out: list[ThrashFinding] = []
+    within_cross_lemmas: set[str] = set()
     for lem, by_ch in best.items():
         if len(by_ch) < 2:
             continue
         chapters = sorted(by_ch.keys())
         total = sum(r.count for r in by_ch.values())
         # KD-19: chapter with max within-scene count; ties → lowest chapter number
+        pick_ch = min(chapters, key=lambda c: (-by_ch[c].count, c))
+        picked = by_ch[pick_ch]
+        within_cross_lemmas.add(lem)
+        out.append(
+            ThrashFinding(
+                kind="cross_chapter",
+                lemma=lem,
+                severity=_severity_for_count(total),
+                count=total,
+                chapters=chapters,
+                chapter=None,
+                scene_index=picked.scene_index,
+                quote=picked.quote,
+                normalized_key=lem,
+                foothold_token=picked.foothold_token,
+                later_surfaces=list(picked.later_surfaces),
+            )
+        )
+
+    # KD-10 orphan rollup from chapter_rare (no inventing cross_chapter_common).
+    rare_best: dict[str, dict[int, ThrashFinding]] = defaultdict(dict)
+    for row in chapter_rare or []:
+        if row.kind != "chapter_rare":
+            continue
+        lem = row.lemma
+        if lem in within_cross_lemmas:
+            continue
+        ch = int(row.chapter or 0)
+        prev = rare_best[lem].get(ch)
+        if prev is None or row.count > prev.count:
+            rare_best[lem][ch] = row
+    for lem, by_ch in rare_best.items():
+        if lem in within_cross_lemmas:
+            continue
+        if len(by_ch) < 2:
+            continue
+        chapters = sorted(by_ch.keys())
+        total = sum(r.count for r in by_ch.values())
         pick_ch = min(chapters, key=lambda c: (-by_ch[c].count, c))
         picked = by_ch[pick_ch]
         out.append(
@@ -759,6 +844,7 @@ def aggregate_cross_chapter(
                 later_surfaces=list(picked.later_surfaces),
             )
         )
+
     out.sort(key=lambda f: (-f.count, f.lemma))
     return out
 
@@ -769,8 +855,9 @@ def detect_thrash(
     threshold: float = DEFAULT_ZIPF_THRESHOLD,
     cap_per_chapter: int = _WITHIN_SCENE_CAP_PER_CHAPTER,
 ) -> list[ThrashFinding]:
-    """Book-level: within_scene per chapter + cross_chapter rollup."""
+    """Book-level: within_scene + chapter_rare + cross_chapter rollup."""
     within: list[ThrashFinding] = []
+    chapter_rare: list[ThrashFinding] = []
     for chapter_number, content in chapters:
         within.extend(
             detect_thrash_in_chapter(
@@ -780,8 +867,18 @@ def detect_thrash(
                 cap_per_chapter=cap_per_chapter,
             )
         )
-    cross = aggregate_cross_chapter(within)
-    return within + cross
+        chapter_rare.extend(
+            detect_chapter_rare(
+                content,
+                chapter_number=chapter_number,
+                threshold=threshold,
+                cap_per_chapter=cap_per_chapter,
+            )
+        )
+    within_keys = {(r.lemma, int(r.chapter or 0)) for r in within if r.kind == "within_scene"}
+    chapter_rare = [r for r in chapter_rare if (r.lemma, int(r.chapter or 0)) not in within_keys]
+    cross = aggregate_cross_chapter(within, chapter_rare=chapter_rare)
+    return within + chapter_rare + cross
 
 
 def finding_to_dict(finding: ThrashFinding) -> dict:
