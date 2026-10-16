@@ -702,6 +702,17 @@ def detect_thrash_in_chapter(
     return findings[: max(0, int(cap_per_chapter))]
 
 
+def detect_chapter_rare(
+    content: str,
+    *,
+    chapter_number: int,
+    threshold: float = DEFAULT_ZIPF_THRESHOLD,
+) -> list[ThrashFinding]:
+    """Chapter-scope Zipf rare (≥2 across chapter). S1 no-op wire — returns []."""
+    _ = (content, chapter_number, threshold)
+    return []
+
+
 def aggregate_cross_chapter(
     within: list[ThrashFinding],
 ) -> list[ThrashFinding]:
@@ -795,6 +806,7 @@ __all__ = [
     "DEFAULT_ZIPF_THRESHOLD",
     "ThrashFinding",
     "aggregate_cross_chapter",
+    "detect_chapter_rare",
     "detect_thrash",
     "detect_thrash_in_chapter",
     "ensure_zipf_loaded",

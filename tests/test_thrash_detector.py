@@ -93,3 +93,19 @@ def test_frontmatter_stripped() -> None:
     text = "---\ntitle: Ch1\n---\nThe firn cracked. She kicked the firn aside.\n"
     findings = detect_thrash_in_chapter(text, chapter_number=1)
     assert any(f.lemma == "firn" for f in findings)
+
+
+def test_s1_additive_stubs_return_empty() -> None:
+    """#10 S1: additive entrypoints are identity stubs (never NotImplemented)."""
+    from ghostreader.analyzers.common_word_thrash import (
+        detect_common_word_thrash,
+        detect_dialogue_tag_thrash,
+    )
+    from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
+    from ghostreader.analyzers.thrash_detector import detect_chapter_rare
+
+    text = "The firn cracked. She kicked the firn aside. Firn dust rose."
+    assert detect_chapter_rare(text, chapter_number=1) == []
+    assert detect_common_word_thrash(text, chapter_number=1) == []
+    assert detect_phrase_thrash(text, chapter_number=1) == []
+    assert detect_dialogue_tag_thrash(text, chapter_number=1) == []
