@@ -712,3 +712,111 @@ suppressions:
     advisory with no failure path.'
   addedBy: audit-triage
   addedAt: '2026-09-22'
+- findingId: f112777f6bc00da8
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (speculative): ghostreader/companion/pipeline.py:412 — Voice cards are loaded after ensure_facts awaits while chapters come from earlier discovery; TOCTOU only hurts if cards/manuscript change mid-run.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 590cf2fa9b066acf
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/pipeline.py:620 — update_progress_after_run at 626-632 already passes max_chapter_on_disk=disk_max into _clamp_last, so the cursor is clamped on the same run, not left above disk for the next run.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 7f24c0e4248a3ae2
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/report/register_export.py:38 — analyze_register_findings does scan all chapters then slice to cap, but that is CPU waste only; no wrong rows or dropped correctness on the default path.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 936eb6add0347145
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/progress.py:17 — pyproject.toml requires-python >=3.12, so datetime.UTC (3.11+) is supported; companion import does not break on the supported runtime.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 6edfd29cefa628fe
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/voice_card_constants.py:10 — VOICE_CARD_FINDINGS_CAP is enforced in detect_voice_card_issues (max_entries slice) and again in companion_voice_card_to_dicts; constants module is not required to enforce.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 3d444c7dc160f527
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/analyzers/thrash_detector.py:45 — COMMON_ENGLISH (uncommon thrash pre-filter) and READER_EXEMPT_WORDS (common-word skip) are complementary detectors by design, not conflicting exemptions for the same finding kind.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: b34a99afa3237205
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (speculative): ghostreader/companion/craft.py:196 — _companion_prose_typesafe_state does set register_data/voice_card_data to None, but no in-repo TypeSafe schema proof of rejection or literal ''None'' prompt rendering.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: df1869baa33eb17c
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (duplicate): ghostreader/report/thrash_export.py:88 — Same cap/priority starvation as c1aaf755373a65d9: high-count cross_chapter still loses to higher-priority kinds at equal severity under the shared sort.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 63fef5b698224ba7
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/voice_card_constants.py:1 — voice_card_detector imports and uses these cue/cap/title constants; wiring is live, so the unwired-detector claim is factually wrong.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 6629de461b730aeb
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/voice_card_constants.py:20 — _is_title_token exact-matches TITLE_SKIP_TOKENS on whole tokens; ''Drake''/''Draper'' are not skipped, so substring title corruption of those names does not occur.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: edc4dc6b688c83d2
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/companion/craft.py:160 — Register/voice dims default on with companion_*_watch, but prompts tell the model to judge from manuscript and treat heuristic rows as optional bias, not require rows.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: a099db8235ef2be2
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (duplicate): ghostreader/companion/progress.py:8 — Same datetime.UTC import claim as 936eb6add0347145; still false under requires-python >=3.12.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: cd7003da97f9c83f
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/register.py:25 — register_detector only constructs kinds unearned_jargon and initiation_budget; the else→unearned_jargon coercion is dead defensive code, not a leak of companion-only kinds into ...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 54694435d86a57f8
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (speculative): ghostreader/companion/craft.py:60 — Prompt forbids inventing a register_findings kind while machine register_findings are a separate brief field; no concrete path shown that merges them indistinguishably.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 3446c5092e066677
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (speculative): ghostreader/companion/discovery.py:48 — max_chapter_on_disk is a simple glob max with no lock; concurrent truncate during discover is a hypothetical race, not a default single-operator path.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 1a69a427c195b7a9
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/progress.py:88 — clamp_progress_to_disk is called from pipeline.py:278 before compute_order_warnings, and update_progress_after_run also clamps via _clamp_last.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: c2fd55096917617f
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (duplicate): ghostreader/companion/progress.py:155 — update_progress_after_run applies the same _clamp_last persist as clamp_progress_to_disk (finding 34bcc41bc96e3f9a); same cursor-lowering defect, not a separate concurrent-race ...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: ff82d2bb7641ed37
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/report/__init__.py:75 — thrash_findings is a documented additive ReportOutput/JSON field (ANALYZE_HOOK); exposing machine rows is the contract, not an accidental schema break.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 25fd2ce714e991d1
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/voice_card.py:13 — detect_voice_card_issues only emits card_mismatch and card_collapse; unknown-kind→card_mismatch coercion never relabels real detector rows on the product path.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 47b91dd59bfebed2
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/report/thrash_export.py:49 — Line 66 does int(ch.get("chapter_number") or 0), but product Chapter.chapter_number is always int via loaders/chapters_to_dicts, so nonnumeric-ID export loss is not on the defau...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 9d9fc99376096439
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/report/thrash_export.py:44 — Helper defaults enabled=True by documented caller contract; sole product caller cli.py:382-400 sets thrash_enabled = analyze_thrash_watch and depth in {standard, deep}, so quick...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: c02992607c4966fe
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (overstated): ghostreader/companion/craft.py:208 — str(f.get(''summary'', ...)) would render ''None'' if summary were null, but adapters/enrich keep summary as a non-null str on the TypeSafe path, so literal None is not a default-pr...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 697e1af94ac22ffa
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/companion/craft.py:303 — pipeline skips craft under continuity_only and passes include_* from companion_*_watch; stock callers do not silently inherit extra dims against those flags.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 6232919caee8db94
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (bad-anchor): ghostreader/companion/craft.py:300 — craft.py:300-306 is only run_companion_craft''s parameter list; the body awaits one typesafe/LLM path with no shared store, lock, retry, or late-result budget to bound.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 9f410d188d4215cc
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (false-positive): ghostreader/cli.py:178 — ReportOutput already declares register_findings and thrash_findings and from_final_report accepts them; cli.py:391-400 construction cannot TypeError on those fields.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 88ce4c4504401e70
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (bad-anchor): ghostreader/analyzers/thrash_detector.py:247 — thrash_detector.py:247 is the COMMON_ENGLISH entry ''look'', not Zipf omission; missing-lemma→not-uncommon lives at is_uncommon (KD-5) around lines 589-599.'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'
+- findingId: 5a03c3117f79bede
+  reason: 'audit-triage 2026-10-25-ghostreader bucket3 (speculative): ghostreader/analyzers/register_detector.py:289 — Line 289 only sets initiation_budget span_end_word; _opening_window_text whitespace find reconstruction did not show a default-path truncation that leaves in-window terms unexam...'
+  addedBy: audit-triage
+  addedAt: '2026-10-25'

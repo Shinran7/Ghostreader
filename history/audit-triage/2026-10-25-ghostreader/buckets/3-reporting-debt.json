@@ -1,0 +1,278 @@
+{
+  "bucket": "3-reporting-debt",
+  "count": 27,
+  "auditCommit": "1608d265",
+  "triageDir": ".tmp/audit-triage/2026-10-25-ghostreader",
+  "findings": [
+    {
+      "findingId": "f112777f6bc00da8",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 412,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Voice cards are loaded after ensure_facts awaits while chapters come from earlier discovery; TOCTOU only hurts if cards/manuscript change mid-run.",
+      "message": "ghostreader/companion/pipeline.py:412-415 \u2014 Inconsistent filesystem snapshot. Authors are hurt: voice-card rows can compare manuscript text with cards reread after awaits, attributing findings to a card revision that did not match the manuscript snapshot."
+    },
+    {
+      "findingId": "590cf2fa9b066acf",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 620,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "update_progress_after_run at 626-632 already passes max_chapter_on_disk=disk_max into _clamp_last, so the cursor is clamped on the same run, not left above disk for the next run.",
+      "message": "ghostreader/companion/pipeline.py:620-630 \u2014 Progress cursor exceeds disk state. Companion operators are hurt: the cursor can advance beyond chapters on disk, then be clamped back on the next run, causing repeated processing and spurious progress warnings."
+    },
+    {
+      "findingId": "7f24c0e4248a3ae2",
+      "severity": "P1",
+      "filePath": "ghostreader/report/register_export.py",
+      "line": 38,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "analyze_register_findings does scan all chapters then slice to cap, but that is CPU waste only; no wrong rows or dropped correctness on the default path.",
+      "message": "ghostreader/report/register_export.py:38-48 \u2014 Unbounded work before cap. Analyze users are hurt: all chapters are detected, materialized, and sorted even though the caller keeps at most 15 rows, wasting CPU on discarded findings."
+    },
+    {
+      "findingId": "936eb6add0347145",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 17,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "pyproject.toml requires-python >=3.12, so datetime.UTC (3.11+) is supported; companion import does not break on the supported runtime.",
+      "message": "ghostreader/companion/progress.py:17 \u2014 Importing datetime.UTC breaks companion startup on Python versions below 3.11, instead of retaining the previously compatible UTC form."
+    },
+    {
+      "findingId": "6edfd29cefa628fe",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/voice_card_constants.py",
+      "line": 10,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "VOICE_CARD_FINDINGS_CAP is enforced in detect_voice_card_issues (max_entries slice) and again in companion_voice_card_to_dicts; constants module is not required to enforce.",
+      "message": "ghostreader/companion/voice_card_constants.py:10\u201311 \u2014 The declared finding cap has no enforcement point here. Users may see different machine and companion finding counts, and per-chapter row budgets may be exceeded."
+    },
+    {
+      "findingId": "3d444c7dc160f527",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/thrash_detector.py",
+      "line": 45,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "COMMON_ENGLISH (uncommon thrash pre-filter) and READER_EXEMPT_WORDS (common-word skip) are complementary detectors by design, not conflicting exemptions for the same finding kind.",
+      "message": "ghostreader/analyzers/thrash_detector.py:45 \u2014 Conflicting word exemptions. Authors can see the same word treated as harmless by one thrash detector and reported by another, making findings inconsistent."
+    },
+    {
+      "findingId": "b34a99afa3237205",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 196,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "_companion_prose_typesafe_state does set register_data/voice_card_data to None, but no in-repo TypeSafe schema proof of rejection or literal 'None' prompt rendering.",
+      "message": "ghostreader/companion/craft.py:122\u2013128 \u2014 State schema compatibility. Typesafe users may have requests rejected if the client disallows the added keys or null values, or receive literal \u201cNone\u201d as prompt context."
+    },
+    {
+      "findingId": "df1869baa33eb17c",
+      "severity": "P1",
+      "filePath": "ghostreader/report/thrash_export.py",
+      "line": 88,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "Same cap/priority starvation as c1aaf755373a65d9: high-count cross_chapter still loses to higher-priority kinds at equal severity under the shared sort.",
+      "message": "ghostreader/report/thrash_export.py:88 \u2014 Severe cross-chapter misses. Authors searching for repeated invented nouns can receive no cross_chapter row for high-count lemmas whose within-scene rank is low."
+    },
+    {
+      "findingId": "63fef5b698224ba7",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/voice_card_constants.py",
+      "line": 1,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "voice_card_detector imports and uses these cue/cap/title constants; wiring is live, so the unwired-detector claim is factually wrong.",
+      "message": "ghostreader/companion/voice_card_constants.py:1\u201398 \u2014 Constants without a wired detector. Users may be prompted for voice-card judgments without supplied cards or heuristic rows, leading to invented voice-mismatch concerns."
+    },
+    {
+      "findingId": "6629de461b730aeb",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/voice_card_constants.py",
+      "line": 20,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "_is_title_token exact-matches TITLE_SKIP_TOKENS on whole tokens; 'Drake'/'Draper' are not skipped, so substring title corruption of those names does not occur.",
+      "message": "ghostreader/companion/voice_card_constants.py:20\u201340 \u2014 Substring title matching can corrupt names such as \u201cDrake\u201d or \u201cDraper\u201d; users may lose or misattribute dialogue for those characters."
+    },
+    {
+      "findingId": "edc4dc6b688c83d2",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 160,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Register/voice dims default on with companion_*_watch, but prompts tell the model to judge from manuscript and treat heuristic rows as optional bias, not require rows.",
+      "message": "ghostreader/companion/craft.py:160\u2013168 \u2014 Unprompted register judgments. Users without register or voice-card data may receive fabricated craft findings because these dimensions are enabled by default and the prompt asks for judgments without supporting rows."
+    },
+    {
+      "findingId": "a099db8235ef2be2",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 8,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "Same datetime.UTC import claim as 936eb6add0347145; still false under requires-python >=3.12.",
+      "message": "ghostreader/companion/progress.py:8 \u2014 Unsupported datetime import. Users on Python 3.10 or earlier cannot import the companion package because datetime.UTC is unavailable."
+    },
+    {
+      "findingId": "cd7003da97f9c83f",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/register.py",
+      "line": 25,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "register_detector only constructs kinds unearned_jargon and initiation_budget; the else\u2192unearned_jargon coercion is dead defensive code, not a leak of companion-only kinds into analyze.",
+      "message": "ghostreader/companion/register.py:25 \u2014 Kind coercion. Consumers of register findings are hurt: unsupported kinds are exported as `unearned_jargon`, so companion-only rows can leak into analyze exports mislabeled as jargon."
+    },
+    {
+      "findingId": "54694435d86a57f8",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 60,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Prompt forbids inventing a register_findings kind while machine register_findings are a separate brief field; no concrete path shown that merges them indistinguishably.",
+      "message": "ghostreader/companion/craft.py:60\u201380 \u2014 The prompt forbids register finding kinds while the report exposes machine register rows. Users may receive model-invented register findings indistinguishable from heuristic results."
+    },
+    {
+      "findingId": "3446c5092e066677",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/discovery.py",
+      "line": 48,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "max_chapter_on_disk is a simple glob max with no lock; concurrent truncate during discover is a hypothetical race, not a default single-operator path.",
+      "message": "ghostreader/companion/discovery.py:48\u201350 \u2014 The disk maximum can be stale during a concurrent truncate; callers may unnecessarily re-analyze the newest chapter and duplicate findings."
+    },
+    {
+      "findingId": "1a69a427c195b7a9",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 88,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "clamp_progress_to_disk is called from pipeline.py:278 before compute_order_warnings, and update_progress_after_run also clamps via _clamp_last.",
+      "message": "ghostreader/companion/progress.py:88\u2013104 \u2014 The new clamp is not called by the shown callers. After a story is restored to an earlier chapter, users can retain an overstated cursor and receive false regression or skip warnings."
+    },
+    {
+      "findingId": "c2fd55096917617f",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 155,
+      "verdict": "duplicate",
+      "bucket": "reporting",
+      "evidence": "update_progress_after_run applies the same _clamp_last persist as clamp_progress_to_disk (finding 34bcc41bc96e3f9a); same cursor-lowering defect, not a separate concurrent-race bug in pipeline's snapshotted disk_max.",
+      "message": "ghostreader/companion/progress.py:155\u2013180 \u2014 A concurrent truncate can lower persisted progress after a run, causing chapters 5\u20139 to be re-analyzed and duplicate findings to be emitted."
+    },
+    {
+      "findingId": "ff82d2bb7641ed37",
+      "severity": "P1",
+      "filePath": "ghostreader/report/__init__.py",
+      "line": 75,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "thrash_findings is a documented additive ReportOutput/JSON field (ANALYZE_HOOK); exposing machine rows is the contract, not an accidental schema break.",
+      "message": "ghostreader/report/__init__.py:75 \u2014 Public schema exposure. End users or strict report consumers may receive the machine-only thrash rows or reject the payload because of the added field."
+    },
+    {
+      "findingId": "25fd2ce714e991d1",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/voice_card.py",
+      "line": 13,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "detect_voice_card_issues only emits card_mismatch and card_collapse; unknown-kind\u2192card_mismatch coercion never relabels real detector rows on the product path.",
+      "message": "ghostreader/companion/voice_card.py:31-32 \u2014 Unknown kind coercion. Companion brief consumers are hurt: unsupported detector rows pass the kind filter as `card_mismatch`, so users receive rows mislabeled as a mismatch."
+    },
+    {
+      "findingId": "47b91dd59bfebed2",
+      "severity": "P2",
+      "filePath": "ghostreader/report/thrash_export.py",
+      "line": 49,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Line 66 does int(ch.get(\"chapter_number\") or 0), but product Chapter.chapter_number is always int via loaders/chapters_to_dicts, so nonnumeric-ID export loss is not on the default path.",
+      "message": "ghostreader/report/thrash_export.py:49 \u2014 Invalid chapter identifier handling. Users supplying otherwise usable chapter content with a nonnumeric identifier can lose the entire export to a conversion error."
+    },
+    {
+      "findingId": "9d9fc99376096439",
+      "severity": "P2",
+      "filePath": "ghostreader/report/thrash_export.py",
+      "line": 44,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "Helper defaults enabled=True by documented caller contract; sole product caller cli.py:382-400 sets thrash_enabled = analyze_thrash_watch and depth in {standard, deep}, so quick depth does not run scans.",
+      "message": "ghostreader/report/thrash_export.py:44 \u2014 Missing depth/watch enforcement. Users on quick depth can incur all detector scans if the caller does not gate the default-enabled export, despite the documented opt-in behavior."
+    },
+    {
+      "findingId": "c02992607c4966fe",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 208,
+      "verdict": "overstated",
+      "bucket": "reporting",
+      "evidence": "str(f.get('summary', ...)) would render 'None' if summary were null, but adapters/enrich keep summary as a non-null str on the TypeSafe path, so literal None is not a default-product failure.",
+      "message": "ghostreader/companion/craft.py:274 \u2014 Null note rendering. Users may see the literal text \u201cNone\u201d when an enrichment summary is null, replacing the existing dimension note."
+    },
+    {
+      "findingId": "697e1af94ac22ffa",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 303,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "pipeline skips craft under continuity_only and passes include_* from companion_*_watch; stock callers do not silently inherit extra dims against those flags.",
+      "message": "ghostreader/companion/craft.py:303\u2013306 \u2014 Opt-out defaults. Callers expecting continuity-only or the stock five-dimension set may silently receive four extra dimensions, changing ratings and judgment counts."
+    },
+    {
+      "findingId": "6232919caee8db94",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/craft.py",
+      "line": 300,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "craft.py:300-306 is only run_companion_craft's parameter list; the body awaits one typesafe/LLM path with no shared store, lock, retry, or late-result budget to bound.",
+      "message": "ghostreader/companion/craft.py:300\u2013306 \u2014 No shared result store, lock, retry, or budget is shown to bound late results; callers have no demonstrated protection against work finishing after they have moved on."
+    },
+    {
+      "findingId": "9f410d188d4215cc",
+      "severity": "P2",
+      "filePath": "ghostreader/cli.py",
+      "line": 178,
+      "verdict": "false-positive",
+      "bucket": "reporting",
+      "evidence": "ReportOutput already declares register_findings and thrash_findings and from_final_report accepts them; cli.py:391-400 construction cannot TypeError on those fields.",
+      "message": "ghostreader/cli.py:391-400 \u2014 Report model incompatibility. Analyze users are hurt if `ReportOutput` does not accept or expose these fields: report construction or JSON export fails with a `TypeError` or `AttributeError`."
+    },
+    {
+      "findingId": "88ce4c4504401e70",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/thrash_detector.py",
+      "line": 247,
+      "verdict": "bad-anchor",
+      "bucket": "reporting",
+      "evidence": "thrash_detector.py:247 is the COMMON_ENGLISH entry 'look', not Zipf omission; missing-lemma\u2192not-uncommon lives at is_uncommon (KD-5) around lines 589-599.",
+      "message": "ghostreader/analyzers/thrash_detector.py:247 \u2014 Omitted Zipf entries are treated as common. Authors can miss uncommon-word thrash findings for words absent from the vendored score subset."
+    },
+    {
+      "findingId": "5a03c3117f79bede",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/register_detector.py",
+      "line": 289,
+      "verdict": "speculative",
+      "bucket": "reporting",
+      "evidence": "Line 289 only sets initiation_budget span_end_word; _opening_window_text whitespace find reconstruction did not show a default-path truncation that leaves in-window terms unexamined.",
+      "message": "ghostreader/analyzers/register_detector.py:289 \u2014 Token-boundary miscount. Users can receive an initiation-budget count and excerpt that disagree with the first-N-words window, causing terms after the actual truncation point to go unexamined."
+    }
+  ]
+}

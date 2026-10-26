@@ -1,0 +1,78 @@
+{
+  "bucket": "1-confirmed-bugs-to-fix",
+  "count": 7,
+  "auditCommit": "1608d265",
+  "triageDir": ".tmp/audit-triage/2026-10-25-ghostreader",
+  "findings": [
+    {
+      "findingId": "3477dc8e4a3d8eb9",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/voice_card_detector.py",
+      "line": 117,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "attribute_quotes uses bare `name_lower in context` substring match; reproduced Ann matching inside 'annual' and claiming the quote.",
+      "message": "ghostreader/analyzers/voice_card_detector.py:117 \u2014 Substring speaker attribution. Authors are hurt: a name embedded in unrelated text can claim a quote, producing a false mismatch for the wrong character and omitting the real speaker."
+    },
+    {
+      "findingId": "c1aaf755373a65d9",
+      "severity": "P1",
+      "filePath": "ghostreader/report/thrash_export.py",
+      "line": 75,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "_KIND_PRIORITY ranks cross_chapter last (5); sort is severity then kind_rank then -count, so a 40-row cap can be filled by per-chapter kinds and emit zero cross_chapter rows.",
+      "message": "ghostreader/report/thrash_export.py:75 \u2014 Cross-chapter finding starvation. Users can receive no cross_chapter rows when the 40-row cap is filled by higher-priority per-chapter findings."
+    },
+    {
+      "findingId": "a09a2599189d27bc",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/register_detector.py",
+      "line": 150,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "_is_taught only requires the term and any _TEACH_IN_RE cue somewhere in the \u00b12-sentence neighborhood, not that the cue glosses that term, so unrelated parentheticals can mark coined terms taught.",
+      "message": "ghostreader/analyzers/register_detector.py:150 \u2014 Term-to-gloss attribution is too broad. Users relying on jargon-earn findings can have unrelated nearby explanations mark a coined term as taught, undercounting unexplained terms and hiding a budget overrun."
+    },
+    {
+      "findingId": "0639c457197fe086",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/thrash_detector.py",
+      "line": 860,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "aggregate_cross_chapter never mixes within_scene in ch1 with chapter_rare in ch2; after within_keys drops ch1 rare, orphan rollup needs \u22652 rare chapters, so cross_chapter is omitted (reproduced).",
+      "message": "ghostreader/analyzers/thrash_detector.py:860 \u2014 Cross-chapter evidence loss. Authors relying on cross_chapter rows lose chapter-2 evidence when a lemma has a within_scene row in chapter 1 but only repeats across scenes in chapter 2."
+    },
+    {
+      "findingId": "1368d196c238516a",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/phrase_thrash.py",
+      "line": 190,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "_candidate_ngrams allows gap<=2, so 'dark. Stone' (gap 2) counts as phrase 'dark stone'; detect_phrase_thrash reproduced count=3 on cross-sentence repeats.",
+      "message": "ghostreader/analyzers/phrase_thrash.py:190-216 \u2014 Sentence-boundary phrase false positives. Writers can receive phrase-thrash findings for sequences such as \u201cdark. Stone\u201d that never occur as a contiguous phrase."
+    },
+    {
+      "findingId": "37ade2643281c8de",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/voice_card_detector.py",
+      "line": 101,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "attribute_quotes does name_to_slug[alias]=slug with no collision check, so a later cast member sharing a given-name alias overwrites the speaker map.",
+      "message": "ghostreader/analyzers/voice_card_detector.py:101-104 \u2014 Alias collision. Authors are hurt: shared given-name aliases overwrite the speaker map, misattributing one character\u2019s speech and potentially hiding their mismatch."
+    },
+    {
+      "findingId": "3faae60a8f76ee05",
+      "severity": "P2",
+      "filePath": "ghostreader/analyzers/phrase_thrash.py",
+      "line": 174,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "_norm_token strips one trailing 's' only, so fox\u2192fox and foxes\u2192foxe; 'silver fox' vs 'silver foxes' split across keys and miss fuse.",
+      "message": "ghostreader/analyzers/phrase_thrash.py:174 \u2014 Plural phrase keys can diverge. Writers repeating \u201csilver fox\u201d and \u201csilver foxes\u201d can have the repetition split across keys, so the phrase-thrash finding is missed."
+    }
+  ]
+}

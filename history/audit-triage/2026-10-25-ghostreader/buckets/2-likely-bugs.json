@@ -1,0 +1,108 @@
+{
+  "bucket": "2-likely-bugs",
+  "count": 10,
+  "auditCommit": "1608d265",
+  "triageDir": ".tmp/audit-triage/2026-10-25-ghostreader",
+  "findings": [
+    {
+      "findingId": "3b3918434702a159",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 277,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "pipeline load/clamp/save_progress has no file locking; concurrent companion runs can overwrite the shared progress.json cursor.",
+      "message": "ghostreader/companion/pipeline.py:277-285 \u2014 Concurrent progress race. Operators running companion concurrently are hurt: runs can overwrite the shared progress cursor, causing chapters to be reprocessed or progress warnings to be missed."
+    },
+    {
+      "findingId": "214787ccf389a3a3",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 175,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "_unstructured_consistency_finding uses severity=neutral and summary 'Consistency check completed (unstructured response)', so a non-dict JSON array is surfaced as a benign completed finding rather than a parse failure.",
+      "message": "ghostreader/agents/consistency_checker.py:175 \u2014 Neutral fallback misclassification. Users can see a benign-looking \u201ccompleted\u201d finding when a non-empty response contains no usable dict items, obscuring that the consistency result was unstructured."
+    },
+    {
+      "findingId": "a32e6b7cefd7f80e",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/common_word_thrash.py",
+      "line": 275,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "thrash_export.analyze_thrash_findings calls detect_common_word_thrash without load_bearing, so LOAD_BEARING_* thresholds never apply on the analyze product path.",
+      "message": "ghostreader/analyzers/common_word_thrash.py:275 \u2014 Common-word coverage and threshold mismatch. Authors can miss carpet findings for frequent body words, and load-bearing words are judged with the ordinary threshold because the export caller supplies no load-bearing set."
+    },
+    {
+      "findingId": "f76cb8510581a0d5",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/voice_card_detector.py",
+      "line": 300,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "_QUOTE_RE + attribute_quotes treat any same-line quotes near a name as dialogue; reproduced narration 'dead silence' attributed to Mara (batch line 300 is a weak anchor).",
+      "message": "ghostreader/analyzers/voice_card_detector.py:39 \u2014 Narration treated as dialogue. Authors are hurt: quoted phrases in narration enter speaker metrics and can create false mismatch or collapse findings."
+    },
+    {
+      "findingId": "44c033ea41870e36",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/voice_card_detector.py",
+      "line": 39,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "attribute_quotes scans per line with _QUOTE_RE requiring open/close on one line; reproduced multiline quote spanning lines yields no attribution (cited line 39 is VoiceCard import).",
+      "message": "ghostreader/analyzers/voice_card_detector.py:39 \u2014 Multiline dialogue omission. Authors are hurt: quoted speech spanning manuscript lines is not matched, reducing speaker metrics and potentially suppressing findings."
+    },
+    {
+      "findingId": "f00105574b5aeb07",
+      "severity": "P1",
+      "filePath": "ghostreader/cli.py",
+      "line": 381,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "cli.py gates register/thrash with depth then analyze_*_findings(..., enabled=False) returns []; JSON still emits empty watcher arrays with no disabled marker.",
+      "message": "ghostreader/cli.py:381-382 \u2014 Silent watcher disablement. Analyze users are hurt: when the depth gate is false, JSON still contains empty watcher arrays, indistinguishable from detectors that ran and found nothing."
+    },
+    {
+      "findingId": "34bcc41bc96e3f9a",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 85,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "clamp_progress_to_disk/_clamp_last permanently min() the saved cursor to max chapter-*.md; pipeline always runs this, so a partial/renamed chapter dir lowers high-water and reprocesses chapters when files return.",
+      "message": "ghostreader/companion/progress.py:20\u201330 \u2014 Disk-based cursor clamp. Users with partial, renamed, or relocated chapter files can have their saved high-water mark lowered, causing completed chapters to be reprocessed when files return."
+    },
+    {
+      "findingId": "866a6c8f8bb5dfd7",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/progress.py",
+      "line": 130,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "compute_order_warnings clamps last via _clamp_last before regression checks, so a partial disk max can hide rewrite warnings against the true saved high-water mark.",
+      "message": "ghostreader/companion/progress.py:130\u2013145 \u2014 Cursor clamping can suppress regression warnings. Users pointed at a partial chapter directory may not be warned that an earlier chapter changed relative to their saved high-water mark."
+    },
+    {
+      "findingId": "8b0795ad9255147f",
+      "severity": "P1",
+      "filePath": "ghostreader/analyzers/voice_card_detector.py",
+      "line": 294,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "cards_eligible_for_contrast only casefold+strip; 'Hello!' vs 'Hello' and 'Terse, clipped.' vs 'Terse clipped' remain eligible and can false-trigger card_collapse.",
+      "message": "ghostreader/analyzers/voice_card_detector.py:119 \u2014 Punctuation-only card contrast. Authors are hurt: cards differing only in punctuation are treated as distinct, so speakers with effectively identical cards can receive a false `card_collapse` finding."
+    },
+    {
+      "findingId": "cf264539d189fad9",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/voice_cards.py",
+      "line": 130,
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "_load_one_card returns None on unreadable/parse failures with only _LOG.debug; load_voice_cards silently continues, and pipeline warns only when the whole set is empty\u2014partial skips hide missed character comparisons.",
+      "message": "ghostreader/companion/voice_cards.py:130-135 \u2014 Silent partial card set. Authors are hurt: unreadable or invalid cards are skipped without a user-visible diagnostic, so comparisons involving those characters are missed."
+    }
+  ]
+}
