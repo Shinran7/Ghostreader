@@ -1,0 +1,7 @@
+{
+  "slug": "fixture-sermon-orin",
+  "name": "Orin Fixture",
+  "dialogue_voice": "Measured sermon cadence; liturgy before every answer; oratorical mid-length clauses. No jokes.",
+  "voice_wildcards": [],
+  "weight": "major"
+}

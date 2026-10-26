@@ -1,0 +1,7 @@
+{
+  "slug": "fixture-terse-warden",
+  "name": "Warden Fixture",
+  "dialogue_voice": "Terse, clipped oaths; laconic curt replies; short clauses only.",
+  "voice_wildcards": [],
+  "weight": "major"
+}

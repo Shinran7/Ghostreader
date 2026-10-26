@@ -1,0 +1,5 @@
+slug: fixture-yaml-speaker
+name: Yaml Fixture
+dialogue_voice: Terse clipped short laconic curt replies.
+voice_wildcards: []
+weight: supporting

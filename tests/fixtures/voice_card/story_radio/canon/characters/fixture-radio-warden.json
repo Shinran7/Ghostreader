@@ -1,0 +1,7 @@
+{
+  "slug": "fixture-radio-warden",
+  "name": "Radio Fixture",
+  "dialogue_voice": "Monotone radio protocol voice; flat clipped dispatch only.",
+  "voice_wildcards": [],
+  "weight": "major"
+}
