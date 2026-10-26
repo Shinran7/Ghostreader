@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.2)
+# Companion JSON hook (0.2.3)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.2`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.3`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.2`**). Independent of analyze JSON (`0.2.1`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.3`**). Independent of analyze JSON (`0.2.1`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -31,16 +31,17 @@ side effect beyond the current contract.
 | Band | Flips `verdict` to `watch`? | Exit `2` (`--fail-on-continuity`)? |
 | --- | --- | --- |
 | Gate continuity (`character` / `timeline` / `plot_holes`) | Yes | Yes (continuity concerns only) |
-| Craft (incl. soft `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism`) | Yes | No |
+| Craft (incl. soft `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism` / optional `prose.voice_card`) | Yes | No |
 | Info continuity (`foreshadowing` / `unresolved`) | **Never** alone | No |
 | Light narrative (`pacing` / `character_arcs`) | Only when narrative is **on** and the finding is **grounded to chapter N** | No |
 | Machine `register_findings` alone | **No** | No |
+| Machine `voice_card_findings` alone | **No** | No |
 
-`info` never flips ship by itself. Soft craft can. Narrative flips only when enabled and grounded. Algorithmic `register_findings` never flip `watch` or exit `2` by themselves.
+`info` never flips ship by itself. Soft craft can. Narrative flips only when enabled and grounded. Algorithmic `register_findings` and `voice_card_findings` never flip `watch` or exit `2` by themselves.
 
-`verdict_drivers` lists which bands caused `watch`: `"continuity"`, `"craft"`, `"narrative"`. Prefer this (and the finding arrays) over guessing from `verdict` alone. Soft register concerns stay under **`"craft"`** (no `"register"` driver in v1).
+`verdict_drivers` lists which bands caused `watch`: `"continuity"`, `"craft"`, `"narrative"`. Prefer this (and the finding arrays) over guessing from `verdict` alone. Soft register / voice-card concerns stay under **`"craft"`** (no `"register"` or `"voice_card"` driver in v1).
 
-Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter repetition for avoid/governor promotion lives in **`repetition_findings`** (algorithmic; empty list OK). Machine register / initiation rows live in **`register_findings`** (algorithmic; empty list OK; **JSON-primary** — markdown/terminal may omit machine rows in v1).
+Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter repetition for avoid/governor promotion lives in **`repetition_findings`** (algorithmic; empty list OK). Machine register / initiation rows live in **`register_findings`** (algorithmic; empty list OK; **JSON-primary** — markdown/terminal may omit machine rows in v1). Machine voice-vs-card rows live in **`voice_card_findings`** (algorithmic; empty list OK; **JSON-primary**).
 
 ## Config knobs
 
@@ -51,6 +52,7 @@ Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter re
 | `companion_info_dims` | `true` | Ask/store foreshadowing + unresolved (watch-only) |
 | `companion_light_narrative` | **`true`** | Pacing + character arcs; set `false` to roll back |
 | `companion_register_watch` | **`true`** | Heuristic `register_findings` + soft register dims; `false` → `[]` + stock five prose dims |
+| `companion_voice_card_watch` | **`true`** | Heuristic `voice_card_findings` + soft `prose.voice_card` (when wired); `false` → `[]` + no soft voice-card dim |
 
 Steady state is narrative **on**. Kill switch remains for rollback.
 
@@ -83,7 +85,7 @@ Always present (empty lists until filled):
 
 ### Since 0.2.2
 
-- `register_findings` — algorithmic opening-window register rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/register is skipped (`--continuity-only` / kill switch) or nothing fired. Kinds are only `unearned_jargon` \| `initiation_budget` — **no** `missing_human_door` or Earth-anachronism machine rows (human door is soft `prose.human_door`; Earth timeline/culture is soft `prose.earth_anachronism` craft only). Soft craft dims `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism` may also appear under `craft_findings` / `craft_ratings`. Contract stays **0.2.2** (no new register kind; no HOOK bump for this soft dim).
+- `register_findings` — algorithmic opening-window register rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/register is skipped (`--continuity-only` / kill switch) or nothing fired. Kinds are only `unearned_jargon` \| `initiation_budget` — **no** `missing_human_door` or Earth-anachronism machine rows (human door is soft `prose.human_door`; Earth timeline/culture is soft `prose.earth_anachronism` craft only). Soft craft dims `prose.human_door` / `prose.jargon_earn` / `prose.earth_anachronism` may also appear under `craft_findings` / `craft_ratings`. Soft-only dims do **not** bump the contract by themselves.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -100,6 +102,24 @@ Always present (empty lists until filled):
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
 
+### Since 0.2.3
+
+- `voice_card_findings` — algorithmic book-so-far voice-vs-card rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/voice-card watch is skipped (`--continuity-only` / kill switch), cards are missing, speakers are below `min_lines`, or nothing fired. Kinds are only `card_mismatch` \| `card_collapse`. Machine rows **alone** never flip `watch` or exit `2`. Soft `prose.voice_card` (when enabled) stays under craft / `"craft"` drivers.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `kind` | `card_mismatch` \| `card_collapse` | Detector bucket |
+| `severity` | `high` \| `moderate` \| `low` | Machine bands |
+| `summary` | string | One-line human summary |
+| `speaker` | string | Primary **card slug** (collapse: slug_a) |
+| `speaker_b` | string \| null | Collapse partner **card slug**; null on mismatch |
+| `quote` | string \| null | One verbatim attributed span |
+| `card_excerpt` | string \| null | Truncated `dialogue_voice` (≤120 chars) |
+| `metrics` | object \| null | `{line_count, avg_words, contraction_rate, fragment_rate, interruption_rate}` when attached |
+| `chapters` | int[] | Chapters where this speaker’s quotes were found |
+| `chapter` | int | Focus chapter N (brief `chapter_number`) |
+| `normalized_key` | string \| null | e.g. `card_mismatch:slug` or `card_collapse:slug_a\|slug_b` (pair **sorted**) |
+
 ### Additive (no contract bump)
 
 - `package_version` — install version string. Same meaning as on analyze JSON.
@@ -112,7 +132,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 
 ```json
 {
-  "ghostreader_version": "0.2.2",
+  "ghostreader_version": "0.2.3",
   "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
@@ -156,6 +176,7 @@ Shape Autonomicon should accept (unknown keys ignored):
     }
   ],
   "register_findings": [],
+  "voice_card_findings": [],
   "warnings": [],
   "ungrounded_count": 0,
   "typesafe_enabled": true
@@ -170,11 +191,12 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.2`; additive keys exist including `repetition_findings`, `register_findings`, and `package_version`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.3`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.
 7. Confirm cross-chapter phrase rows in `repetition_findings` carry `kind`, `scope`, `chapters`, `focus_count` (empty list is fine).
 8. Confirm `register_findings` is always present (empty OK) and kinds are only `unearned_jargon` / `initiation_budget`.
+9. Confirm `voice_card_findings` is always present (empty OK) and kinds are only `card_mismatch` / `card_collapse`; machine rows alone do not flip `watch`.
 
 Repeat a short A/B with TypeSafe on and off if both paths matter for the hook.

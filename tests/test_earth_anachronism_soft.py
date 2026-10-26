@@ -1,4 +1,8 @@
-"""eff33fcf T2: GhostReader soft prose.earth_anachronism; HOOK 0.2.2 kinds unchanged."""
+"""eff33fcf T2: GhostReader soft prose.earth_anachronism; register kinds unchanged.
+
+Contract is now 0.2.3 for additive voice_card_findings (#11). Soft Earth
+anachronism still does not add a register_findings kind or its own bump.
+"""
 
 from __future__ import annotations
 
@@ -15,14 +19,15 @@ def test_soft_dim_emittable_and_hook_version() -> None:
     assert "prose.earth_anachronism" in COMPANION_REGISTER_DIMENSIONS
     bank = companion_prose_questions()
     assert "prose.earth_anachronism" in bank
-    assert GHOSTREADER_VERSION == "0.2.2"
+    assert GHOSTREADER_VERSION == "0.2.3"
 
 
 def test_register_kinds_unchanged_in_hook() -> None:
     hook = (
         Path(__file__).resolve().parents[1] / "ghostreader" / "companion" / "HOOK.md"
     ).read_text(encoding="utf-8")
-    assert "0.2.2" in hook
+    assert "0.2.3" in hook
+    assert "0.2.2" in hook  # historical Since 0.2.2 register section remains
     assert "unearned_jargon" in hook
     assert "initiation_budget" in hook
     assert "prose.earth_anachronism" in hook

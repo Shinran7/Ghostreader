@@ -97,6 +97,7 @@ class TestJsonPayload:
             "verdict_drivers",
             "repetition_findings",
             "register_findings",
+            "voice_card_findings",
             "warnings",
             "ungrounded_count",
         ):
@@ -114,8 +115,9 @@ class TestJsonPayload:
         assert payload["verdict_drivers"] == []
         assert payload["repetition_findings"] == []
         assert payload["register_findings"] == []
-        assert GHOSTREADER_VERSION == "0.2.2"
-        assert payload["ghostreader_version"] == "0.2.2"
+        assert payload["voice_card_findings"] == []
+        assert GHOSTREADER_VERSION == "0.2.3"
+        assert payload["ghostreader_version"] == "0.2.3"
         assert payload["package_version"] == pkg_ver
 
         buf = io.StringIO()
@@ -123,9 +125,10 @@ class TestJsonPayload:
         assert buf.getvalue() == text + "\n"
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
-        assert parsed["ghostreader_version"] == "0.2.2"
+        assert parsed["ghostreader_version"] == "0.2.3"
         assert parsed["package_version"] == pkg_ver
         assert parsed["register_findings"] == []
+        assert parsed["voice_card_findings"] == []
 
     def test_craft_window_chapters_in_payload(self) -> None:
         brief = CompanionBrief(
@@ -143,9 +146,10 @@ class TestJsonPayload:
         )
         payload = brief_to_payload(brief)
         assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
-        assert payload["ghostreader_version"] == "0.2.2"
+        assert payload["ghostreader_version"] == "0.2.3"
         assert payload["repetition_findings"] == []
         assert payload["register_findings"] == []
+        assert payload["voice_card_findings"] == []
         from ghostreader import __version__ as pkg_ver
 
         assert payload["package_version"] == pkg_ver
@@ -176,9 +180,10 @@ class TestJsonPayload:
             repetition_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.2"
+        assert payload["ghostreader_version"] == "0.2.3"
         assert payload["repetition_findings"] == [row]
         assert payload["register_findings"] == []
+        assert payload["voice_card_findings"] == []
 
     def test_register_findings_in_payload(self) -> None:
         row = {
@@ -208,13 +213,87 @@ class TestJsonPayload:
             register_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.2"
+        assert payload["ghostreader_version"] == "0.2.3"
         assert payload["register_findings"] == [row]
+        assert payload["voice_card_findings"] == []
         assert all(
             r["kind"] in {"unearned_jargon", "initiation_budget"}
             for r in payload["register_findings"]
         )
         assert "missing_human_door" not in {r["kind"] for r in payload["register_findings"]}
+
+    def test_voice_card_findings_in_payload(self) -> None:
+        row = {
+            "kind": "card_mismatch",
+            "severity": "moderate",
+            "summary": "fixture-terse-warden attributed speech runs long vs card cue.",
+            "speaker": "fixture-terse-warden",
+            "speaker_b": None,
+            "quote": "I would prefer that we reconsider the entire arrangement before dawn.",
+            "card_excerpt": "Terse, clipped oaths; few contractions; short clauses.",
+            "metrics": {
+                "line_count": 9.0,
+                "avg_words": 14.2,
+                "contraction_rate": 0.0,
+                "fragment_rate": 0.11,
+                "interruption_rate": 0.0,
+            },
+            "chapters": [3, 7, 12, 18],
+            "chapter": 18,
+            "normalized_key": "card_mismatch:fixture-terse-warden",
+        }
+        brief = CompanionBrief(
+            manuscript_name="m",
+            story_slug="s",
+            mode="progressive",
+            chapter_number=18,
+            chapters_considered=[18],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            voice_card_findings=[row],
+        )
+        payload = brief_to_payload(brief)
+        assert payload["ghostreader_version"] == "0.2.3"
+        assert payload["voice_card_findings"] == [row]
+        assert all(
+            r["kind"] in {"card_mismatch", "card_collapse"} for r in payload["voice_card_findings"]
+        )
+
+    def test_machine_voice_card_alone_does_not_flip_verdict(self) -> None:
+        # Machine rows are advisory; compute_verdict ignores them.
+        assert compute_verdict([], []) == "ship"
+        brief = CompanionBrief(
+            manuscript_name="m",
+            story_slug="s",
+            mode="progressive",
+            chapter_number=1,
+            chapters_considered=[1],
+            facts_reused=0,
+            facts_extracted=1,
+            verdict="ship",
+            chapter_note="ok",
+            voice_card_findings=[
+                {
+                    "kind": "card_collapse",
+                    "severity": "moderate",
+                    "summary": "a and b look similar",
+                    "speaker": "a",
+                    "speaker_b": "b",
+                    "quote": None,
+                    "card_excerpt": None,
+                    "metrics": None,
+                    "chapters": [1],
+                    "chapter": 1,
+                    "normalized_key": "card_collapse:a|b",
+                }
+            ],
+        )
+        payload = brief_to_payload(brief)
+        assert payload["verdict"] == "ship"
+        assert payload["voice_card_findings"]
+        assert compute_verdict_drivers([], []) == []
 
     def test_markdown_marks_missing_citations(self) -> None:
         brief = CompanionBrief(
