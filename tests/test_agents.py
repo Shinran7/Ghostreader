@@ -351,7 +351,17 @@ class TestConsistencyParseFindings:
         findings = _parse_findings('["not a finding", 42]')
         assert len(findings) == 1
         assert findings[0]["dimension"] == "consistency.general"
-        assert findings[0]["summary"].startswith("Consistency check completed")
+        assert findings[0]["severity"] == "concern"
+        assert "failed to parse" in findings[0]["summary"].lower()
+        assert "completed" not in findings[0]["summary"].lower()
+
+    def test_non_json_text_is_parse_failure_concern(self) -> None:
+        from ghostreader.agents.consistency_checker import _parse_findings
+
+        findings = _parse_findings("sorry, no JSON here")
+        assert len(findings) == 1
+        assert findings[0]["severity"] == "concern"
+        assert "failed to parse" in findings[0]["summary"].lower()
 
     def test_empty_array_means_no_findings(self) -> None:
         from ghostreader.agents.consistency_checker import _parse_findings

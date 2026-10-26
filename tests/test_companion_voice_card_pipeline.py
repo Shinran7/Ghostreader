@@ -302,3 +302,74 @@ async def test_machine_rows_alone_never_flip_watch(tmp_path: Path) -> None:
     assert brief.verdict == "ship"
     assert brief.verdict_drivers == []
     assert brief.craft_findings == []
+
+
+@pytest.mark.asyncio
+async def test_partial_invalid_cards_surface_warning(tmp_path: Path) -> None:
+    """Unreadable/invalid cards must appear in brief.warnings (not only debug logs)."""
+    story = tmp_path / "story_partial_cards"
+    chapters = story / "chapters"
+    characters = story / "canon" / "characters"
+    chapters.mkdir(parents=True)
+    characters.mkdir(parents=True)
+    ch_path = chapters / "chapter-001.md"
+    ch_path.write_text(
+        'Warden said, "Move."\nHe said, "Now."\n',
+        encoding="utf-8",
+    )
+    (characters / "warden.json").write_text(
+        '{"slug":"warden","name":"Warden","dialogue_voice":"Terse, clipped."}\n',
+        encoding="utf-8",
+    )
+    (characters / "broken.json").write_text("{nope", encoding="utf-8")
+    ch = Chapter(
+        title="Ch 1",
+        content=ch_path.read_text(encoding="utf-8"),
+        chapter_number=1,
+        source_path=ch_path,
+    )
+    discovery = DiscoveryResult(
+        mode="progressive",
+        path=story,
+        story_slug="story_partial_cards",
+        story_dir=story,
+        chapters_dir=chapters,
+        chapter_number=1,
+        chapters=[ch],
+        gaps=[],
+        warnings=[],
+        seed_meta={},
+        manuscript_name="story_partial_cards · Chapter 1",
+    )
+
+    async def fake_craft(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "prose_output": {
+                "findings": [],
+                "raw_response": {
+                    "dimension_ratings": {
+                        "prose.voice_card": {"severity": "neutral", "note": ""},
+                    }
+                },
+            }
+        }
+
+    ctxs = _patch_pipeline_base(fake_craft=fake_craft, store=_empty_store())
+    with ctxs[0], ctxs[1], ctxs[2], ctxs[3], ctxs[4], ctxs[5], ctxs[6], ctxs[7]:
+        brief = await run_companion_pipeline(
+            discovery,
+            llm=MagicMock(),
+            typesafe_client=None,
+            typesafe_enabled=False,
+            story_state_dir=tmp_path / "state",
+            genre=None,
+            companion_register_watch=False,
+            companion_voice_card_watch=True,
+            companion_light_narrative=False,
+            json_mode=True,
+        )
+
+    assert any(
+        "skipped 1 unreadable/invalid card(s)" in w and "broken.json" in w
+        for w in brief.warnings
+    )

@@ -73,6 +73,9 @@ class ReportOutput:
     register_findings: list[dict[str, Any]] = field(default_factory=list)
     # Zipf uncommon-noun thrash rows (#285); empty OK; additive; machine only.
     thrash_findings: list[dict[str, Any]] = field(default_factory=list)
+    # False when depth/kill-switch skipped the watcher (so [] ≠ "ran, found nothing").
+    register_findings_enabled: bool = True
+    thrash_findings_enabled: bool = True
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -85,6 +88,8 @@ class ReportOutput:
         repetition_findings: list[dict[str, Any]] | None = None,
         register_findings: list[dict[str, Any]] | None = None,
         thrash_findings: list[dict[str, Any]] | None = None,
+        register_findings_enabled: bool = True,
+        thrash_findings_enabled: bool = True,
     ) -> ReportOutput:
         """Build a ``ReportOutput`` from the synthesis ``final_report`` dict."""
         ratings = [
@@ -127,6 +132,8 @@ class ReportOutput:
             repetition_findings=list(repetition_findings or []),
             register_findings=list(register_findings or []),
             thrash_findings=list(thrash_findings or []),
+            register_findings_enabled=register_findings_enabled,
+            thrash_findings_enabled=thrash_findings_enabled,
             raw=report,
         )
 

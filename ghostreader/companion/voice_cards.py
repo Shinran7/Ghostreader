@@ -93,33 +93,45 @@ def _parse_card_payload(data: dict[str, Any], *, fallback_slug: str) -> VoiceCar
     )
 
 
-def _load_one_card(path: Path) -> VoiceCard | None:
+def _load_one_card(path: Path) -> tuple[VoiceCard | None, str | None]:
+    """Return (card, skip_reason). skip_reason set for unreadable/invalid files."""
     suffix = path.suffix.lower()
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         _LOG.debug("voice_cards: skip unreadable %s (%s)", path, exc)
-        return None
+        return None, f"{path.name} (unreadable)"
 
     try:
         data = json.loads(text) if suffix == ".json" else yaml.safe_load(text)
     except (json.JSONDecodeError, yaml.YAMLError, OSError) as exc:
         _LOG.debug("voice_cards: skip parse failure %s (%s)", path, exc)
-        return None
+        return None, f"{path.name} (invalid)"
 
     if not isinstance(data, dict):
-        return None
-    return _parse_card_payload(data, fallback_slug=path.stem)
+        _LOG.debug("voice_cards: skip non-object payload %s", path)
+        return None, f"{path.name} (invalid)"
+    return _parse_card_payload(data, fallback_slug=path.stem), None
 
 
-def load_voice_cards(story_dir: Path) -> list[VoiceCard]:
-    """Load *.json / *.yaml / *.yml under canon/characters. Fail-soft → []."""
+def _partial_skip_warning(skipped: list[str]) -> str:
+    names = ", ".join(skipped)
+    return (
+        f"voice_card watch: skipped {len(skipped)} unreadable/invalid card(s): {names}"
+    )
+
+
+def load_voice_cards_with_warnings(
+    story_dir: Path,
+) -> tuple[list[VoiceCard], list[str]]:
+    """Load cards and return user-visible warnings for partial skip sets."""
     characters_dir = find_canon_characters_dir(story_dir)
     if characters_dir is None:
-        return []
+        return [], []
 
     cards: list[VoiceCard] = []
     seen_slugs: set[str] = set()
+    skipped: list[str] = []
     paths: list[Path] = []
     for pattern in _CARD_GLOBS:
         paths.extend(sorted(characters_dir.glob(pattern)))
@@ -127,13 +139,26 @@ def load_voice_cards(story_dir: Path) -> list[VoiceCard]:
     for path in paths:
         if not path.is_file():
             continue
-        card = _load_one_card(path)
+        card, skip_reason = _load_one_card(path)
+        if skip_reason is not None:
+            skipped.append(skip_reason)
+            continue
         if card is None:
             continue
         if card.slug in seen_slugs:
             continue
         seen_slugs.add(card.slug)
         cards.append(card)
+
+    warnings: list[str] = []
+    if skipped:
+        warnings.append(_partial_skip_warning(skipped))
+    return cards, warnings
+
+
+def load_voice_cards(story_dir: Path) -> list[VoiceCard]:
+    """Load *.json / *.yaml / *.yml under canon/characters. Fail-soft → []."""
+    cards, _warnings = load_voice_cards_with_warnings(story_dir)
     return cards
 
 
@@ -141,4 +166,5 @@ __all__ = [
     "VoiceCard",
     "find_canon_characters_dir",
     "load_voice_cards",
+    "load_voice_cards_with_warnings",
 ]

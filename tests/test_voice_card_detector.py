@@ -8,6 +8,7 @@ from ghostreader.analyzers.register_detector import strip_chapter_body
 from ghostreader.analyzers.voice_card_detector import (
     active_cue_families,
     attribute_quotes,
+    cards_eligible_for_contrast,
     detect_voice_card_issues,
     given_name_alias,
     speaker_surface_metrics,
@@ -130,6 +131,45 @@ class TestAttribution:
         rows = detect_voice_card_issues([(1, raw)], cards, focus_chapter=1)
         assert any(r["kind"] == "card_mismatch" for r in rows)
         assert all("chapter_number" not in (r.get("quote") or "") for r in rows)
+
+    def test_substring_name_does_not_match_inside_word(self) -> None:
+        # findingId 3477dc8e4a3d8eb9 — Ann must not claim quotes via "annual".
+        text = 'The annual review was late.\nSomeone said, "Hold the gate."\n'
+        attributed = attribute_quotes(text, [("ann", "Ann")])
+        assert attributed == {}
+
+    def test_alias_collision_skips_ambiguous_given_name(self) -> None:
+        # findingId 37ade2643281c8de — shared given-name must not silently steal.
+        cast = [("ann-smith", "Ann Smith"), ("ann-jones", "Ann Jones")]
+        bare = attribute_quotes('Ann said, "Hold the ridge."\n', cast)
+        assert bare == {}
+        full = attribute_quotes(
+            'Ann Smith said, "One."\nAnn Jones said, "Two."\n',
+            cast,
+        )
+        assert full.get("ann-smith") == ["One."]
+        assert full.get("ann-jones") == ["Two."]
+
+    def test_narration_scare_quote_not_attributed(self) -> None:
+        # findingId f76cb8510581a0d5 — narration "dead silence" is not dialogue.
+        text = 'Mara remembered the "dead silence" of the hall.\n'
+        assert attribute_quotes(text, [("mara", "Mara")]) == {}
+        spoken = 'Mara said, "Hold the gate."\n'
+        assert attribute_quotes(spoken, [("mara", "Mara")]) == {"mara": ["Hold the gate."]}
+
+    def test_multiline_quote_attributed(self) -> None:
+        # findingId 44c033ea41870e36 — quotes spanning lines must attribute.
+        text = 'Orin said, "We hold the ridge\nuntil dawn breaks."\n'
+        attributed = attribute_quotes(text, [("orin", "Orin")])
+        assert attributed == {"orin": ["We hold the ridge until dawn breaks."]}
+
+
+class TestCardContrast:
+    def test_punctuation_only_cards_not_eligible(self) -> None:
+        # findingId 8b0795ad9255147f — 'Hello!' vs 'Hello' must not contrast.
+        assert cards_eligible_for_contrast("Hello!", "Hello") is False
+        assert cards_eligible_for_contrast("Terse, clipped.", "Terse clipped") is False
+        assert cards_eligible_for_contrast("Terse clipped.", "Formal measured.") is True
 
 
 class TestCuePolarity:

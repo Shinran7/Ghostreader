@@ -11,7 +11,10 @@ from ghostreader.companion.voice_card import (
     voice_card_findings_for_chapters,
 )
 from ghostreader.companion.voice_card_constants import VOICE_CARD_FINDINGS_CAP
-from ghostreader.companion.voice_cards import load_voice_cards
+from ghostreader.companion.voice_cards import (
+    load_voice_cards,
+    load_voice_cards_with_warnings,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "voice_card"
 
@@ -84,3 +87,36 @@ class TestVoiceCardBlock:
         assert "speaker=garen-solwick" in block
         assert "speaker_b=ysolde-kestrel" in block
         assert "Focus-chapter 12 quotes" in block
+
+
+class TestVoiceCardPartialLoadWarnings:
+    def test_partial_invalid_cards_warn_with_names(self, tmp_path: Path) -> None:
+        characters = tmp_path / "canon" / "characters"
+        characters.mkdir(parents=True)
+        (characters / "good.json").write_text(
+            '{"slug":"warden","name":"Warden","dialogue_voice":"Terse, clipped."}\n',
+            encoding="utf-8",
+        )
+        (characters / "broken.json").write_text("{not-json", encoding="utf-8")
+        (characters / "array.yml").write_text("- just a list\n", encoding="utf-8")
+
+        cards, warnings = load_voice_cards_with_warnings(tmp_path)
+        assert len(cards) == 1
+        assert cards[0].slug == "warden"
+        assert len(warnings) == 1
+        assert "skipped 2 unreadable/invalid card(s)" in warnings[0]
+        assert "broken.json" in warnings[0]
+        assert "array.yml" in warnings[0]
+        # Compatibility wrapper still returns only cards.
+        assert len(load_voice_cards(tmp_path)) == 1
+
+    def test_all_valid_cards_no_skip_warning(self, tmp_path: Path) -> None:
+        characters = tmp_path / "canon" / "characters"
+        characters.mkdir(parents=True)
+        (characters / "a.json").write_text(
+            '{"slug":"a","name":"A","dialogue_voice":"Soft."}\n',
+            encoding="utf-8",
+        )
+        cards, warnings = load_voice_cards_with_warnings(tmp_path)
+        assert len(cards) == 1
+        assert warnings == []

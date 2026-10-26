@@ -4,25 +4,23 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterator, Literal
 
 logger = logging.getLogger(__name__)
 
 _PROGRESS_VERSION = 1
+_LOCK_TIMEOUT_S = 30.0
+_LOCK_POLL_S = 0.05
 
 
 def _iso_now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _clamp_last(last: int | None, max_chapter_on_disk: int | None) -> int | None:
-    """Lower high-water cursor to max chapter still on disk when truncated."""
-    if last is None or max_chapter_on_disk is None:
-        return last
-    return min(last, max_chapter_on_disk)
 
 
 @dataclass
@@ -62,6 +60,57 @@ def progress_path(story_state_dir: Path) -> Path:
     return story_state_dir / "companion" / "progress.json"
 
 
+def _lock_path(story_state_dir: Path) -> Path:
+    return progress_path(story_state_dir).parent / "progress.json.lock"
+
+
+@contextmanager
+def _progress_lock(story_state_dir: Path) -> Iterator[None]:
+    """Exclusive lock for progress.json read-modify-write (Windows-friendly)."""
+    lock_path = _lock_path(story_state_dir)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(lock_path, "a+b")
+    locked = False
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            deadline = time.monotonic() + _LOCK_TIMEOUT_S
+            while True:
+                try:
+                    fh.seek(0)
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    locked = True
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"Timed out locking companion progress at {lock_path}"
+                        ) from None
+                    time.sleep(_LOCK_POLL_S)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            locked = True
+        yield
+    finally:
+        if locked:
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+
+                    fh.seek(0)
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        fh.close()
+
+
 def load_progress(story_state_dir: Path) -> ProgressState:
     path = progress_path(story_state_dir)
     if not path.exists():
@@ -79,33 +128,34 @@ def load_progress(story_state_dir: Path) -> ProgressState:
 def save_progress(story_state_dir: Path, state: ProgressState) -> None:
     path = progress_path(story_state_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state.to_dict(), indent=2) + "\n", encoding="utf-8")
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state.to_dict(), indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
 
 
 def clamp_progress_to_disk(
     story_state_dir: Path,
     max_chapter_on_disk: int | None,
 ) -> ProgressState:
-    """Persist cursor clamp when later chapters were removed (restore/truncate)."""
+    """Load progress without permanently lowering high-water for missing files.
+
+    Disk max bounds what discovery can process now. The saved high-water mark
+    is preserved so chapters are not reprocessed when files return.
+    """
     current = load_progress(story_state_dir)
-    clamped = _clamp_last(current.last_chapter_companioned, max_chapter_on_disk)
-    if clamped == current.last_chapter_companioned:
-        return current
-    updated = ProgressState(
-        version=current.version,
-        last_chapter_companioned=clamped,
-        last_run_at=current.last_run_at,
-        last_mode=current.last_mode,
-        gaps_known=list(current.gaps_known),
-    )
-    save_progress(story_state_dir, updated)
-    logger.info(
-        "Clamped companion progress cursor %s → %s (max on disk %s)",
-        current.last_chapter_companioned,
-        clamped,
-        max_chapter_on_disk,
-    )
-    return updated
+    last = current.last_chapter_companioned
+    if (
+        last is not None
+        and max_chapter_on_disk is not None
+        and last > max_chapter_on_disk
+    ):
+        logger.info(
+            "Companion progress high-water %s above max on disk %s; "
+            "preserving saved cursor (not clamping)",
+            last,
+            max_chapter_on_disk,
+        )
+    return current
 
 
 def compute_order_warnings(
@@ -118,11 +168,12 @@ def compute_order_warnings(
 ) -> list[str]:
     """Regression / skip warnings (still run). Does not mutate progress.
 
-    When ``max_chapter_on_disk`` is set, the high-water cursor is clamped before
-    comparing so phantom later chapters (post-restore truncate) do not warn.
+    Compares against the true saved high-water mark. ``max_chapter_on_disk`` is
+    accepted for call-site compatibility and does not suppress rewrite warnings.
     """
+    del max_chapter_on_disk  # API compat; warnings use real high-water
     warnings: list[str] = []
-    last = _clamp_last(progress.last_chapter_companioned, max_chapter_on_disk)
+    last = progress.last_chapter_companioned
 
     if mode == "progressive":
         if last is not None and chapter_number < last:
@@ -160,35 +211,36 @@ def update_progress_after_run(
 ) -> ProgressState:
     """Persist cursor after a successful companion run.
 
-    Progressive rewrite of an earlier chapter does not lower the cursor while
-    later chapters still exist. When the story was truncated, clamp down to
-    ``max_chapter_on_disk``. Sweep sets cursor to max chapter in the run.
+    Progressive rewrite of an earlier chapter does not lower the cursor.
+    Missing later chapter files also do not lower the saved high-water mark.
+    Sweep sets cursor to max(existing, max chapter in the run).
+    ``max_chapter_on_disk`` is accepted for call-site compatibility only.
     """
-    current = load_progress(story_state_dir)
-    if mode == "sweep":
-        n = max_chapter_in_run if max_chapter_in_run is not None else chapter_number
-        new_last = (
-            n
-            if current.last_chapter_companioned is None
-            else max(current.last_chapter_companioned, n)
-        )
-    else:
-        if current.last_chapter_companioned is None:
-            new_last = chapter_number
+    del max_chapter_on_disk  # API compat; do not destroy high-water
+    with _progress_lock(story_state_dir):
+        current = load_progress(story_state_dir)
+        if mode == "sweep":
+            n = max_chapter_in_run if max_chapter_in_run is not None else chapter_number
+            new_last = (
+                n
+                if current.last_chapter_companioned is None
+                else max(current.last_chapter_companioned, n)
+            )
         else:
-            new_last = max(current.last_chapter_companioned, chapter_number)
+            if current.last_chapter_companioned is None:
+                new_last = chapter_number
+            else:
+                new_last = max(current.last_chapter_companioned, chapter_number)
 
-    new_last = _clamp_last(new_last, max_chapter_on_disk)
-
-    updated = ProgressState(
-        version=_PROGRESS_VERSION,
-        last_chapter_companioned=new_last,
-        last_run_at=_iso_now(),
-        last_mode=mode,
-        gaps_known=list(gaps),
-    )
-    save_progress(story_state_dir, updated)
-    return updated
+        updated = ProgressState(
+            version=_PROGRESS_VERSION,
+            last_chapter_companioned=new_last,
+            last_run_at=_iso_now(),
+            last_mode=mode,
+            gaps_known=list(gaps),
+        )
+        save_progress(story_state_dir, updated)
+        return updated
 
 
 __all__ = [

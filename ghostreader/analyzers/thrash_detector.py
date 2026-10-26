@@ -761,74 +761,54 @@ def aggregate_cross_chapter(
 ) -> list[ThrashFinding]:
     """Roll up lemmas thrashing in ≥2 chapters (KD-19 quote selection).
 
-    Primary rollup uses within_scene rows. KD-10: also roll chapter_rare
-    orphans when the lemma has no within_scene cross_chapter yet.
+    Merge within_scene and chapter_rare per lemma/chapter (within wins when
+    both exist in the same chapter) so ch1 within_scene + ch2 chapter_rare
+    still yields cross_chapter. KD-10 orphan-only rare rollup is included.
     """
-    # lemma -> chapter -> best within_scene row (max count; ties lowest scene_index)
+    # lemma -> chapter -> best row (prefer within_scene over chapter_rare)
     best: dict[str, dict[int, ThrashFinding]] = defaultdict(dict)
+
+    def _better_within(row: ThrashFinding, prev: ThrashFinding) -> bool:
+        return row.count > prev.count or (
+            row.count == prev.count and (row.scene_index or 0) < (prev.scene_index or 0)
+        )
+
     for row in within:
-        if row.kind != "within_scene":
+        if row.kind != "within_scene" or not row.lemma:
             continue
         ch = int(row.chapter or 0)
         lem = row.lemma
         prev = best[lem].get(ch)
-        if prev is None:
+        if prev is None or _better_within(row, prev):
             best[lem][ch] = row
+
+    for row in chapter_rare or []:
+        if row.kind != "chapter_rare" or not row.lemma:
             continue
-        if (
-            row.count > prev.count
-            or row.count == prev.count
-            and (row.scene_index or 0) < (prev.scene_index or 0)
-        ):
+        lem = row.lemma
+        ch = int(row.chapter or 0)
+        prev = best[lem].get(ch)
+        # Same-chapter within_scene already owns this chapter.
+        if prev is not None and prev.kind == "within_scene":
+            continue
+        if prev is None or row.count > prev.count:
             best[lem][ch] = row
 
     out: list[ThrashFinding] = []
-    within_cross_lemmas: set[str] = set()
     for lem, by_ch in best.items():
         if len(by_ch) < 2:
             continue
         chapters = sorted(by_ch.keys())
         total = sum(r.count for r in by_ch.values())
-        # KD-19: chapter with max within-scene count; ties → lowest chapter number
-        pick_ch = min(chapters, key=lambda c: (-by_ch[c].count, c))
-        picked = by_ch[pick_ch]
-        within_cross_lemmas.add(lem)
-        out.append(
-            ThrashFinding(
-                kind="cross_chapter",
-                lemma=lem,
-                severity=_severity_for_count(total),
-                count=total,
-                chapters=chapters,
-                chapter=None,
-                scene_index=picked.scene_index,
-                quote=picked.quote,
-                normalized_key=lem,
-                foothold_token=picked.foothold_token,
-                later_surfaces=list(picked.later_surfaces),
-            )
+        # KD-19: densest chapter; ties → lowest chapter; prefer within_scene quote.
+        pick_ch = min(
+            chapters,
+            key=lambda c: (
+                -by_ch[c].count,
+                0 if by_ch[c].kind == "within_scene" else 1,
+                c,
+            ),
         )
-
-    # KD-10 orphan rollup from chapter_rare (no inventing cross_chapter_common).
-    rare_best: dict[str, dict[int, ThrashFinding]] = defaultdict(dict)
-    for row in chapter_rare or []:
-        if row.kind != "chapter_rare":
-            continue
-        lem = row.lemma
-        if lem in within_cross_lemmas:
-            continue
-        ch = int(row.chapter or 0)
-        prev = rare_best[lem].get(ch)
-        if prev is None or row.count > prev.count:
-            rare_best[lem][ch] = row
-    for lem, by_ch in rare_best.items():
-        if lem in within_cross_lemmas:
-            continue
-        if len(by_ch) < 2:
-            continue
-        chapters = sorted(by_ch.keys())
-        total = sum(r.count for r in by_ch.values())
-        pick_ch = min(chapters, key=lambda c: (-by_ch[c].count, c))
         picked = by_ch[pick_ch]
         out.append(
             ThrashFinding(
@@ -846,7 +826,7 @@ def aggregate_cross_chapter(
             )
         )
 
-    out.sort(key=lambda f: (-f.count, f.lemma))
+    out.sort(key=lambda f: (-f.count, f.lemma or ""))
     return out
 
 

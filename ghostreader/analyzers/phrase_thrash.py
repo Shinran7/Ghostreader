@@ -156,8 +156,16 @@ _NUMBER_WORDS = frozenset(
 
 
 def _norm_token(tok: str) -> str:
+    """Light lemma: case/hyphen; plural fox/foxes → fox (not foxe)."""
     low = tok.lower().replace("-", "")
     if low.endswith("'s"):
+        return low[:-2]
+    if len(low) > 4 and low.endswith("ies"):
+        return low[:-3] + "y"
+    # foxes/boxes/churches/glasses → fox/box/church/glass (not foxe).
+    if len(low) > 4 and (
+        low.endswith(("xes", "zes", "ches", "shes")) or low.endswith("sses")
+    ):
         return low[:-2]
     if len(low) > 3 and low.endswith("s") and not low.endswith("ss"):
         return low[:-1]
@@ -191,10 +199,15 @@ def _is_procedural_si_gram(norms: list[str]) -> bool:
 
 def _candidate_ngrams(
     tokens: list[tuple[str, int, int, str]],
+    text: str = "",
 ) -> list[tuple[str, int, str]]:
-    """Adjacent 2–3-grams → (phrase, start, first_surface)."""
+    """Adjacent 2–3-grams → (phrase, start, first_surface).
+
+    Gap ≤2 only; never fuse across sentence punctuation (. ? !).
+    """
     phrases: list[tuple[str, int, str]] = []
     n = len(tokens)
+    raw = text or ""
     for i in range(n):
         for width in (2, 3):
             if i + width > n:
@@ -204,6 +217,10 @@ def _candidate_ngrams(
             for a, b in zip(window, window[1:], strict=False):
                 gap = b[1] - a[2]
                 if gap > 2:
+                    adjacent = False
+                    break
+                # "dark. Stone" is not the phrase "dark stone".
+                if re.search(r"[.!?]", raw[a[2] : b[1]]):
                     adjacent = False
                     break
             if not adjacent:
@@ -251,7 +268,7 @@ def detect_phrase_thrash(
     body = strip_chapter_body(content or "")
     if not body.strip():
         return []
-    grams = _candidate_ngrams(_content_tokens(body))
+    grams = _candidate_ngrams(_content_tokens(body), body)
     if not grams:
         return []
     counts: Counter[str] = Counter(p for p, _start, _surf in grams)

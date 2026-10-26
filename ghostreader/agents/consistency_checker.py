@@ -134,11 +134,12 @@ def _format_chapter_excerpts(
 
 
 def _unstructured_consistency_finding(text: str) -> list[AgentFinding]:
+    """Surface an unparseable consistency response as a concern, not a benign pass."""
     return [
         AgentFinding(
             dimension="consistency.general",
-            severity="neutral",
-            summary="Consistency check completed (unstructured response)",
+            severity="concern",
+            summary="Consistency check failed to parse structured findings",
             evidence=text[:500],
             chapter_ref="all",
         )

@@ -235,3 +235,89 @@ def test_chapter_rare_orphan_cross_chapter_rollup() -> None:
     assert len(basalt) == 1
     assert basalt[0].chapters == [1, 2]
     assert basalt[0].count >= 4
+
+
+def test_phrase_sentence_boundary_not_fused() -> None:
+    """findingId 1368d196: 'dark. Stone' must not become phrase 'dark stone'."""
+    from ghostreader.analyzers.phrase_thrash import detect_phrase_thrash
+
+    text = (
+        "The dark. Stone waited on the ledge. "
+        "More dark. Stone rose from the cut. "
+        "Third dark. Stone fell beside her."
+    )
+    rows = detect_phrase_thrash(text, chapter_number=1)
+    assert all(f.phrase != "dark stone" for f in rows)
+
+
+def test_phrase_plural_keys_share_fox_foxes() -> None:
+    """findingId 3faae60a: silver fox / silver foxes share one phrase key."""
+    from ghostreader.analyzers.phrase_thrash import _norm_token, detect_phrase_thrash
+
+    assert _norm_token("fox") == "fox"
+    assert _norm_token("foxes") == "fox"
+    text = (
+        "A silver fox crossed the rim. "
+        "Later silver foxes waited by the hatch. "
+        "She watched the silver fox den."
+    )
+    rows = detect_phrase_thrash(text, chapter_number=1)
+    silver = [f for f in rows if f.phrase == "silver fox"]
+    assert len(silver) == 1
+    assert silver[0].count >= 2
+    assert all(f.phrase != "silver foxe" for f in rows)
+
+
+def test_within_scene_plus_chapter_rare_cross_chapter() -> None:
+    """findingId 0639c457: ch1 within_scene + ch2 chapter_rare → cross_chapter."""
+    from ghostreader.analyzers.thrash_detector import (
+        aggregate_cross_chapter,
+        detect_chapter_rare,
+        detect_thrash_in_chapter,
+    )
+
+    ch1 = "The firn cracked. She kicked the firn aside."
+    ch2 = "Firn under the hatch.\n\nCold firn at the seal."
+    within = detect_thrash_in_chapter(ch1, chapter_number=1) + detect_thrash_in_chapter(
+        ch2, chapter_number=2
+    )
+    rare = detect_chapter_rare(ch1, chapter_number=1) + detect_chapter_rare(ch2, chapter_number=2)
+    within_keys = {(r.lemma, int(r.chapter or 0)) for r in within if r.kind == "within_scene"}
+    rare = [r for r in rare if (r.lemma, int(r.chapter or 0)) not in within_keys]
+    cross = aggregate_cross_chapter(within, chapter_rare=rare)
+    firn = [r for r in cross if r.lemma == "firn" and r.kind == "cross_chapter"]
+    assert len(firn) == 1
+    assert firn[0].chapters == [1, 2]
+    assert firn[0].count >= 4
+
+
+def test_analyze_passes_load_bearing_thresholds() -> None:
+    """findingId a32e6b7c: load_bearing uses LOAD_BEARING_ABS on analyze path."""
+    from ghostreader.analyzers.common_word_thrash import (
+        COMMON_OVERUSE_ABS,
+        LOAD_BEARING_ABS,
+        detect_common_word_thrash,
+    )
+    from ghostreader.report.thrash_export import analyze_thrash_findings
+
+    # 7 rims: over common ABS (6), under load-bearing ABS (10).
+    n = COMMON_OVERUSE_ABS + 1
+    assert n < LOAD_BEARING_ABS
+    text = " ".join(["She stood on the rim."] * n)
+    plain = detect_common_word_thrash(text, chapter_number=1)
+    assert any(f.lemma == "rim" for f in plain)
+    protected = detect_common_word_thrash(text, chapter_number=1, load_bearing={"rim"})
+    assert all(f.lemma != "rim" for f in protected)
+    export_plain = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+    )
+    assert any(r["kind"] == "common_word" and r["lemma"] == "rim" for r in export_plain)
+    export_lb = analyze_thrash_findings(
+        [{"chapter_number": 1, "content": text}],
+        enabled=True,
+        load_bearing={"rim"},
+    )
+    assert all(
+        not (r["kind"] == "common_word" and r.get("lemma") == "rim") for r in export_lb
+    )

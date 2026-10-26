@@ -213,7 +213,9 @@ class TestJsonExport:
         assert data["ghostreader_version"] == "0.2.1"
         assert data["repetition_findings"] == []
         assert data["register_findings"] == []
+        assert data["register_findings_enabled"] is True
         assert data["thrash_findings"] == []
+        assert data["thrash_findings_enabled"] is True
         from ghostreader import __version__ as pkg_ver
 
         assert data["package_version"] == pkg_ver
@@ -240,9 +242,36 @@ class TestJsonExport:
         assert payload["repetition_findings"] == []
         assert "register_findings" in payload
         assert payload["register_findings"] == []
+        assert payload["register_findings_enabled"] is True
         assert "thrash_findings" in payload
         assert payload["thrash_findings"] == []
+        assert payload["thrash_findings_enabled"] is True
         assert payload["package_version"] == pkg_ver
+
+    def test_disabled_watchers_marked_in_json(self, sample_report: ReportOutput) -> None:
+        """Depth/kill-switch off must not look like ran-and-found-nothing (#13)."""
+        from ghostreader.report.json_export import _build_payload
+
+        sample_report.register_findings = []
+        sample_report.thrash_findings = []
+        sample_report.register_findings_enabled = False
+        sample_report.thrash_findings_enabled = False
+        payload = _build_payload(sample_report)
+        assert payload["register_findings"] == []
+        assert payload["thrash_findings"] == []
+        assert payload["register_findings_enabled"] is False
+        assert payload["thrash_findings_enabled"] is False
+
+    def test_from_final_report_passes_enabled_flags(self) -> None:
+        report = ReportOutput.from_final_report(
+            {},
+            register_findings_enabled=False,
+            thrash_findings_enabled=False,
+        )
+        assert report.register_findings_enabled is False
+        assert report.thrash_findings_enabled is False
+        assert report.register_findings == []
+        assert report.thrash_findings == []
 
 
 # ── Algorithmic thrash export (#285) ───────────────────────────────────
@@ -379,6 +408,76 @@ class TestAnalyzeThrashFindings:
         assert phrase_rows
         assert all(r.get("lemma") is None for r in phrase_rows)
         assert all(r.get("phrase") for r in phrase_rows)
+
+    def test_cross_chapter_survives_cap_reserve(self) -> None:
+        """findingId c1aaf755: cross_chapter not starved by a tight per-chapter cap."""
+        from unittest.mock import patch
+
+        from ghostreader.analyzers.thrash_detector import ThrashFinding, reset_zipf_cache_for_tests
+        from ghostreader.report.thrash_export import analyze_thrash_findings
+
+        reset_zipf_cache_for_tests()
+
+        def _flood_within(content: str, *, chapter_number: int, **_kw):
+            return [
+                ThrashFinding(
+                    kind="within_scene",
+                    lemma=f"lemma{chapter_number}_{i:02d}",
+                    severity="high",
+                    count=4,
+                    chapters=[chapter_number],
+                    chapter=chapter_number,
+                    scene_index=0,
+                    quote="x",
+                    normalized_key=f"lemma{chapter_number}_{i:02d}",
+                    foothold_token="x",
+                )
+                for i in range(20)
+            ]
+
+        cross = [
+            ThrashFinding(
+                kind="cross_chapter",
+                lemma="firn",
+                severity="high",
+                count=8,
+                chapters=[1, 2],
+                chapter=None,
+                scene_index=0,
+                quote="firn",
+                normalized_key="firn",
+                foothold_token="firn",
+            )
+        ]
+
+        with (
+            patch(
+                "ghostreader.report.thrash_export.detect_thrash_in_chapter",
+                side_effect=_flood_within,
+            ),
+            patch("ghostreader.report.thrash_export.detect_chapter_rare", return_value=[]),
+            patch("ghostreader.report.thrash_export.detect_common_word_thrash", return_value=[]),
+            patch("ghostreader.report.thrash_export.detect_phrase_thrash", return_value=[]),
+            patch(
+                "ghostreader.report.thrash_export.detect_dialogue_tag_thrash",
+                return_value=[],
+            ),
+            patch(
+                "ghostreader.report.thrash_export.aggregate_cross_chapter",
+                return_value=cross,
+            ),
+        ):
+            rows = analyze_thrash_findings(
+                [
+                    {"chapter_number": 1, "content": "a"},
+                    {"chapter_number": 2, "content": "b"},
+                ],
+                enabled=True,
+                cap=40,
+            )
+
+        assert len(rows) <= 40
+        assert any(r["kind"] == "cross_chapter" and r.get("lemma") == "firn" for r in rows)
 
 
 # ── Algorithmic register export (#7) ───────────────────────────────────

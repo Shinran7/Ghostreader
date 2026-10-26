@@ -58,7 +58,7 @@ from ghostreader.companion.voice_card import (
 from ghostreader.companion.voice_card import (
     voice_card_findings_for_chapters,
 )
-from ghostreader.companion.voice_cards import load_voice_cards
+from ghostreader.companion.voice_cards import load_voice_cards_with_warnings
 from ghostreader.graph import chapters_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.llm import message_text
@@ -406,11 +406,16 @@ async def run_companion_pipeline(
         vc_block = ""
         if include_voice_card:
             _stderr("Running voice-card watch…", quiet_stdout_json=json_mode)
-            cards = load_voice_cards(discovery.story_dir)
+            cards, card_load_warnings = load_voice_cards_with_warnings(discovery.story_dir)
             if not cards:
                 seed_path = find_seed_yaml(discovery.path)
                 if seed_path is not None:
-                    cards = load_voice_cards(seed_path.parent)
+                    seed_cards, seed_card_warnings = load_voice_cards_with_warnings(
+                        seed_path.parent
+                    )
+                    cards = seed_cards
+                    card_load_warnings = seed_card_warnings
+            warnings.extend(card_load_warnings)
             if not cards:
                 warnings.append("voice_card watch: no canon/characters cards found")
                 voice_card_findings = []

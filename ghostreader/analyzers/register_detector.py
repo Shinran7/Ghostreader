@@ -31,17 +31,6 @@ _ITALIC_RE = re.compile(r"(?<!\*)\*([A-Za-z][A-Za-z0-9']*)\*(?:-([A-Za-z][A-Za-z
 # Plain institutional hyphen compounds (lowercase-ish content words).
 _HYPHEN_RE = re.compile(r"\b([A-Za-z]+(?:-[A-Za-z]+)+)\b")
 
-_TEACH_IN_RE = re.compile(
-    r"(?:"
-    r"\b(?:was|were|is|are)\s+called\b"
-    r"|\bknown\s+as\b"
-    r"|\bmeans?\b"
-    r"|\bnamed\b"
-    r"|[\(\[][^)\]]{1,80}[\)\]]"
-    r")",
-    re.IGNORECASE,
-)
-
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -146,7 +135,7 @@ def _sentence_spans(text: str) -> list[tuple[int, int]]:
 
 
 def _is_taught(term: str, window_text: str, char_start: int) -> bool:
-    """Cheap teach-in: gloss / called / means / parenthetical within ±2 sentences."""
+    """Teach-in only when the gloss/cue attaches to *this* term (±2 sentences)."""
     spans = _sentence_spans(window_text)
     if not spans:
         return False
@@ -162,10 +151,21 @@ def _is_taught(term: str, window_text: str, char_start: int) -> bool:
     lo = max(0, idx - 2)
     hi = min(len(spans), idx + 3)
     neighborhood = window_text[spans[lo][0] : spans[hi - 1][1]]
-    # Term must appear near a teach-in cue in the neighborhood.
-    if not re.search(rf"(?i)(?<!\w){re.escape(term)}(?!\w)", neighborhood):
-        return False
-    return _TEACH_IN_RE.search(neighborhood) is not None
+    # Optional *…* wrappers around italic coined terms in the window text.
+    t = rf"\*?{re.escape(term)}\*?"
+    # Cue must attach to the term — co-presence of an unrelated gloss is not enough.
+    attach = re.compile(
+        rf"(?i)(?:"
+        rf"(?<!\w){t}(?!\w)\s*[\(\[][^)\]]{{1,80}}[\)\]]"
+        rf"|[\(\[][^)\]]{{1,80}}[\)\]]\s*(?<!\w){t}(?!\w)"
+        rf"|\b(?:was|were|is|are)\s+called\s+(?<!\w){t}(?!\w)"
+        rf"|\bknown\s+as\s+(?<!\w){t}(?!\w)"
+        rf"|\bnamed\s+(?<!\w){t}(?!\w)"
+        rf"|(?<!\w){t}(?!\w)\s+means?\b"
+        rf"|\bmeans?\s+(?<!\w){t}(?!\w)"
+        rf")"
+    )
+    return attach.search(neighborhood) is not None
 
 
 def _normalized_key(term: str) -> str:

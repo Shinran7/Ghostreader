@@ -88,7 +88,9 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
         "prioritized_findings": [asdict(f) for f in report.prioritized_findings],
         "repetition_findings": list(report.repetition_findings),
         "register_findings": list(report.register_findings),
+        "register_findings_enabled": bool(report.register_findings_enabled),
         "thrash_findings": list(report.thrash_findings),
+        "thrash_findings_enabled": bool(report.thrash_findings_enabled),
         "rewrite_suggestions": [asdict(s) for s in report.rewrite_suggestions]
         if report.rewrite_suggestions
         else [],

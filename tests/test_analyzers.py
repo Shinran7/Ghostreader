@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ghostreader.analyzers import RepetitionReport
+from ghostreader.analyzers.register_detector import _is_taught, detect_register
 from ghostreader.analyzers.repetition_detector import RepetitionDetector
 from ghostreader.ingestion import Chapter
 
@@ -77,3 +78,28 @@ class TestRepetitionDetector:
         )
         report = detector.run(sample_chapters)
         assert len(report.word_frequencies) <= 5
+
+
+class TestRegisterTaughtAttachment:
+    """findingId a09a2599: teach cue must attach to the term."""
+
+    def test_unrelated_parenthetical_does_not_teach(self) -> None:
+        text = (
+            "The *tobhandari* wind cut the stair. "
+            "Nearby, the ledger (a list of debts) sat closed. "
+            "She climbed without pause."
+        )
+        start = text.find("tobhandari")
+        assert _is_taught("tobhandari", text, start) is False
+        report = detect_register(text, chapter_number=1, window_words=80, budget=0)
+        cand = [c for c in report.candidates if c.normalized_key == "tobhandari"]
+        assert cand and cand[0].taught is False
+        assert any(f.kind == "unearned_jargon" and f.term == "tobhandari" for f in report.findings)
+
+    def test_attached_called_cue_teaches(self) -> None:
+        text = "The wind was called *tobhandari* on the stair. She climbed."
+        start = text.find("tobhandari")
+        assert _is_taught("tobhandari", text, start) is True
+        report = detect_register(text, chapter_number=1, window_words=40, budget=3)
+        cand = [c for c in report.candidates if c.normalized_key == "tobhandari"]
+        assert cand and cand[0].taught is True

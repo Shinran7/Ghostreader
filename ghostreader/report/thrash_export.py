@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from ghostreader.analyzers.common_word_thrash import (
@@ -41,6 +41,8 @@ _KIND_PRIORITY = {
     "cross_chapter": 5,
 }
 DEFAULT_THRASH_FINDINGS_CAP = 40
+# Keep some cross_chapter rows under the shared cap (KD-9 priority ranks them last).
+_CROSS_CHAPTER_RESERVE_FRAC = 4  # up to cap // 4
 
 
 def analyze_thrash_findings(
@@ -48,12 +50,16 @@ def analyze_thrash_findings(
     *,
     cap: int = DEFAULT_THRASH_FINDINGS_CAP,
     enabled: bool = True,
+    load_bearing: set[str] | frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run thrash heuristics and merge for analyze JSON.
 
     Soft ``prose.uncommon_thrash`` is deferred (KD-4). Callers gate *enabled*
     on ``analyze_thrash_watch`` and depth ∈ ``{standard, deep}`` (not ``quick``).
     Kill switch / disabled → ``[]``.
+
+    ``load_bearing`` raises common-word thresholds (LOAD_BEARING_*) for those
+    lemmas on the analyze product path.
     """
     if not enabled:
         return []
@@ -66,7 +72,13 @@ def analyze_thrash_findings(
         chapter_number = int(ch.get("chapter_number") or 0)
         within_rows.extend(detect_thrash_in_chapter(content, chapter_number=chapter_number))
         chapter_rare_rows.extend(detect_chapter_rare(content, chapter_number=chapter_number))
-        other_additive.extend(detect_common_word_thrash(content, chapter_number=chapter_number))
+        other_additive.extend(
+            detect_common_word_thrash(
+                content,
+                chapter_number=chapter_number,
+                load_bearing=load_bearing,
+            )
+        )
         other_additive.extend(detect_phrase_thrash(content, chapter_number=chapter_number))
         other_additive.extend(detect_dialogue_tag_thrash(content, chapter_number=chapter_number))
 
@@ -91,7 +103,7 @@ def analyze_thrash_findings(
 
     cleaned.sort(key=_sort_key)
     limit = max(0, int(cap))
-    capped = cleaned[:limit]
+    capped = _cap_with_cross_chapter_reserve(cleaned, limit, sort_key=_sort_key)
 
     counts = Counter(str(r.get("kind") or "") for r in capped)
     logger.info(
@@ -106,6 +118,35 @@ def analyze_thrash_findings(
         len(capped),
     )
     return capped
+
+
+def _cap_with_cross_chapter_reserve(
+    rows: list[dict[str, Any]],
+    limit: int,
+    *,
+    sort_key: Callable[[dict[str, Any]], tuple],
+) -> list[dict[str, Any]]:
+    """Apply cap while reserving seats so cross_chapter is not starved out."""
+    if limit <= 0:
+        return []
+    if len(rows) <= limit:
+        return rows
+    cross = [r for r in rows if str(r.get("kind") or "") == "cross_chapter"]
+    others = [r for r in rows if str(r.get("kind") or "") != "cross_chapter"]
+    reserve = min(len(cross), max(1, limit // _CROSS_CHAPTER_RESERVE_FRAC)) if cross else 0
+    other_budget = max(0, limit - reserve)
+    picked = others[:other_budget] + cross[:reserve]
+    # Fill any unused reserve from remaining others (short books / few cross rows).
+    if len(picked) < limit:
+        used = {id(r) for r in picked}
+        for r in others[other_budget:]:
+            if len(picked) >= limit:
+                break
+            if id(r) in used:
+                continue
+            picked.append(r)
+    picked.sort(key=sort_key)
+    return picked[:limit]
 
 
 __all__ = ["DEFAULT_THRASH_FINDINGS_CAP", "analyze_thrash_findings"]

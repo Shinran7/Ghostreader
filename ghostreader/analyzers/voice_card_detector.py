@@ -38,7 +38,19 @@ from ghostreader.companion.voice_card_constants import (
 )
 from ghostreader.companion.voice_cards import VoiceCard
 
-_QUOTE_RE = re.compile(r'\u201c([^\u201d]+)\u201d|"([^"]+)"')
+_QUOTE_RE = re.compile(r'\u201c([^\u201d]+)\u201d|"([^"]+)"', re.DOTALL)
+# Attribution verbs immediately before/after a quote (narration filter).
+_ATTR_VERB = (
+    r"said|says|say|asked|asks|ask|replied|replies|reply|"
+    r"answered|answers|answer|whispered|whispers|muttered|mutters|"
+    r"shouted|shouts|told|tells|spoke|speaks|called|calls|"
+    r"cried|cries|added|adds|continued|continues"
+)
+_ATTR_VERB_BEFORE_RE = re.compile(rf"\b(?:{_ATTR_VERB})\s*[,:]?\s*$", re.IGNORECASE)
+_ATTR_VERB_AFTER_RE = re.compile(
+    rf"^[,.]?\s*(?:\w+\s+)?(?:{_ATTR_VERB})\b",
+    re.IGNORECASE,
+)
 _CONTRACTIONS = (
     "n't",
     "'ll",
@@ -82,33 +94,101 @@ def given_name_alias(name: str) -> str | None:
     return None
 
 
+def _name_in_context(name_lower: str, context: str) -> bool:
+    """True when *name_lower* appears as a whole token in *context* (casefold)."""
+    if not name_lower:
+        return False
+    return re.search(r"(?<!\w)" + re.escape(name_lower) + r"(?!\w)", context) is not None
+
+
+def _is_likely_dialogue(line: str, q_start: int, q_end: int) -> bool:
+    """Reject mid-clause scare-quotes; keep said / em-dash / turn-initial quotes."""
+    before = line[:q_start].rstrip()
+    after = line[q_end:].lstrip()
+    if before.endswith(("—", "–")) or after.startswith(("—", "–")):
+        return True
+    stripped = line.lstrip()
+    if stripped.startswith(("—", "–")):
+        return True
+    if _ATTR_VERB_BEFORE_RE.search(before):
+        return True
+    if _ATTR_VERB_AFTER_RE.match(after):
+        return True
+    # Dialogue turn: quote opens at line start or after sentence end.
+    if not before or before.endswith((".", "!", "?", ":")):
+        return True
+    # Mid-clause embedding (the "dead silence" of …) — narration, not speech.
+    if before[-1].isalnum():
+        return False
+    return True
+
+
+def _normalize_card_text(text: str) -> str:
+    """Casefold, strip, drop punctuation so 'Hello!' == 'Hello' for contrast."""
+    t = (text or "").casefold().strip()
+    t = re.sub(r"[^\w\s]+", "", t, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def attribute_quotes(text: str, cast: list[tuple[str, str]]) -> dict[str, list[str]]:
     """Attribute quoted lines to nearest cast name (±2 lines).
 
     Cousin of Autonomicon voice_fidelity.attribute_quotes. Prefer same-line
     speaker tags; only then expand ±2. Form C bare quotes stay unattributed.
+
+    Name matches are whole-token (Ann must not match inside "annual").
+    Shared given-name aliases are dropped on collision so neither speaker
+    silently steals bare-given-name quotes; full names still match.
+    Narration scare-quotes without dialogue cues are skipped.
+    Quotes may span manuscript lines.
     """
     lines = text.split("\n")
+    line_starts: list[int] = []
+    pos = 0
+    for line in lines:
+        line_starts.append(pos)
+        pos += len(line) + 1
+
     name_to_slug: dict[str, str] = {}
+    ambiguous_aliases: set[str] = set()
     for slug, name in cast:
         if not name:
             continue
-        name_to_slug[name.casefold()] = slug
+        full = name.casefold()
+        name_to_slug[full] = slug
         alias = given_name_alias(name)
-        if alias:
+        if not alias or alias == full:
+            continue
+        if alias in ambiguous_aliases:
+            continue
+        existing = name_to_slug.get(alias)
+        if existing is None:
             name_to_slug[alias] = slug
+        elif existing != slug:
+            # Skip ambiguous shared given-name (do not prefer either speaker).
+            name_to_slug.pop(alias, None)
+            ambiguous_aliases.add(alias)
     sorted_names = sorted(name_to_slug.items(), key=lambda x: -len(x[0]))
 
     out: dict[str, list[str]] = {}
-    for line_idx, line in enumerate(lines):
-        quotes = _QUOTE_RE.findall(line)
-        if not quotes:
+    for match in _QUOTE_RE.finditer(text):
+        raw = match.group(1) or match.group(2)
+        if not raw:
             continue
-        dialogue_texts = [q[0] or q[1] for q in quotes if q[0] or q[1]]
-        if not dialogue_texts:
+        dialogue_text = re.sub(r"\s+", " ", raw.strip())
+        if not dialogue_text:
             continue
-        # Prefer same-line speaker tags; only then expand ±2 lines (avoids
-        # adjacent-speaker theft when lines alternate tightly).
+
+        abs_start, abs_end = match.start(), match.end()
+        line_idx = text.count("\n", 0, abs_start)
+        line = lines[line_idx]
+        line_start = line_starts[line_idx]
+        rel_start = abs_start - line_start
+        # Clamp end to this line for local cue checks (multiline spans).
+        rel_end = min(abs_end, line_start + len(line)) - line_start
+        if not _is_likely_dialogue(line, rel_start, rel_end):
+            continue
+
         contexts = [
             line.casefold(),
             " ".join(lines[max(0, line_idx - 2) : min(len(lines), line_idx + 3)]).casefold(),
@@ -116,8 +196,8 @@ def attribute_quotes(text: str, cast: list[tuple[str, str]]) -> dict[str, list[s
         attributed = False
         for context in contexts:
             for name_lower, slug in sorted_names:
-                if name_lower and name_lower in context:
-                    out.setdefault(slug, []).extend(dialogue_texts)
+                if _name_in_context(name_lower, context):
+                    out.setdefault(slug, []).append(dialogue_text)
                     attributed = True
                     break
             if attributed:
@@ -160,8 +240,9 @@ def speaker_surface_metrics(quotes: list[str]) -> dict[str, float]:
 
 
 def cards_eligible_for_contrast(card_a: str, card_b: str) -> bool:
-    a = (card_a or "").casefold().strip()
-    b = (card_b or "").casefold().strip()
+    """True when both cards are non-empty and differ after punctuation normalize."""
+    a = _normalize_card_text(card_a)
+    b = _normalize_card_text(card_b)
     if not a or not b:
         return False
     return a != b
