@@ -397,6 +397,7 @@ async def _run_analyze(
             chapter_dicts,
             cap=cfg.analyze_thrash_findings_cap,
             enabled=thrash_enabled,
+            load_bearing=set(cfg.analyze_thrash_load_bearing),
         ),
         register_findings_enabled=register_enabled,
         thrash_findings_enabled=thrash_enabled,

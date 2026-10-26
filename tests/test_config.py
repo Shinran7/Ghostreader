@@ -44,6 +44,7 @@ class TestGhostreaderConfig:
         assert cfg.analyze_register_watch is True
         assert cfg.analyze_thrash_watch is True
         assert cfg.analyze_thrash_findings_cap == 40
+        assert cfg.analyze_thrash_load_bearing == []
 
     def test_save_includes_typesafe_fields(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig(typesafe_enabled=True)
@@ -75,6 +76,7 @@ class TestGhostreaderConfig:
         assert "analyze_register_watch: true" in text
         assert "analyze_thrash_watch: true" in text
         assert "analyze_thrash_findings_cap: 40" in text
+        assert "analyze_thrash_load_bearing: []" in text
         assert "Does NOT revert analyze_repetition_*" in text
         loaded = GhostreaderConfig.load(tmp_path)
         assert loaded.typesafe_enabled is True
@@ -96,6 +98,18 @@ class TestGhostreaderConfig:
         assert loaded.analyze_register_watch is True
         assert loaded.analyze_thrash_watch is True
         assert loaded.analyze_thrash_findings_cap == 40
+        assert loaded.analyze_thrash_load_bearing == []
+
+    def test_load_bearing_list_round_trip(self, tmp_path: Path) -> None:
+        """#14: motif protect list saves and reloads from config.yaml."""
+        cfg = GhostreaderConfig(analyze_thrash_load_bearing=["rim", "veil"])
+        cfg.save(tmp_path)
+        text = (tmp_path / "config.yaml").read_text(encoding="utf-8")
+        assert "analyze_thrash_load_bearing:" in text
+        assert "- rim" in text
+        assert "- veil" in text
+        loaded = GhostreaderConfig.load(tmp_path)
+        assert loaded.analyze_thrash_load_bearing == ["rim", "veil"]
 
     def test_save_writes_gemini_default(self, tmp_path: Path) -> None:
         cfg = GhostreaderConfig()

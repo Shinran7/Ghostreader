@@ -95,3 +95,7 @@ analyze_thrash_watch: true
 
 # Max algorithmic thrash_findings rows in analyze JSON export.
 analyze_thrash_findings_cap: 40
+
+# Motif / load-bearing words for common-word thrash (higher bar).
+# Empty list = ordinary thresholds for every word.
+analyze_thrash_load_bearing: []

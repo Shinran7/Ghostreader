@@ -321,3 +321,35 @@ def test_analyze_passes_load_bearing_thresholds() -> None:
     assert all(
         not (r["kind"] == "common_word" and r.get("lemma") == "rim") for r in export_lb
     )
+
+
+def test_config_list_wires_like_analyze_cli() -> None:
+    """#14: config analyze_thrash_load_bearing reaches export the way cli does."""
+    from ghostreader.analyzers.common_word_thrash import (
+        COMMON_OVERUSE_ABS,
+        LOAD_BEARING_ABS,
+    )
+    from ghostreader.config import GhostreaderConfig
+    from ghostreader.report.thrash_export import analyze_thrash_findings
+
+    n = COMMON_OVERUSE_ABS + 1
+    assert n < LOAD_BEARING_ABS
+    text = " ".join(["She stood on the rim."] * n)
+    chapters = [{"chapter_number": 1, "content": text}]
+    bare = GhostreaderConfig()
+    assert bare.analyze_thrash_load_bearing == []
+    flagged = analyze_thrash_findings(
+        chapters,
+        enabled=True,
+        load_bearing=set(bare.analyze_thrash_load_bearing),
+    )
+    assert any(r["kind"] == "common_word" and r.get("lemma") == "rim" for r in flagged)
+    protected_cfg = GhostreaderConfig(analyze_thrash_load_bearing=["rim"])
+    quiet = analyze_thrash_findings(
+        chapters,
+        enabled=True,
+        load_bearing=set(protected_cfg.analyze_thrash_load_bearing),
+    )
+    assert all(
+        not (r["kind"] == "common_word" and r.get("lemma") == "rim") for r in quiet
+    )

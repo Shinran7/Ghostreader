@@ -78,6 +78,9 @@ class GhostreaderConfig(BaseModel):
     analyze_thrash_watch: bool = True
     # Max algorithmic thrash_findings rows in analyze JSON.
     analyze_thrash_findings_cap: int = 40
+    # Motif / load-bearing lemmas for common-word thrash (higher threshold).
+    # Empty = ordinary thresholds for every word (KD-5 protect set may be empty).
+    analyze_thrash_load_bearing: list[str] = []
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -104,6 +107,12 @@ class GhostreaderConfig(BaseModel):
             if isinstance(val, bool):
                 return str(val).lower()
             return str(val)
+
+        def _fmt_str_list(vals: list[str]) -> str:
+            cleaned = [str(v).strip() for v in vals if str(v).strip()]
+            if not cleaned:
+                return "[]"
+            return "\n" + "\n".join(f"  - {v}" for v in cleaned)
 
         lines = [
             # LLM model (required). Examples: gemini-3.8-flash,
@@ -215,6 +224,10 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Max algorithmic thrash_findings rows in analyze JSON export.",
             f"analyze_thrash_findings_cap: {_fmt(self.analyze_thrash_findings_cap)}",
+            "",
+            "# Motif / load-bearing words for common-word thrash (higher bar).",
+            "# Empty list = ordinary thresholds for every word.",
+            f"analyze_thrash_load_bearing: {_fmt_str_list(self.analyze_thrash_load_bearing)}",
             "",
         ]
 
