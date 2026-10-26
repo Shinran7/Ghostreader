@@ -52,10 +52,18 @@ from ghostreader.companion.repetition import (
     repetition_findings_for_brief,
     select_craft_chapters,
 )
+from ghostreader.companion.voice_card import (
+    voice_card_block as format_voice_card_block,
+)
+from ghostreader.companion.voice_card import (
+    voice_card_findings_for_chapters,
+)
+from ghostreader.companion.voice_cards import load_voice_cards
 from ghostreader.graph import chapters_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.llm import message_text
 from ghostreader.report import DimensionRating, PrioritizedFinding
+from ghostreader.seed import find_seed_yaml
 from ghostreader.typesafe.routing import prioritization_sort_key
 
 logger = logging.getLogger(__name__)
@@ -316,6 +324,7 @@ async def run_companion_pipeline(
     craft_window_chapters: list[int] = [discovery.chapter_number]
     repetition_findings: list[dict[str, Any]] = []
     register_findings: list[dict[str, Any]] = []
+    voice_card_findings: list[dict[str, Any]] = []
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
     info_ratings_map: dict[str, dict[str, str]] = {}
@@ -393,9 +402,43 @@ async def run_companion_pipeline(
                 quiet_stdout_json=json_mode,
             )
 
-        # Soft dim gating only in S3; detector + bias block land in S4a.
         include_voice_card = companion_voice_card_watch
-        if not include_voice_card:
+        vc_block = ""
+        if include_voice_card:
+            _stderr("Running voice-card watch…", quiet_stdout_json=json_mode)
+            cards = load_voice_cards(discovery.story_dir)
+            if not cards:
+                seed_path = find_seed_yaml(discovery.path)
+                if seed_path is not None:
+                    cards = load_voice_cards(seed_path.parent)
+            if not cards:
+                warnings.append("voice_card watch: no canon/characters cards found")
+                voice_card_findings = []
+                vc_block = format_voice_card_block(
+                    [],
+                    chapter_number=discovery.chapter_number,
+                )
+                _stderr(
+                    "Voice-card watch: no cards (fail-soft)",
+                    quiet_stdout_json=json_mode,
+                )
+            else:
+                chapter_pairs = [(c.chapter_number, c.content) for c in discovery.chapters]
+                voice_card_findings = voice_card_findings_for_chapters(
+                    chapter_pairs,
+                    cards,
+                    focus_n=discovery.chapter_number,
+                )
+                vc_block = format_voice_card_block(
+                    voice_card_findings,
+                    chapter_number=discovery.chapter_number,
+                )
+                _stderr(
+                    f"Voice-card watch: kept {len(voice_card_findings)} row(s)",
+                    quiet_stdout_json=json_mode,
+                )
+        else:
+            voice_card_findings = []
             _stderr(
                 "Voice-card watch: off (kill switch)",
                 quiet_stdout_json=json_mode,
@@ -409,7 +452,7 @@ async def run_companion_pipeline(
             typesafe_client=typesafe_client,
             register_block=reg_block,
             include_register_dims=include_register,
-            voice_card_block="",
+            voice_card_block=vc_block,
             include_voice_card_dims=include_voice_card,
         )
         prose_output = prose_result.get("prose_output") or {}
@@ -570,6 +613,7 @@ async def run_companion_pipeline(
         verdict_drivers=drivers,
         repetition_findings=repetition_findings,
         register_findings=register_findings,
+        voice_card_findings=voice_card_findings,
         warnings=warnings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
