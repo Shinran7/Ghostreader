@@ -143,9 +143,9 @@ def narrative_questions() -> dict[str, Any]:
     return {dim: _choice(_NARRATIVE_INSTRUCTIONS[dim]) for dim in NARRATIVE_DIMENSIONS}
 
 
-# Companion soft craft dims (#7 + #274 T2) — do not overload prose.vocabulary.
-# Soft human-door / jargon-earn / earth-anachronism; stock analyze PROSE_DIMENSIONS stay five-pack.
-# register_findings kinds remain unearned_jargon | initiation_budget only (HOOK 0.2.2).
+# Companion soft craft dims (#7 + #274 T2 + #11) — do not overload prose.vocabulary.
+# Soft human-door / jargon-earn / earth-anachronism / voice-card; stock analyze
+# PROSE_DIMENSIONS stay five-pack. Machine kinds stay on their own arrays.
 COMPANION_REGISTER_DIMENSIONS: tuple[str, ...] = (
     "prose.human_door",
     "prose.jargon_earn",
@@ -180,14 +180,53 @@ _COMPANION_REGISTER_INSTRUCTIONS: dict[str, str] = {
     ),
 }
 
-COMPANION_PROSE_DIMENSIONS: tuple[str, ...] = PROSE_DIMENSIONS + COMPANION_REGISTER_DIMENSIONS
+# Companion soft voice-vs-card (#11). Machine rows stay in voice_card_findings.
+COMPANION_VOICE_CARD_DIMENSIONS: tuple[str, ...] = ("prose.voice_card",)
+
+_COMPANION_VOICE_CARD_INSTRUCTIONS: dict[str, str] = {
+    "prose.voice_card": (
+        "Rate whether attributed dialogue for carded speakers in THIS CHAPTER "
+        "matches each speaker's dialogue_voice / voice_wildcards. Concern = clear "
+        "mismatch or carded speakers collapsing into one register despite distinct "
+        "cards, using quotes visible in the chapter excerpt. Heuristic rows labeled "
+        "prior are context only — do not invent concerns for chapters not in the "
+        "excerpt. Strength = distinct, card-faithful speech. Do not invent "
+        "eye-dialect spelling issues. Fail soft when cards are missing."
+    ),
+}
 
 
-def companion_prose_questions() -> dict[str, Any]:
-    """Base five prose dims + register dims (always merged in S2)."""
+def build_companion_prose_dimensions(
+    *,
+    include_register: bool = True,
+    include_voice_card: bool = True,
+) -> tuple[str, ...]:
+    """Stock five + optional companion soft packs (register / voice-card)."""
+    dims: tuple[str, ...] = PROSE_DIMENSIONS
+    if include_register:
+        dims = dims + COMPANION_REGISTER_DIMENSIONS
+    if include_voice_card:
+        dims = dims + COMPANION_VOICE_CARD_DIMENSIONS
+    return dims
+
+
+# Full default companion bank (both watches on).
+COMPANION_PROSE_DIMENSIONS: tuple[str, ...] = build_companion_prose_dimensions()
+
+
+def companion_prose_questions(
+    *,
+    include_register: bool = True,
+    include_voice_card: bool = True,
+) -> dict[str, Any]:
+    """Base five prose dims + optional companion soft packs."""
     questions = prose_questions()
-    for dim in COMPANION_REGISTER_DIMENSIONS:
-        questions[dim] = _choice(_COMPANION_REGISTER_INSTRUCTIONS[dim])
+    if include_register:
+        for dim in COMPANION_REGISTER_DIMENSIONS:
+            questions[dim] = _choice(_COMPANION_REGISTER_INSTRUCTIONS[dim])
+    if include_voice_card:
+        for dim in COMPANION_VOICE_CARD_DIMENSIONS:
+            questions[dim] = _choice(_COMPANION_VOICE_CARD_INSTRUCTIONS[dim])
     return questions
 
 

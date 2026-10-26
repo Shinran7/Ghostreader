@@ -44,6 +44,9 @@ companion_light_narrative: true
 # Companion register / initiation watch (heuristic + soft dims; false = off).
 companion_register_watch: true
 
+# Companion voice-vs-card watch (heuristic + soft prose.voice_card; false = off).
+companion_voice_card_watch: true
+
 # Probe chat model JSON contract at analyze/companion start (model-switch guard).
 llm_json_probe: true
 

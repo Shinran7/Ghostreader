@@ -53,12 +53,34 @@ _COMPANION_REGISTER_BIAS = (
     "lyric that advances feeling; term taught in use; bureaucracy on purpose."
 )
 
+_COMPANION_VOICE_CARD_DIM_FRAGMENT = """
+ADDITIONAL COMPANION VOICE-CARD DIMENSION (judge when voice-card watch is on):
+**Voice vs card** (`prose.voice_card`) — Does attributed dialogue for carded
+speakers in THIS CHAPTER match each speaker's dialogue_voice / voice_wildcards?
+Concern = clear mismatch or carded speakers collapsing into one register despite
+distinct cards, using quotes visible in the chapter excerpt. Heuristic rows
+labeled prior are context only — do not invent concerns for chapters not in the
+excerpt. Strength = distinct, card-faithful speech. Do not invent eye-dialect
+spelling issues. Fail soft when cards are missing.
+
+When emitting findings, "dimension" may also be "prose.voice_card".
+"""
+
+_COMPANION_VOICE_CARD_BIAS = (
+    "Voice-vs-card heuristic rows (if any) are machine signals about attributed "
+    "speech vs canon dialogue_voice. Rows labeled prior are context only — do not "
+    "invent concerns for chapters absent from the excerpt. Soft literary judgment "
+    "owns card fidelity. Do not invent eye-dialect spelling issues. Fail soft when "
+    "cards are missing."
+)
+
 
 def _companion_prose_typesafe_state(
     state: AnalysisState,
     *,
     repetition_block: str,
     register_block: str = "",
+    voice_card_block: str = "",
 ) -> dict[str, Any]:
     """Build TypeSafe prose state with companion-formatted repetition string."""
     config = state.get("config", {})
@@ -67,11 +89,14 @@ def _companion_prose_typesafe_state(
     mode_bias = _COMPANION_REP_BIAS
     if register_block:
         mode_bias = f"{mode_bias}\n{_COMPANION_REGISTER_BIAS}"
+    if voice_card_block:
+        mode_bias = f"{mode_bias}\n{_COMPANION_VOICE_CARD_BIAS}"
     return {
         "genre": config.get("genre"),
         "author_intent": build_author_intent_block(seed_meta) or None,
         "repetition_data": repetition_block,
         "register_data": register_block or None,
+        "voice_card_data": voice_card_block or None,
         "manuscript": _format_chapter_excerpts(chapters),
         "mode_bias": mode_bias,
     }
@@ -82,6 +107,7 @@ def _companion_craft_context(
     repetition_block: str,
     register_block: str,
     chapter_block: str,
+    voice_card_block: str = "",
 ) -> str:
     parts = [
         _COMPANION_REP_BIAS,
@@ -99,6 +125,17 @@ def _companion_craft_context(
                 else f"## Register heuristic\n{register_block}",
             ]
         )
+    if voice_card_block:
+        parts.extend(
+            [
+                "",
+                _COMPANION_VOICE_CARD_BIAS,
+                "",
+                voice_card_block
+                if voice_card_block.lstrip().startswith("#")
+                else f"## Voice-vs-card heuristic\n{voice_card_block}",
+            ]
+        )
     parts.extend(["", f"## Manuscript Text\n{chapter_block}"])
     return "\n".join(parts)
 
@@ -110,6 +147,8 @@ async def _companion_prose_llm_path(
     repetition_block: str,
     register_block: str = "",
     include_register_dims: bool = True,
+    voice_card_block: str = "",
+    include_voice_card_dims: bool = True,
 ) -> dict[str, Any]:
     config = state.get("config", {})
     genre = config.get("genre")
@@ -117,18 +156,22 @@ async def _companion_prose_llm_path(
     seed_meta = config.get("seed_meta", {})
     author_intent = build_author_intent_block(seed_meta)
 
-    # Stock five-dim template; companion-local register naming when watch is on.
+    # Stock five-dim template; companion-local soft dims when watches are on.
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         genre_preamble=get_genre_preamble(genre),
         author_intent=author_intent,
     )
     effective_register = register_block if include_register_dims else ""
+    effective_voice = voice_card_block if include_voice_card_dims else ""
     if include_register_dims:
         system_prompt = system_prompt + _COMPANION_REGISTER_DIM_FRAGMENT
+    if include_voice_card_dims:
+        system_prompt = system_prompt + _COMPANION_VOICE_CARD_DIM_FRAGMENT
     chapter_block = _format_chapter_excerpts(chapters)
     user_message = _companion_craft_context(
         repetition_block=repetition_block,
         register_block=effective_register,
+        voice_card_block=effective_voice,
         chapter_block=chapter_block,
     )
     response = await llm.ainvoke(
@@ -155,6 +198,8 @@ async def _companion_prose_typesafe_path(
     repetition_block: str,
     register_block: str = "",
     include_register_dims: bool = True,
+    voice_card_block: str = "",
+    include_voice_card_dims: bool = True,
 ) -> dict[str, Any]:
     from ghostreader.typesafe.adapters import (
         build_typesafe_raw_response,
@@ -164,23 +209,29 @@ async def _companion_prose_typesafe_path(
     from ghostreader.typesafe.client import ask
     from ghostreader.typesafe.enrich import enrich_findings_batch
     from ghostreader.typesafe.questions import (
-        COMPANION_PROSE_DIMENSIONS,
-        PROSE_DIMENSIONS,
+        build_companion_prose_dimensions,
         companion_prose_questions,
-        prose_questions,
     )
     from ghostreader.typesafe.routing import needs_choice_enrich
 
     config = state.get("config", {})
     floor = float(config.get("typesafe_confidence_floor", 0.55))
     effective_register = register_block if include_register_dims else ""
-    dims = COMPANION_PROSE_DIMENSIONS if include_register_dims else PROSE_DIMENSIONS
-    questions = companion_prose_questions() if include_register_dims else prose_questions()
+    effective_voice = voice_card_block if include_voice_card_dims else ""
+    dims = build_companion_prose_dimensions(
+        include_register=include_register_dims,
+        include_voice_card=include_voice_card_dims,
+    )
+    questions = companion_prose_questions(
+        include_register=include_register_dims,
+        include_voice_card=include_voice_card_dims,
+    )
 
     ts_state = _companion_prose_typesafe_state(
         state,
         repetition_block=repetition_block,
         register_block=effective_register,
+        voice_card_block=effective_voice,
     )
     response = await ask(typesafe_client, state=ts_state, questions=questions)
     findings, ratings = choices_to_findings(response, dims, confidence_floor=floor)
@@ -199,6 +250,7 @@ async def _companion_prose_typesafe_path(
     context = _companion_craft_context(
         repetition_block=repetition_block,
         register_block=effective_register,
+        voice_card_block=effective_voice,
         chapter_block=_format_chapter_excerpts(chapters),
     )
 
@@ -250,6 +302,8 @@ async def run_companion_craft(
     typesafe_client: Any | None = None,
     register_block: str = "",
     include_register_dims: bool = True,
+    voice_card_block: str = "",
+    include_voice_card_dims: bool = True,
 ) -> dict[str, Any]:
     """Run companion prose craft with a pre-formatted repetition string.
 
@@ -258,8 +312,9 @@ async def run_companion_craft(
 
     When *include_register_dims* is true (default), companion asks
     ``prose.human_door`` / ``prose.jargon_earn`` / ``prose.earth_anachronism``.
-    Kill switch / ``--continuity-only``
-    callers pass false for stock five-pack only.
+    When *include_voice_card_dims* is true (default), companion asks
+    ``prose.voice_card``. Kill switch / ``--continuity-only`` callers pass false
+    for the packs they want off (stock five-pack when both false).
     """
     state: AnalysisState = {  # type: ignore[assignment]
         "chapters": chapters_to_dicts(focus_chapters),
@@ -275,6 +330,8 @@ async def run_companion_craft(
             repetition_block=repetition_block,
             register_block=register_block,
             include_register_dims=include_register_dims,
+            voice_card_block=voice_card_block,
+            include_voice_card_dims=include_voice_card_dims,
         )
     return await _companion_prose_llm_path(
         state,
@@ -282,6 +339,8 @@ async def run_companion_craft(
         repetition_block=repetition_block,
         register_block=register_block,
         include_register_dims=include_register_dims,
+        voice_card_block=voice_card_block,
+        include_voice_card_dims=include_voice_card_dims,
     )
 
 

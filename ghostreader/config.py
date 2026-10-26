@@ -43,6 +43,8 @@ class GhostreaderConfig(BaseModel):
     companion_light_narrative: bool = True
     # Companion register / initiation watch (heuristic rows + soft dims). Default on.
     companion_register_watch: bool = True
+    # Companion voice-vs-card watch (heuristic rows + soft prose.voice_card). Default on.
+    companion_voice_card_watch: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -161,6 +163,9 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Companion register / initiation watch (heuristic + soft dims; false = off).",
             f"companion_register_watch: {_fmt(self.companion_register_watch)}",
+            "",
+            "# Companion voice-vs-card watch (heuristic + soft prose.voice_card; false = off).",
+            f"companion_voice_card_watch: {_fmt(self.companion_voice_card_watch)}",
             "",
             "# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",

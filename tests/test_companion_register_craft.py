@@ -35,8 +35,10 @@ class TestCompanionRegisterQuestions:
         assert "prose.human_door" in bank
         assert "prose.jargon_earn" in bank
         assert set(COMPANION_REGISTER_DIMENSIONS).issubset(set(bank))
-        assert len(COMPANION_PROSE_DIMENSIONS) == 8
+        # Full default bank = stock five + register three + voice-card one.
+        assert len(COMPANION_PROSE_DIMENSIONS) == 9
         assert len(PROSE_DIMENSIONS) == 5
+        assert "prose.voice_card" in bank
 
     def test_llm_fragment_names_both_dims(self) -> None:
         assert "prose.human_door" in _COMPANION_REGISTER_DIM_FRAGMENT

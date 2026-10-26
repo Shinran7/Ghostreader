@@ -258,6 +258,7 @@ async def run_companion_pipeline(
     companion_info_dims: bool = True,
     companion_light_narrative: bool = True,
     companion_register_watch: bool = True,
+    companion_voice_card_watch: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     json_mode: bool = False,
@@ -392,6 +393,14 @@ async def run_companion_pipeline(
                 quiet_stdout_json=json_mode,
             )
 
+        # Soft dim gating only in S3; detector + bias block land in S4a.
+        include_voice_card = companion_voice_card_watch
+        if not include_voice_card:
+            _stderr(
+                "Voice-card watch: off (kill switch)",
+                quiet_stdout_json=json_mode,
+            )
+
         prose_result = await run_companion_craft(
             focus_chapters=focus_chapters,
             repetition_block=repetition_block,
@@ -400,6 +409,8 @@ async def run_companion_pipeline(
             typesafe_client=typesafe_client,
             register_block=reg_block,
             include_register_dims=include_register,
+            voice_card_block="",
+            include_voice_card_dims=include_voice_card,
         )
         prose_output = prose_result.get("prose_output") or {}
         craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)

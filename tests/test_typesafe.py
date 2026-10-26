@@ -239,9 +239,11 @@ class TestQuestionBanks:
         assert "prose.human_door" in bank
         assert "prose.jargon_earn" in bank
         assert "prose.earth_anachronism" in bank
+        assert "prose.voice_card" in bank
         # Stock analyze five-pack unchanged.
         assert set(prose_questions()) == set(PROSE_DIMENSIONS)
         assert len(PROSE_DIMENSIONS) == 5
+        assert len(COMPANION_PROSE_DIMENSIONS) == 9
 
     def test_narrative_keys(self) -> None:
         assert set(narrative_questions()) == set(NARRATIVE_DIMENSIONS)

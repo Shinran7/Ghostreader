@@ -28,6 +28,7 @@ class TestGhostreaderConfig:
         assert cfg.companion_info_dims is True
         assert cfg.companion_light_narrative is True
         assert cfg.companion_register_watch is True
+        assert cfg.companion_voice_card_watch is True
         assert cfg.analyze_repetition_words == 50
         assert cfg.analyze_repetition_phrases == 40
         assert cfg.analyze_repetition_patterns == 20
@@ -58,6 +59,7 @@ class TestGhostreaderConfig:
         assert "companion_info_dims: true" in text
         assert "companion_light_narrative: true" in text
         assert "companion_register_watch: true" in text
+        assert "companion_voice_card_watch: true" in text
         assert "analyze_repetition_words: 50" in text
         assert "analyze_repetition_phrases: 40" in text
         assert "analyze_repetition_patterns: 20" in text
@@ -82,6 +84,7 @@ class TestGhostreaderConfig:
         assert loaded.companion_info_dims is True
         assert loaded.companion_light_narrative is True
         assert loaded.companion_register_watch is True
+        assert loaded.companion_voice_card_watch is True
         assert loaded.analyze_repetition_words == 50
         assert loaded.analyze_repetition_phrases == 40
         assert loaded.analyze_repetition_patterns == 20
