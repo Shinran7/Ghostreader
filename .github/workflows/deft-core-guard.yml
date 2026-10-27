@@ -1,0 +1,652 @@
+name: deft-core-guard
+
+# Deft framework guard (#1430 / #3127 / #3193 / #3345 / #3388): a single PR should not mix changes to the
+# vendored framework payload (.deft/core/**) with true application/product files.
+# One upgrade PR MAY include deposit + installer-managed paths + package.json pin/lock
+# + .deft/GENERATION.json when package.json is @deftai/directive* dependency-key pin-only
+# and lockfiles are pin follow-through (#3193). Framework updates come from `deft update`
+# / install and should land without product feature work so reviewers treat the payload
+# as machine-managed. Delete this file if you do not want the guard.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-mixed-core-and-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Refuse PRs that mix .deft/core/** with non-framework paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -eu
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files:"
+          echo "$changed"
+          core=$(printf '%s\n' "$changed" | grep -E '^\.deft/core/' || true)
+          # Installer-managed allowlist — one ERE per line (#3345 loadable YAML)
+          allowlist=$(mktemp)
+          trap 'rm -f "$allowlist"' EXIT
+          cat > "$allowlist" <<'ALLOW'
+          ^AGENTS\.md$
+          ^\.agents/
+          ^\.claude/skills/deft/SKILL\.md$
+          ^\.claude/skills/deft-directive-setup/SKILL\.md$
+          ^\.claude/skills/deft-directive-build/SKILL\.md$
+          ^\.claude/skills/deft-directive-review-cycle/SKILL\.md$
+          ^\.claude/skills/deft-directive-refinement/SKILL\.md$
+          ^\.claude/skills/deft-directive-swarm/SKILL\.md$
+          ^\.claude/skills/deft-directive-interview/SKILL\.md$
+          ^\.claude/skills/deft-directive-portfolio-priority/SKILL\.md$
+          ^\.claude/skills/deft-directive-pre-pr/SKILL\.md$
+          ^\.claude/skills/deft-directive-sync/SKILL\.md$
+          ^\.cursor/skills/deft/SKILL\.md$
+          ^\.cursor/skills/deft-directive-setup/SKILL\.md$
+          ^\.cursor/skills/deft-directive-build/SKILL\.md$
+          ^\.cursor/skills/deft-directive-review-cycle/SKILL\.md$
+          ^\.cursor/skills/deft-directive-refinement/SKILL\.md$
+          ^\.cursor/skills/deft-directive-swarm/SKILL\.md$
+          ^\.cursor/skills/deft-directive-interview/SKILL\.md$
+          ^\.cursor/skills/deft-directive-portfolio-priority/SKILL\.md$
+          ^\.cursor/skills/deft-directive-pre-pr/SKILL\.md$
+          ^\.cursor/skills/deft-directive-sync/SKILL\.md$
+          ^\.codex/skills/deft/SKILL\.md$
+          ^\.codex/skills/deft-directive-setup/SKILL\.md$
+          ^\.codex/skills/deft-directive-build/SKILL\.md$
+          ^\.codex/skills/deft-directive-review-cycle/SKILL\.md$
+          ^\.codex/skills/deft-directive-refinement/SKILL\.md$
+          ^\.codex/skills/deft-directive-swarm/SKILL\.md$
+          ^\.codex/skills/deft-directive-interview/SKILL\.md$
+          ^\.codex/skills/deft-directive-portfolio-priority/SKILL\.md$
+          ^\.codex/skills/deft-directive-pre-pr/SKILL\.md$
+          ^\.codex/skills/deft-directive-sync/SKILL\.md$
+          ^\.github/skills/deft/SKILL\.md$
+          ^\.github/skills/deft-directive-setup/SKILL\.md$
+          ^\.github/skills/deft-directive-build/SKILL\.md$
+          ^\.github/skills/deft-directive-review-cycle/SKILL\.md$
+          ^\.github/skills/deft-directive-refinement/SKILL\.md$
+          ^\.github/skills/deft-directive-swarm/SKILL\.md$
+          ^\.github/skills/deft-directive-interview/SKILL\.md$
+          ^\.github/skills/deft-directive-portfolio-priority/SKILL\.md$
+          ^\.github/skills/deft-directive-pre-pr/SKILL\.md$
+          ^\.github/skills/deft-directive-sync/SKILL\.md$
+          ^\.githooks/
+          ^\.claude/settings\.json$
+          ^\.grok/hooks/deft\.json$
+          ^\.cursor/hooks\.json$
+          ^\.cursor/hooks/deft-cursor-hook-adapter\.mjs$
+          ^\.cursor/hooks/deft-cursor-hook-adapter\.test\.mjs$
+          ^\.codex/hooks\.json$
+          ^\.claude/commands/deft-directive-change\.md$
+          ^\.claude/commands/deft-directive-change-apply\.md$
+          ^\.claude/commands/deft-directive-change-verify\.md$
+          ^\.claude/commands/deft-directive-change-archive\.md$
+          ^\.claude/commands/deft-directive-run-interview\.md$
+          ^\.claude/commands/deft-directive-run-yolo\.md$
+          ^\.claude/commands/deft-directive-run-map\.md$
+          ^\.claude/commands/deft-directive-run-discuss\.md$
+          ^\.claude/commands/deft-directive-run-research\.md$
+          ^\.claude/commands/deft-directive-run-speckit\.md$
+          ^\.claude/commands/deft-directive-run-probe\.md$
+          ^\.claude/commands/deft-continue\.md$
+          ^\.claude/commands/deft-checkpoint\.md$
+          ^\.cursor/commands/deft-directive-change\.md$
+          ^\.cursor/commands/deft-directive-change-apply\.md$
+          ^\.cursor/commands/deft-directive-change-verify\.md$
+          ^\.cursor/commands/deft-directive-change-archive\.md$
+          ^\.cursor/commands/deft-directive-run-interview\.md$
+          ^\.cursor/commands/deft-directive-run-yolo\.md$
+          ^\.cursor/commands/deft-directive-run-map\.md$
+          ^\.cursor/commands/deft-directive-run-discuss\.md$
+          ^\.cursor/commands/deft-directive-run-research\.md$
+          ^\.cursor/commands/deft-directive-run-speckit\.md$
+          ^\.cursor/commands/deft-directive-run-probe\.md$
+          ^\.cursor/commands/deft-continue\.md$
+          ^\.cursor/commands/deft-checkpoint\.md$
+          ^\.grok/commands/deft-directive-change\.md$
+          ^\.grok/commands/deft-directive-change-apply\.md$
+          ^\.grok/commands/deft-directive-change-verify\.md$
+          ^\.grok/commands/deft-directive-change-archive\.md$
+          ^\.grok/commands/deft-directive-run-interview\.md$
+          ^\.grok/commands/deft-directive-run-yolo\.md$
+          ^\.grok/commands/deft-directive-run-map\.md$
+          ^\.grok/commands/deft-directive-run-discuss\.md$
+          ^\.grok/commands/deft-directive-run-research\.md$
+          ^\.grok/commands/deft-directive-run-speckit\.md$
+          ^\.grok/commands/deft-directive-run-probe\.md$
+          ^\.grok/commands/deft-continue\.md$
+          ^\.grok/commands/deft-checkpoint\.md$
+          ^\.codex/prompts/deft-directive-change\.md$
+          ^\.codex/prompts/deft-directive-change-apply\.md$
+          ^\.codex/prompts/deft-directive-change-verify\.md$
+          ^\.codex/prompts/deft-directive-change-archive\.md$
+          ^\.codex/prompts/deft-directive-run-interview\.md$
+          ^\.codex/prompts/deft-directive-run-yolo\.md$
+          ^\.codex/prompts/deft-directive-run-map\.md$
+          ^\.codex/prompts/deft-directive-run-discuss\.md$
+          ^\.codex/prompts/deft-directive-run-research\.md$
+          ^\.codex/prompts/deft-directive-run-speckit\.md$
+          ^\.codex/prompts/deft-directive-run-probe\.md$
+          ^\.codex/prompts/deft-continue\.md$
+          ^\.codex/prompts/deft-checkpoint\.md$
+          ^\.gitattributes$
+          ^\.gitignore$
+          ^\.prettierignore$
+          ^greptile\.json$
+          ^\.github/codeql/codeql-config\.yml$
+          ^\.github/workflows/deft-core-guard\.yml$
+          ^Taskfile\.yml$
+          ^package\.json$
+          ^package-lock\.json$
+          ^pnpm-lock\.yaml$
+          ^yarn\.lock$
+          ^\.deft/GENERATION\.json$
+          ^vbrief/\.deft-version$
+          ^vbrief/vbrief\.md$
+          ^vbrief/schemas/
+          ^vbrief/migration/
+          ^vbrief/proposed/\.gitkeep$
+          ^vbrief/pending/\.gitkeep$
+          ^vbrief/active/\.gitkeep$
+          ^vbrief/completed/\.gitkeep$
+          ^vbrief/cancelled/\.gitkeep$
+          ^xbrief/\.deft-version$
+          ^xbrief/xbrief\.md$
+          ^xbrief/schemas/
+          ^xbrief/migration/
+          ^xbrief/proposed/\.gitkeep$
+          ^xbrief/pending/\.gitkeep$
+          ^xbrief/active/\.gitkeep$
+          ^xbrief/completed/\.gitkeep$
+          ^xbrief/cancelled/\.gitkeep$
+          ALLOW
+          app=$(printf '%s\n' "$changed" | grep -vE '^\.deft/core/' | grep -vE -f "$allowlist" | grep -v '^$' || true)
+          if [ -n "$core" ] && [ -n "$app" ]; then
+            # Evidence-based branch-sync exemption (#3388). Not name-only.
+          if python3 - "$HEAD_SHA" "$BASE_REF" <<'PY'
+          import json, subprocess, sys
+          head_sha, pr_base = sys.argv[1], sys.argv[2]
+          def git(*a):
+              return subprocess.run(['git', *a], capture_output=True, text=True)
+          dest = source = None
+          if git('fetch', '--quiet', 'origin', pr_base).returncode != 0: sys.exit(1)
+          shown = git('show', 'origin/' + pr_base + ':xbrief/PROJECT-DEFINITION.xbrief.json')
+          if shown.returncode == 0:
+              try:
+                  plan = json.loads(shown.stdout).get('plan')
+              except Exception:
+                  plan = None
+              if isinstance(plan, dict):
+                  pol = plan.get('x-directive/policy') or plan.get('policy') or {}
+                  if isinstance(pol, dict):
+                      d, s = pol.get('deliveryBranch'), pol.get('baseBranch')
+                      if isinstance(d, str) and d.strip(): dest = d.strip()
+                      if isinstance(s, str) and s.strip(): source = s.strip()
+          if not dest:
+              r = git('symbolic-ref', 'refs/remotes/origin/HEAD', '--short')
+              if r.returncode == 0 and r.stdout.strip():
+                  dest = r.stdout.strip().split('/', 1)[-1]
+              else:
+                  for n in ('main', 'master'):
+                      if git('show-ref', '--verify', '--quiet', 'refs/remotes/origin/' + n).returncode == 0:
+                          dest = n
+                          break
+                  if not dest:
+                      for n in ('main', 'master'):
+                          if git('show-ref', '--verify', '--quiet', 'refs/heads/' + n).returncode == 0:
+                              dest = n
+                              break
+                  if not dest: dest = 'master'
+          if not source: source = dest
+          if source == dest or pr_base != dest: sys.exit(1)
+          if git('fetch', '--quiet', 'origin', source).returncode != 0: sys.exit(1)
+          if git('merge-base', '--is-ancestor', head_sha, 'origin/' + source).returncode != 0: sys.exit(1)
+          print('sync PR detected: all commits already guard-checked on ' + source)
+          PY
+          then
+            exit 0
+          fi
+            echo "::error title=deft-core guard (#1430)::This PR changes the vendored framework payload (.deft/core/**) AND non-framework files. Split the framework update into its own PR."
+            echo "--- framework (.deft/core/**) changes ---"; printf '%s\n' "$core"
+            echo "--- non-framework changes ---"; printf '%s\n' "$app"
+            exit 1
+          fi
+          # Content-aware pin unit (#3193): path allowlist is not enough for package/lock.
+          if [ -n "$core" ]; then
+          python3 - "$BASE_SHA" "$HEAD_SHA" <<'PY'
+          # Content-aware pin unit for deposited deft-core-guard (#3193).
+          # Invoked as: python3 - "$BASE_SHA" "$HEAD_SHA"
+          # Mirrors packages/core/src/init-deposit/hygiene.ts isUpgradePinPathContentAllowed.
+          from __future__ import annotations
+          
+          import json
+          import re
+          import subprocess
+          import sys
+          
+          _Q = chr(39) + chr(34)  # ' and " without raw-string quote pain
+          
+          
+          def git_show(sha, path):
+              try:
+                  return subprocess.check_output(
+                      ["git", "show", f"{sha}:{path}"], text=True, stderr=subprocess.DEVNULL
+                  )
+              except subprocess.CalledProcessError:
+                  return ""
+          
+          
+          def changed_names(base_sha, head_sha):
+              out = subprocess.check_output(
+                  ["git", "diff", "--name-only", base_sha, head_sha], text=True
+              )
+              return [p for p in out.splitlines() if p]
+          
+          
+          def is_dir_key(n):
+              return n.startswith("@deftai/directive")
+          
+          
+          DEP_FIELDS = (
+              "dependencies",
+              "devDependencies",
+              "optionalDependencies",
+              "peerDependencies",
+          )
+          
+          
+          def deep_eq(a, b):
+              if a is b:
+                  return True
+              if type(a) is not type(b):
+                  return False
+              if isinstance(a, dict):
+                  if set(a) != set(b):
+                      return False
+                  return all(deep_eq(a[k], b[k]) for k in a)
+              if isinstance(a, list):
+                  return len(a) == len(b) and all(deep_eq(x, y) for x, y in zip(a, b))
+              return a == b
+          
+          
+          def strip_pins(obj):
+              if not isinstance(obj, dict):
+                  return obj
+              out = {}
+              for k, v in obj.items():
+                  if k in DEP_FIELDS and isinstance(v, dict):
+                      out[k] = {dk: dv for dk, dv in v.items() if not is_dir_key(dk)}
+                  else:
+                      out[k] = v
+              return out
+          
+          
+          def pkg_pin_only(base, head):
+              try:
+                  b, h = json.loads(base or "{}"), json.loads(head or "{}")
+              except json.JSONDecodeError:
+                  return False
+              return deep_eq(strip_pins(b), strip_pins(h))
+          
+          
+          def collect_deps(pkg):
+              out = {}
+              if not isinstance(pkg, dict):
+                  return out
+              for f in DEP_FIELDS:
+                  block = pkg.get(f)
+                  if isinstance(block, dict):
+                      for k, v in block.items():
+                          if isinstance(v, str):
+                              out[k] = v
+                          elif isinstance(v, dict) and isinstance(v.get("version"), str):
+                              out[k] = v["version"]
+                          elif v is not None:
+                              out[k] = str(v)
+              return out
+          
+          
+          def only_dir_diff(bd, hd):
+              keys = set(bd) | set(hd)
+              for k in keys:
+                  if is_dir_key(k):
+                      continue
+                  if bd.get(k) != hd.get(k):
+                      return False
+              return True
+          
+          
+          def npm_root_deps(lock):
+              pkgs = lock.get("packages") if isinstance(lock, dict) else None
+              if isinstance(pkgs, dict) and isinstance(pkgs.get(""), dict):
+                  return collect_deps(pkgs[""])
+              deps = lock.get("dependencies") if isinstance(lock, dict) else None
+              out = {}
+              if isinstance(deps, dict):
+                  for k, v in deps.items():
+                      if isinstance(v, dict):
+                          out[k] = str(v.get("version", v))
+                      elif isinstance(v, str):
+                          out[k] = v
+              return out
+          
+          
+          def npm_lock_ok(base, head):
+              try:
+                  b, h = json.loads(base or "{}"), json.loads(head or "{}")
+              except json.JSONDecodeError:
+                  return False
+              br, hr = npm_root_deps(b), npm_root_deps(h)
+              if not only_dir_diff(br, hr):
+                  return False
+              bp, hp = b.get("packages") or {}, h.get("packages") or {}
+              if not isinstance(bp, dict):
+                  bp = {}
+              if not isinstance(hp, dict):
+                  hp = {}
+              all_keys = set(bp) | set(hp)
+              for key in all_keys:
+                  if key == "":
+                      continue
+                  if "node_modules/@deftai/directive" in key or "/@deftai/directive/" in key:
+                      continue
+                  if not deep_eq(bp.get(key), hp.get(key)):
+                      return False
+              # lockfileVersion 1: freeze nested dependencies tree without directive keys
+              if not bp and not hp:
+                  def strip_dir(v):
+                      if not isinstance(v, dict):
+                          return v
+                      out = {}
+                      for k, val in v.items():
+                          if is_dir_key(k):
+                              continue
+                          if isinstance(val, dict):
+                              nxt = dict(val)
+                              if "dependencies" in val:
+                                  nxt["dependencies"] = strip_dir(val["dependencies"])
+                              out[k] = nxt
+                          else:
+                              out[k] = val
+                      return out
+                  if not deep_eq(strip_dir(b.get("dependencies")), strip_dir(h.get("dependencies"))):
+                      return False
+              return True
+          
+          
+          def unq(s):
+              s = s.strip()
+              if len(s) >= 2 and s[0] == s[-1] and s[0] in _Q:
+                  return s[1:-1]
+              return s
+          
+          
+          def pnpm_root_deps(raw):
+              out = {}
+              in_imp = in_root = in_dep = False
+              cur = None
+              for line in raw.splitlines():
+                  if re.match(r"^importers:\s*$", line):
+                      in_imp, in_root, in_dep, cur = True, False, False, None
+                      continue
+                  if not in_imp:
+                      continue
+                  if re.match(r"^[^\s#]", line) and not line.startswith("importers"):
+                      break
+                  if re.match(r"^ {2}(?:\.|'\.'|\"\.\"):\s*$", line):
+                      in_root, in_dep, cur = True, False, None
+                      continue
+                  if in_root and re.match(r"^ {2}\S", line) and not re.match(r"^ {2}\.", line):
+                      in_root, in_dep, cur = False, False, None
+                      continue
+                  if not in_root:
+                      continue
+                  if re.match(
+                      r"^ {4}(?:dependencies|devDependencies|optionalDependencies|peerDependencies):\s*$",
+                      line,
+                  ):
+                      in_dep, cur = True, None
+                      continue
+                  if in_dep and re.match(r"^ {4}\S", line):
+                      in_dep, cur = False, None
+                      continue
+                  if not in_dep:
+                      continue
+                  m = re.match(r"^ {6}(.+?):\s*$", line)
+                  if m:
+                      cur = unq(m.group(1))
+                      continue
+                  if cur:
+                      vm = re.match(r"^ {8}version:\s*(.+?)\s*$", line)
+                      if vm:
+                          out[cur] = unq(vm.group(1))
+                          cur = None
+              return out
+          
+          
+          def pnpm_packages_by_name(raw):
+              out = {}
+              blocks = {}
+              in_pkg = False
+              cur = None
+              buf = []
+          
+              def flush():
+                  nonlocal cur, buf
+                  if cur is None:
+                      return
+                  blocks.setdefault(cur, []).append("\n".join(buf))
+                  cur, buf = None, []
+          
+              for line in raw.splitlines():
+                  if re.match(r"^packages:\s*$", line):
+                      flush()
+                      in_pkg = True
+                      continue
+                  if not in_pkg:
+                      continue
+                  if re.match(r"^[^\s#]", line) and not line.startswith("packages"):
+                      flush()
+                      break
+                  m = re.match(r"^ {2}(.+?):\s*$", line)
+                  if m:
+                      flush()
+                      key = unq(m.group(1))
+                      at = key.find("@", 1) if key.startswith("@") else key.find("@")
+                      cur = key[:at] if at > 0 else key
+                      buf = [line]
+                      continue
+                  if cur is not None:
+                      buf.append(line)
+              flush()
+              for name, blist in blocks.items():
+                  out[name] = "\n---\n".join(sorted(blist))
+              return out
+          
+          
+          def pnpm_section_by_name(raw, section):
+              blocks, out = {}, {}
+              in_sec, cur, buf = False, None, []
+              sec_re = re.compile(r"^" + re.escape(section) + r":\s*$")
+          
+              def flush():
+                  nonlocal cur, buf
+                  if cur is None:
+                      return
+                  blocks.setdefault(cur, []).append("\n".join(buf))
+                  cur, buf = None, []
+          
+              for line in raw.splitlines():
+                  if sec_re.match(line):
+                      flush()
+                      in_sec = True
+                      continue
+                  if not in_sec:
+                      continue
+                  if re.match(r"^[^\s#]", line) and not line.startswith(section):
+                      flush()
+                      break
+                  m = re.match(r"^ {2}(.+?):\s*$", line)
+                  if m:
+                      flush()
+                      key = unq(m.group(1))
+                      at = key.find("@", 1) if key.startswith("@") else key.find("@")
+                      cur = key[:at] if at > 0 else key
+                      buf = [line]
+                      continue
+                  if cur is not None:
+                      buf.append(line)
+              flush()
+              for name, blist in blocks.items():
+                  out[name] = "\n---\n".join(sorted(blist))
+              return out
+          
+          
+          def pnpm_ok(base, head):
+              br, hr = pnpm_root_deps(base), pnpm_root_deps(head)
+              if not only_dir_diff(br, hr):
+                  return False
+              for section in ("packages", "snapshots"):
+                  bp, hp = pnpm_section_by_name(base, section), pnpm_section_by_name(head, section)
+                  for name in set(bp) | set(hp):
+                      if is_dir_key(name):
+                          continue
+                      if bp.get(name) != hp.get(name):
+                          return False
+              return True
+          
+          
+          def yarn_blocks(raw):
+              blocks = {}
+              names, buf = [], []
+          
+              def flush():
+                  nonlocal names, buf
+                  if not names:
+                      return
+                  body = "\n".join(buf)
+                  for n in names:
+                      blocks[n] = body
+                  names, buf = [], []
+          
+              for line in raw.splitlines():
+                  if line == "" or line.startswith("#"):
+                      if names and line == "":
+                          flush()
+                      continue
+                  if not re.match(r"^\s", line) and line.endswith(":"):
+                      flush()
+                      header = line[:-1]
+                      names = []
+                      for part in header.split(","):
+                          p = part.strip()
+                          if len(p) >= 2 and p[0] == p[-1] and p[0] in _Q:
+                              p = p[1:-1]
+                          at = p.find("@", 1) if p.startswith("@") else p.find("@")
+                          names.append(p[:at] if at > 0 else p)
+                      buf = [line]
+                      continue
+                  if names:
+                      buf.append(line)
+              flush()
+              return blocks
+          
+          
+          def yarn_ok(base, head):
+              bb, hb = yarn_blocks(base), yarn_blocks(head)
+              for name in set(bb) | set(hb):
+                  if is_dir_key(name):
+                      continue
+                  if bb.get(name) != hb.get(name):
+                      return False
+              return True
+          
+          
+          def main(argv: list[str] | None = None) -> int:
+              args = list(sys.argv[1:] if argv is None else argv)
+              if len(args) < 2:
+                  print("usage: core_guard_pin_content <base_sha> <head_sha>", file=sys.stderr)
+                  return 2
+              base_sha, head_sha = args[0], args[1]
+              paths = changed_names(base_sha, head_sha)
+              core = [p for p in paths if p == ".deft/core" or p.startswith(".deft/core/")]
+              if not core:
+                  return 0
+              checks = {
+                  "package.json": pkg_pin_only,
+                  "package-lock.json": npm_lock_ok,
+                  "pnpm-lock.yaml": pnpm_ok,
+                  "yarn.lock": yarn_ok,
+              }
+              bad = []
+              for path, fn in checks.items():
+                  if path not in paths:
+                      continue
+                  if not fn(git_show(base_sha, path), git_show(head_sha, path)):
+                      bad.append(path)
+              if bad:
+                  print(
+                      "::error title=deft-core guard (#3193)::package/lock co-travel with "
+                      ".deft/core/** must be @deftai/directive* pin-only + lock follow-through. "
+                      "Rejected: " + ", ".join(bad)
+                  )
+                  print("--- content-rejected pin/lock paths ---")
+                  print("\n".join(bad))
+                  return 1
+              print("OK: package/lock content is Directive pin unit (#3193).")
+              return 0
+          
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY
+          fi
+          if printf '%s\n' "$changed" | grep -qx '.deft/GENERATION.json'; then
+          python3 - "$BASE_REF" "$HEAD_SHA" <<'PY'
+          import json, subprocess, sys
+          base_ref, head_sha = sys.argv[1], sys.argv[2]
+          path = ".deft/GENERATION.json"
+          def run(args):
+              p = subprocess.run(args, capture_output=True, text=True)
+              return p.returncode, p.stdout
+          def ls(tree):
+              return run(["git", "--no-replace-objects", "ls-tree", tree, "--", path])
+          def show(spec):
+              return run(["git", "--no-replace-objects", "show", spec])
+          if not base_ref:
+              print("::error::BASE_REF missing for GENERATION.json monotonic check (#4120)")
+              sys.exit(1)
+          code, out = ls("origin/" + base_ref)
+          if code != 0:
+              print("::error::origin/$BASE_REF unreadable for GENERATION.json (#4120)")
+              sys.exit(1)
+          base = None
+          if out.strip():
+              code, blob = show("origin/" + base_ref + ":" + path)
+              if code != 0:
+                  print("::error::cannot show origin base GENERATION.json (#4120)")
+                  sys.exit(1)
+              base = json.loads(blob).get("generation")
+          code, blob = show(head_sha + ":" + path)
+          if code != 0:
+              print("::error::cannot show head GENERATION.json (#4120)")
+              sys.exit(1)
+          head = json.loads(blob).get("generation")
+          if type(head) is not int or head < 1:
+              print("::error::head generation is not an int >= 1 (#4120)")
+              sys.exit(1)
+          if base is not None:
+              if type(base) is not int or base < 1 or not (head > base):
+                  print("::error::GENERATION.json must increase vs origin/$BASE_REF (#4120)")
+                  sys.exit(1)
+          print("OK: GENERATION.json monotonic vs origin/$BASE_REF")
+          PY
+          fi
+          echo "OK: no mixed framework + app changes."

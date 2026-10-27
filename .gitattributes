@@ -1,0 +1,6 @@
+# Deft framework: the vendored payload is packaged framework code, not
+# consumer source. Pin LF endings and mark it generated + vendored so
+# Git does not rewrite it and diffs treat .deft/core/** as machine-managed (#1430, #2118).
+.deft/core/** text eol=lf
+.deft/core/** linguist-generated=true
+.deft/core/** linguist-vendored=true
