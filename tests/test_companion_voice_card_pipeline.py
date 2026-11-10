@@ -121,6 +121,7 @@ async def test_voice_card_watch_on_emits_rows_and_bias(tmp_path: Path) -> None:
             companion_voice_card_watch=True,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert brief.voice_card_findings
@@ -170,6 +171,7 @@ async def test_voice_card_kill_switch_empties(tmp_path: Path) -> None:
             companion_voice_card_watch=False,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert brief.voice_card_findings == []
@@ -199,6 +201,7 @@ async def test_continuity_only_skips_voice_card(tmp_path: Path) -> None:
             companion_voice_card_watch=True,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert brief.voice_card_findings == []
@@ -262,6 +265,7 @@ async def test_missing_cards_warning_and_empty_rows(tmp_path: Path) -> None:
             companion_voice_card_watch=True,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert brief.voice_card_findings == []
@@ -295,6 +299,7 @@ async def test_machine_rows_alone_never_flip_watch(tmp_path: Path) -> None:
             companion_voice_card_watch=True,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert brief.voice_card_findings
@@ -367,6 +372,7 @@ async def test_partial_invalid_cards_surface_warning(tmp_path: Path) -> None:
             companion_voice_card_watch=True,
             companion_light_narrative=False,
             json_mode=True,
+            continuity_canon=False,  # cards fixture is not Canon state
         )
 
     assert any(

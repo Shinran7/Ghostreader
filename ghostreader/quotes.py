@@ -315,6 +315,13 @@ def quote_required(finding: Mapping[str, Any]) -> bool:
     return str(finding.get("dimension") or "") not in QUOTE_EXEMPT_DIMS
 
 
+def canon_counter(finding: Mapping[str, Any]) -> bool:
+    """True when ``counter_evidence`` is a Canon entry, not a manuscript quote (#16)."""
+    return finding.get("counter_source") == "canon" or str(
+        finding.get("counter_evidence") or ""
+    ).startswith("Canon ")
+
+
 def verify_finding(
     finding: Mapping[str, Any],
     index: QuoteIndex,
@@ -325,7 +332,8 @@ def verify_finding(
     """Return a copy with ``quote_verified``, ``location`` and ``id`` set.
 
     ``quote_verified`` is true only when ``evidence`` verifies and, when
-    present, ``counter_evidence`` verifies too. When ``demote`` is set, an
+    present, ``counter_evidence`` verifies too (a Canon entry as counter
+    evidence is exact by construction and is not looked up). When ``demote`` is set, an
     unverified ``concern`` becomes ``neutral`` with an ``Unverified quote``
     summary prefix, so it cannot gate or rank as a concern.
     """
@@ -334,7 +342,7 @@ def verify_finding(
     counter_text = str(out.get("counter_evidence") or "").strip()
     counter_ok = True
     counter_loc: QuoteLocation | None = None
-    if counter_text:
+    if counter_text and not canon_counter(out):
         cc = check_field(index, counter_text, prefer=prefer)
         counter_ok = cc.verified
         counter_loc = cc.location
@@ -375,6 +383,7 @@ def verify_findings(
 
 __all__ = [
     "QUOTE_EXEMPT_DIMS",
+    "canon_counter",
     "quote_required",
     "FUZZY_THRESHOLD",
     "UNVERIFIED_PREFIX",

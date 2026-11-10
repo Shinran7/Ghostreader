@@ -469,9 +469,16 @@ async def scene_consistency_checker_node(
     based ``consistency_checker_node``.
     """
     config = state.get("config", {})
+    if config.get("continuity_canon", True):
+        canon_result = await _canon_path(state, llm)
+        if canon_result is not None:
+            return canon_result
+
     if config.get("typesafe_enabled"):
         assert typesafe_client is not None
-        return await _consistency_typesafe_path(state, llm, typesafe_client)
+        out = await _consistency_typesafe_path(state, llm, typesafe_client)
+        out["consistency_output"]["continuity_source"] = "facts"
+        return out
 
     scene_facts = state.get("scene_facts", [])  # type: ignore[literal-required]
 
@@ -527,7 +534,60 @@ async def scene_consistency_checker_node(
         "findings": findings,
         "raw_response": raw_text,
     }
+    output["continuity_source"] = "facts"  # type: ignore[typeddict-unknown-key]
 
+    return {"consistency_output": output}
+
+
+def _canon_dir_for(state: AnalysisState) -> Any:
+    from pathlib import Path
+
+    from ghostreader.canon import find_canon_dir
+
+    paths = [
+        Path(str(c.get("source_path"))).parent
+        for c in state.get("chapters", [])[:1]
+        if c.get("source_path")
+    ]
+    return find_canon_dir(*paths)
+
+
+async def _canon_path(state: AnalysisState, llm: BaseChatModel) -> dict[str, Any] | None:
+    """Each chapter's prose against Canon as of the chapter before (#16).
+
+    None when no Canon sits beside the chapters (caller falls back to facts).
+    """
+    from ghostreader.agents.canon_consistency import check_book_against_canon
+    from ghostreader.typesafe.grounding import (
+        demote_tone_plot_holes,
+        demote_ungrounded_concerns,
+    )
+
+    canon_dir = _canon_dir_for(state)
+    if canon_dir is None:
+        return None
+    config = state.get("config", {})
+    findings, stats = await check_book_against_canon(
+        list(state.get("chapters", [])),
+        canon_dir,
+        llm,
+        genre=config.get("genre"),
+        seed_meta=config.get("seed_meta", {}),
+    )
+    if not stats["chapters"]:
+        return None
+    findings, _, _ = demote_tone_plot_holes(findings)  # type: ignore[arg-type]
+    findings, _, _ = demote_ungrounded_concerns(
+        findings,  # type: ignore[arg-type]
+        hardening_enabled=bool(config.get("analyze_grounding_hardening", True)),
+    )
+    output: AgentOutput = {
+        "agent": "canon_consistency",
+        "findings": findings,
+        "raw_response": "",
+    }
+    output["continuity_source"] = "canon"  # type: ignore[typeddict-unknown-key]
+    output["canon_stats"] = stats  # type: ignore[typeddict-unknown-key]
     return {"consistency_output": output}
 
 

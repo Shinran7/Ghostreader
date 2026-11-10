@@ -60,7 +60,7 @@ def test_acceptance_checklist_10() -> None:
     assert len(_rows("rim-carpet.md", cap=40)) <= 40
 
     # 8. Contract version
-    assert ANALYZE_JSON_VERSION == "0.2.2"
+    assert ANALYZE_JSON_VERSION == "0.2.3"
 
     # SI noise
     si = _rows("si-noise.md")

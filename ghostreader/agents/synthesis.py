@@ -294,6 +294,17 @@ def _merge_typesafe_stats(state: AnalysisState) -> dict[str, Any]:
     return totals
 
 
+def _continuity_source(state: AnalysisState) -> dict[str, Any]:
+    """``continuity_source`` / ``canon_stats`` from the consistency output (#16)."""
+    out = state.get("consistency_output") or {}
+    if not isinstance(out, dict) or not out:
+        return {"continuity_source": "", "canon_stats": {}}
+    return {
+        "continuity_source": str(out.get("continuity_source") or "facts"),
+        "canon_stats": dict(out.get("canon_stats") or {}),
+    }
+
+
 async def _synthesis_typesafe_path(
     state: AnalysisState, llm: BaseChatModel
 ) -> dict[str, Any]:
@@ -396,6 +407,7 @@ async def _synthesis_typesafe_path(
         "typesafe": typesafe_stats,
         "unverified_findings": unverified,
         "quote_stats": quote_stats,
+        **_continuity_source(state),
     }
     return {"final_report": report}
 
@@ -455,6 +467,7 @@ async def _synthesis_llm_path(
     report["prioritized_findings"] = prioritized
     report["unverified_findings"] = unverified
     report["quote_stats"] = quote_stats
+    report.update(_continuity_source(state))
     if had_prioritized:
         strengths_count, concerns_count, total_findings = _counts_from_findings(
             prioritized

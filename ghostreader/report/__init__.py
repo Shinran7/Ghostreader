@@ -43,6 +43,10 @@ class PrioritizedFinding:
     quote_verified: bool | None = None
     location: dict[str, Any] | None = None
     counter_location: dict[str, Any] | None = None
+    # Canon continuity (#16): "canon" when counter_evidence is a Canon entry;
+    # canon_ref = {id, kind, chapter, file} of that entry.
+    counter_source: str = ""
+    canon_ref: dict[str, Any] | None = None
 
 
 @dataclass
@@ -85,6 +89,9 @@ class ReportOutput:
     # prioritized_findings and the counts. quote_stats: verified / unverified / dropped.
     unverified_findings: list[dict[str, Any]] = field(default_factory=list)
     quote_stats: dict[str, int] = field(default_factory=dict)
+    # Continuity state of record (#16): "canon" | "facts" | "" (not run).
+    continuity_source: str = ""
+    canon_stats: dict[str, int] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -124,6 +131,8 @@ class ReportOutput:
                 quote_verified=f.get("quote_verified"),
                 location=f.get("location"),
                 counter_location=f.get("counter_location"),
+                counter_source=str(f.get("counter_source") or ""),
+                canon_ref=f.get("canon_ref"),
             )
             for i, f in enumerate(report.get("prioritized_findings", []))
         ]
@@ -144,6 +153,8 @@ class ReportOutput:
             warnings=merged_warnings,
             unverified_findings=list(report.get("unverified_findings") or []),
             quote_stats=dict(report.get("quote_stats") or {}),
+            continuity_source=str(report.get("continuity_source") or ""),
+            canon_stats=dict(report.get("canon_stats") or {}),
             repetition_findings=list(repetition_findings or []),
             register_findings=list(register_findings or []),
             thrash_findings=list(thrash_findings or []),

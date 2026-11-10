@@ -345,6 +345,7 @@ async def _run_analyze(
         "analyze_omit_empty_strengths": cfg.analyze_omit_empty_strengths,
         "quote_verification": cfg.quote_verification,
         "quote_recovery_max": cfg.quote_recovery_max,
+        "continuity_canon": cfg.continuity_canon,
     }
     chapter_dicts = chapters_to_dicts(chapters)
     repetition_data = repetition_report_to_dicts(

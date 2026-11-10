@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.5)
+# Companion JSON hook (0.2.6)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.5`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.6`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.5`**). Independent of analyze JSON (`0.2.2`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.6`**). Independent of analyze JSON (`0.2.3`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -56,6 +56,7 @@ Soft LLM `craft_findings` stay human-facing. Machine-actionable cross-chapter re
 | `companion_register_watch` | **`true`** | Heuristic `register_findings` + soft register dims; `false` → `[]` + stock five prose dims |
 | `companion_voice_card_watch` | **`true`** | Heuristic `voice_card_findings` + soft `prose.voice_card` (when wired); `false` → `[]` + no soft voice-card dim |
 | `quote_verification` | **`true`** | Check finding quotes against the text (#17); `false` = off |
+| `continuity_canon` | **`true`** | Check chapter prose against Autonomicon Canon when `canon/` is present (#16); `false` = fact sheets |
 | `quote_recovery_max` | `5` | Max LLM calls per run to fetch verbatim quotes for unverified continuity concerns; `0` = none |
 
 Steady state is narrative **on**. Kill switch remains for rollback.
@@ -105,6 +106,35 @@ Always present (empty lists until filled):
 | `budget` | int \| null | Allowed unexplained count (default 3) |
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
+
+### Since 0.2.6
+
+Canon continuity (#16). In progressive mode, when Autonomicon Canon sits
+beside the chapters, gate continuity checks chapter N's prose against Canon as
+of chapter N−1 (one LLM call) in place of the fact-sheet ask, with or without
+TypeSafe. Sweep mode stays on fact sheets.
+
+- `continuity_source` — the continuity state of record: `"canon"` when
+  Autonomicon Canon (`canon/` beside the chapters, or
+  `checkpoints/chapter-NNN/canon/` when present) was loaded and chapter prose
+  was checked against it; `"facts"` when Ghostreader fact sheets were used;
+  `""` when continuity did not run.
+- `canon_stats` — `{entries, from_checkpoint}` (`from_checkpoint` is `0`/`1`); `{}` unless `continuity_source` is
+  `"canon"`.
+- Canon continuity rows carry `counter_source: "canon"` and `canon_ref`
+  `{id, kind, chapter, file}` naming the Canon entry they contradict
+  (`file` is relative to the canon dir). `counter_evidence` is that entry's
+  text, `"Canon Ch K (kind): …"`; it is exact by construction and is not
+  checked against the manuscript. `chapter_ref` is `"K vs N"`. A row that cites
+  an id not in the state has empty `counter_evidence` and `canon_ref.kind:
+  null`, and does not gate.
+- Canon is read only for chapters before N. Live Canon is filtered by chapter;
+  a deceased character whose `died_chapter` is N or later reads as active.
+- Kill switch: `continuity_canon: false` in `config.yaml` (fact sheets only).
+- Fact-sheet parse failures no longer force `continuity_status: "failed"`
+  or `watch` when `continuity_source` is `"canon"`: fact sheets are not the
+  state of record then. A Canon folder with no entries before N warns and
+  falls back to `"facts"`.
 
 ### Since 0.2.5
 

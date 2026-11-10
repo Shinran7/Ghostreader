@@ -34,6 +34,7 @@ class AnalysisConfig(TypedDict, total=False):
     analyze_omit_empty_strengths: bool
     quote_verification: bool
     quote_recovery_max: int
+    continuity_canon: bool
 
 
 class AgentFinding(TypedDict, total=False):

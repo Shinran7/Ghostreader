@@ -18,7 +18,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.companion.continuity import COMPANION_GATE_DIMS, cited_chapters
 from ghostreader.llm import extract_json_object, message_text
-from ghostreader.quotes import QuoteIndex, verify_finding
+from ghostreader.quotes import QuoteIndex, canon_counter, verify_finding
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ def _user_message(finding: dict[str, Any], texts: Sequence[tuple[int, str]]) -> 
 
 def needs_recovery(finding: dict[str, Any]) -> bool:
     return (
-        finding.get("dimension") in COMPANION_GATE_DIMS
+        not canon_counter(finding)
+        and finding.get("dimension") in COMPANION_GATE_DIMS
         and finding.get("severity") == "concern"
         and finding.get("quote_verified") is False
     )
@@ -56,7 +57,8 @@ def needs_recovery(finding: dict[str, Any]) -> bool:
 def needs_recovery_any_consistency(finding: dict[str, Any]) -> bool:
     """Analyze: every consistency concern, not only the companion gate dims."""
     return (
-        str(finding.get("dimension") or "").startswith("consistency.")
+        not canon_counter(finding)
+        and str(finding.get("dimension") or "").startswith("consistency.")
         and finding.get("severity") == "concern"
         and finding.get("quote_verified") is False
     )

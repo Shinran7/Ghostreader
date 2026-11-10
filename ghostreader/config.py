@@ -58,6 +58,10 @@ class GhostreaderConfig(BaseModel):
     # Max LLM calls per run to fetch verbatim quotes for continuity concerns
     # whose quotes did not verify (companion and analyze; 0 = no recovery).
     quote_recovery_max: int = 5
+    # Use Autonomicon Canon (canon/ beside the chapters) as the continuity
+    # state of record and check chapter prose against it (#16). false = fact
+    # sheets only.
+    continuity_canon: bool = True
     # Analyze repetition feed caps (always on; not gated by analyze_grounding_hardening).
     analyze_repetition_words: int = 50
     analyze_repetition_phrases: int = 40
@@ -193,6 +197,8 @@ class GhostreaderConfig(BaseModel):
             f"quote_verification: {_fmt(self.quote_verification)}",
             "# Max calls per run to fetch verbatim quotes for continuity concerns.",
             f"quote_recovery_max: {_fmt(self.quote_recovery_max)}",
+            "# Check chapter prose against Autonomicon Canon when canon/ is present.",
+            f"continuity_canon: {_fmt(self.continuity_canon)}",
             "",
             "# Analyze repetition feed: max word / phrase / sentence-pattern rows.",
             "# Always applied (not gated by analyze_grounding_hardening).",

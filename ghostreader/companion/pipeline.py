@@ -11,6 +11,7 @@ from typing import Any, Literal
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from ghostreader.agents.canon_consistency import check_chapter_against_canon
 from ghostreader.agents.fact_extractor import (
     ChapterFact,
     count_parse_failed,
@@ -18,6 +19,7 @@ from ghostreader.agents.fact_extractor import (
     parse_failed_warning,
 )
 from ghostreader.analyzers.repetition_detector import RepetitionDetector
+from ghostreader.canon import CanonState, find_canon_dir, load_canon_state
 from ghostreader.companion.brief import (
     CompanionBrief,
     compute_verdict,
@@ -34,7 +36,6 @@ from ghostreader.companion.continuity import (
     partition_findings,
 )
 from ghostreader.companion.craft import run_companion_craft
-from ghostreader.companion.quote_recovery import recover_continuity_quotes
 from ghostreader.companion.discovery import DiscoveryResult, max_chapter_on_disk
 from ghostreader.companion.fact_memory import FactMemoryStore
 from ghostreader.companion.narrative import run_companion_narrative
@@ -43,6 +44,7 @@ from ghostreader.companion.progress import (
     compute_order_warnings,
     update_progress_after_run,
 )
+from ghostreader.companion.quote_recovery import recover_continuity_quotes
 from ghostreader.companion.register import (
     register_block as format_register_block,
 )
@@ -193,6 +195,14 @@ async def _run_llm_consistency(
         [SystemMessage(content=system_prompt), HumanMessage(content=user_message)]
     )
     findings = _parse_findings(message_text(response.content))
+    ratings, info_ratings = _ratings_for(findings, include_info_dims=include_info_dims)
+    return findings, ratings, info_ratings
+
+
+def _ratings_for(
+    findings: list[Any], *, include_info_dims: bool
+) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    """Gate (and info) dim ratings from the first finding per dim."""
     ratings: dict[str, dict[str, str]] = {}
     for dim in COMPANION_GATE_DIMS:
         hit = next((f for f in findings if f.get("dimension") == dim), None)
@@ -215,7 +225,27 @@ async def _run_llm_consistency(
                     "note": str(hit.get("summary") or ""),
                 }
         info_ratings = ensure_info_ratings(raw_info)
-    return findings, ratings, info_ratings
+    return ratings, info_ratings
+
+
+def _load_canon(
+    discovery: DiscoveryResult, *, enabled: bool
+) -> tuple[CanonState | None, list[str]]:
+    """Canon as of the focus chapter, or None (fall back to fact sheets)."""
+    if not enabled:
+        return None, []
+    if discovery.mode != "progressive":
+        return None, []
+    canon_dir = find_canon_dir(discovery.story_dir, discovery.chapters_dir)
+    if canon_dir is None:
+        return None, []
+    state = load_canon_state(canon_dir, discovery.chapter_number)
+    if not state:
+        return None, [
+            f"Canon at {canon_dir} has no entries before chapter "
+            f"{discovery.chapter_number}; continuity uses fact sheets."
+        ]
+    return state, []
 
 
 async def _chapter_note(
@@ -275,6 +305,7 @@ async def run_companion_pipeline(
     typesafe_noul_positive_threshold: float = 0.65,
     quote_verification: bool = True,
     quote_recovery_max: int = 5,
+    continuity_canon: bool = True,
     json_mode: bool = False,
 ) -> CompanionBrief:
     """Facts → craft → continuity → partition → brief; update progress cursor."""
@@ -338,6 +369,21 @@ async def run_companion_pipeline(
     failed_facts = count_parse_failed(cont_facts)
     if failed_facts:
         warnings.append(parse_failed_warning(failed_facts, len(cont_facts)))
+
+    canon_state, canon_warnings = (
+        (None, []) if craft_only else _load_canon(discovery, enabled=continuity_canon)
+    )
+    warnings.extend(canon_warnings)
+    continuity_source = "" if craft_only else ("canon" if canon_state else "facts")
+    canon_stats: dict[str, int] = {}
+    if canon_state:
+        canon_stats = {
+            "entries": len(canon_state.entries),
+            "from_checkpoint": int(canon_state.from_checkpoint),
+        }
+    # Fact-sheet parse failures poison continuity only when fact sheets are
+    # the state of record.
+    facts_poison = bool(failed_facts) and continuity_source == "facts"
 
     craft_findings: list[PrioritizedFinding] = []
     craft_ratings: list[DimensionRating] = []
@@ -491,7 +537,25 @@ async def run_companion_pipeline(
             f"{'on' if typesafe_enabled else 'off'}, info dims={info_status})…",
             quiet_stdout_json=json_mode,
         )
-        if typesafe_enabled:
+        if canon_state:
+            _stderr(
+                f"Continuity source: Canon ({len(canon_state.entries)} entries, "
+                f"{'checkpoint' if canon_state.from_checkpoint else 'live, filtered'})",
+                quiet_stdout_json=json_mode,
+            )
+            continuity_raw = await check_chapter_against_canon(
+                chapter_n=discovery.chapter_number,
+                title=focus.title,
+                content=focus.content,
+                state=canon_state,
+                llm=llm,
+                genre=genre,
+                seed_meta=discovery.seed_meta,
+            )
+            continuity_ratings_map, info_ratings_map = _ratings_for(
+                continuity_raw, include_info_dims=companion_info_dims
+            )
+        elif typesafe_enabled:
             from ghostreader.companion.typesafe_consistency import (
                 run_companion_consistency,
             )
@@ -561,7 +625,7 @@ async def run_companion_pipeline(
         narrative_ratings = _ratings_from_map(nar_ratings_map)
 
     continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
-    if failed_facts and not craft_only:
+    if facts_poison:
         continuity_status = "failed"
     if not craft_only and continuity_parse_failed(continuity_raw):
         continuity_status = "failed"
@@ -644,7 +708,7 @@ async def run_companion_pipeline(
 
     verdict = compute_verdict(gate, craft_findings, narrative_findings)
     drivers = compute_verdict_drivers(gate, craft_findings, narrative_findings)
-    if failed_facts and not craft_only:
+    if facts_poison:
         # Empty fact sheets make "clean continuity" meaningless for Autonomicon.
         verdict = "watch"
     if continuity_status == "failed":
@@ -691,6 +755,8 @@ async def run_companion_pipeline(
         warnings=warnings,
         continuity_status=continuity_status,
         quote_stats=quote_stats,
+        continuity_source=continuity_source,
+        canon_stats=canon_stats,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(UTC).isoformat(),

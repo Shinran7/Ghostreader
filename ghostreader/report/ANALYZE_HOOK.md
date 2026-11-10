@@ -1,4 +1,4 @@
-# Analyze JSON hook (0.2.2)
+# Analyze JSON hook (0.2.3)
 
 Autonomicon (and scripts) read analyze JSON from:
 
@@ -12,12 +12,12 @@ Stdout / the report file is one JSON object. Ignore unknown fields.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.2`**. Bumps only when analyze payload shape changes. |
+| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.3`**. Bumps only when analyze payload shape changes. |
 | `package_version` | Installed package version (`ghostreader.__version__`). For correlating which install produced the file. |
 
-Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.5`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
+Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.6`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
 
-## Contract shape (0.2.2)
+## Contract shape (0.2.3)
 
 Always present:
 
@@ -31,6 +31,31 @@ Always present:
   `overview` counts; `prioritized_findings` is re-ranked.
 - `quote_stats` — `{verified, unverified, dropped, recovered, recovery_calls}`
   (`{}` when `quote_verification: false`).
+
+### Since 0.2.3: Canon continuity (#16)
+
+When Autonomicon Canon sits beside the chapters, the consistency pass checks
+each chapter's prose against Canon as of the chapter before it (one LLM call
+per chapter, 4 at a time) in place of the fact-sheet ask, with or without
+TypeSafe. Chapters with no Canon entries before them are skipped.
+
+- `continuity_source` — the continuity state of record: `"canon"` when
+  Autonomicon Canon (`canon/` beside the chapters, or
+  `checkpoints/chapter-NNN/canon/` when present) was loaded and chapter prose
+  was checked against it; `"facts"` when Ghostreader fact sheets were used;
+  `""` when continuity did not run.
+- `canon_stats` — `{chapters, checkpoints, failed, skipped_empty}` (chapter counts); `{}` unless `continuity_source` is
+  `"canon"`.
+- Canon continuity rows carry `counter_source: "canon"` and `canon_ref`
+  `{id, kind, chapter, file}` naming the Canon entry they contradict
+  (`file` is relative to the canon dir). `counter_evidence` is that entry's
+  text, `"Canon Ch K (kind): …"`; it is exact by construction and is not
+  checked against the manuscript. `chapter_ref` is `"K vs N"`. A row that cites
+  an id not in the state has empty `counter_evidence` and `canon_ref.kind:
+  null`, and does not gate.
+- Canon is read only for chapters before N. Live Canon is filtered by chapter;
+  a deceased character whose `died_chapter` is N or later reads as active.
+- Kill switch: `continuity_canon: false` in `config.yaml` (fact sheets only).
 
 ### Since 0.2.2: quote verification (#17)
 
@@ -86,7 +111,7 @@ Consumers that do not know `thrash_findings` or unknown kinds ignore them. Missi
 
 ```json
 {
-  "ghostreader_version": "0.2.2",
+  "ghostreader_version": "0.2.3",
   "package_version": "0.1.0",
   "repetition_findings": [],
   "register_findings": [],

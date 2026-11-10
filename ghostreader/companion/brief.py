@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.5"
+GHOSTREADER_VERSION = "0.2.6"
 
 
 @dataclass
@@ -64,6 +64,11 @@ class CompanionBrief:
     # Quote verification counts (#17, 0.2.5): verified / unverified / demoted /
     # recovered / recovery_calls. Empty when verification is off.
     quote_stats: dict[str, int] = field(default_factory=dict)
+    # Continuity state of record (#16, 0.2.6): "canon" (Autonomicon Canon +
+    # chapter prose) | "facts" (Ghostreader fact sheets) | "" (skipped).
+    continuity_source: str = ""
+    # Canon load info: {entries, from_checkpoint (0/1)}; empty when facts.
+    canon_stats: dict[str, int] = field(default_factory=dict)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
     generated_at: str = ""
@@ -112,6 +117,9 @@ def finding_from_dict(raw: dict[str, Any], *, rank: int) -> PrioritizedFinding:
         id=str(raw.get("id") or ""),
         quote_verified=raw.get("quote_verified"),
         location=raw.get("location"),
+        counter_location=raw.get("counter_location"),
+        counter_source=str(raw.get("counter_source") or ""),
+        canon_ref=raw.get("canon_ref"),
     )
 
 
@@ -163,6 +171,8 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "warnings": list(brief.warnings),
         "continuity_status": brief.continuity_status,
         "quote_stats": dict(brief.quote_stats),
+        "continuity_source": brief.continuity_source,
+        "canon_stats": dict(brief.canon_stats),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,
     }
