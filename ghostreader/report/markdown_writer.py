@@ -67,6 +67,9 @@ def write_markdown_report(
     sections.append(_findings(report))
     sections.append(_unverified(report))
     sections.append(_algorithmic_repetition(report))
+    sections.append(_register(report))
+    sections.append(_thrash(report))
+    sections.append(_canon(report))
 
     if show_rewrites and report.rewrite_suggestions:
         sections.append(_rewrites(report.rewrite_suggestions))
@@ -94,11 +97,7 @@ def _slugify(name: str) -> str:
 
 def _header(report: ReportOutput, date_str: str) -> str:
     title = report.manuscript_name or "Manuscript Analysis"
-    return (
-        f"# Ghostreader Analysis — {title}\n\n"
-        f"*Generated {date_str} by Ghostreader*\n\n"
-        f"---\n"
-    )
+    return f"# Ghostreader Analysis — {title}\n\n*Generated {date_str} by Ghostreader*\n\n---\n"
 
 
 def _executive_summary(report: ReportOutput) -> str:
@@ -149,15 +148,11 @@ def _findings(report: ReportOutput) -> str:
             indicator = severity_emoji(f.severity)
             chapter_tag = f" *(Chapter {f.chapter_ref})*" if f.chapter_ref else ""
 
-            parts.append(
-                f"**{indicator} #{f.rank} [{f.severity}]** {f.summary}{chapter_tag}\n"
-            )
+            parts.append(f"**{indicator} #{f.rank} [{f.severity}]** {f.summary}{chapter_tag}\n")
             if f.evidence:
                 parts.append(f"> {f.evidence}{_where(f.location)}\n")
             if f.counter_evidence:
-                parts.append(
-                    f"> **vs.** {f.counter_evidence}{_where(f.counter_location)}\n"
-                )
+                parts.append(f"> **vs.** {f.counter_evidence}{_where(f.counter_location)}\n")
 
     return "\n".join(parts)
 
@@ -201,14 +196,90 @@ def _algorithmic_repetition(report: ReportOutput) -> str:
         severity = row.get("severity") or "low"
         chapters = row.get("chapters") or []
         ch_str = ", ".join(str(c) for c in chapters) if chapters else "—"
-        lines.append(
-            f"- **{severity}** `{phrase}` ({kind} × {count}; chapters: {ch_str})"
-        )
+        lines.append(f"- **{severity}** `{phrase}` ({kind} × {count}; chapters: {ch_str})")
         quote = row.get("quote")
         if quote:
             lines.append(f"  > {quote}")
     lines.append("")
     return "\n".join(lines)
+
+
+# Machine-row sections (#18). JSON stays the full contract; these are capped.
+_SECTION_CAP = 30
+
+
+def _capped(title: str, note: str, rows: list[dict], fmt) -> str:  # noqa: ANN001
+    if not rows:
+        return ""
+    lines = [f"\n## {title}\n", f"*{note}*\n"]
+    for row in rows[:_SECTION_CAP]:
+        lines.extend(fmt(row))
+    if len(rows) > _SECTION_CAP:
+        lines.append(f"- … {len(rows) - _SECTION_CAP} more in the JSON report")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _register_row(row: dict) -> list[str]:
+    out = [
+        f"- **{row.get('severity') or 'low'}** {row.get('kind') or ''} "
+        f"(Ch {row.get('chapter') or '?'}): {row.get('summary') or ''}"
+    ]
+    if row.get("quote"):
+        out.append(f"  > {row['quote']}")
+    return out
+
+
+def _thrash_row(row: dict) -> list[str]:
+    key = row.get("phrase") or row.get("lemma") or row.get("normalized_key") or ""
+    chapters = row.get("chapters") or []
+    where = (
+        f"Ch {row['chapter']}"
+        if row.get("chapter")
+        else ("chapters " + ", ".join(str(c) for c in chapters) if chapters else "—")
+    )
+    out = [
+        f"- **{row.get('severity') or 'low'}** `{key}` "
+        f"({row.get('kind') or ''} × {row.get('count') or 0}; {where})"
+    ]
+    if row.get("quote"):
+        out.append(f"  > {row['quote']}")
+    return out
+
+
+def _canon_row(row: dict) -> list[str]:
+    ch = f"Ch {row['chapter']}, " if row.get("chapter") else ""
+    return [
+        f"- **{row.get('severity') or 'low'}** {row.get('kind') or ''} "
+        f"({ch}{row.get('file') or ''}): {row.get('summary') or ''}"
+    ]
+
+
+def _register(report: ReportOutput) -> str:
+    return _capped(
+        "Register (opening window)",
+        "Coined or institutional terms used before the text teaches them.",
+        report.register_findings,
+        _register_row,
+    )
+
+
+def _thrash(report: ReportOutput) -> str:
+    return _capped(
+        "Word thrash",
+        "Reader-visible repeats; keep the first use, vary the later ones.",
+        report.thrash_findings,
+        _thrash_row,
+    )
+
+
+def _canon(report: ReportOutput) -> str:
+    return _capped(
+        "Canon audit",
+        "Autonomicon Canon checked against itself and the prose (no LLM).",
+        report.canon_findings,
+        _canon_row,
+    )
 
 
 def _rewrites(suggestions: list[RewriteSuggestion]) -> str:

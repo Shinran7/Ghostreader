@@ -13,25 +13,27 @@ Primary: .md (Markdown)
 Secondary: .epub (converted internally to markdown)
 
 Agent Framework: LangGraph (stateful multi-agent workflow).
-LLM Backend: LiteLLM connecting to Grok or Gemini (via OpenAI-compatible API). Local Ollama is deprioritized due to past performance issues.
+LLM Backend: LangChain chat models, routed by model name in ghostreader/llm.py (xAI Grok, Gemini, OpenAI, Anthropic, Fireworks). Local Ollama is deprioritized due to past performance issues.
 Philosophy: Local-first, privacy-focused, extensible, and highly controllable.
 
 3. Core Features (MVP)
 Commands
 ghostreader init <project_name>              # Create project folder + config
-ghostreader analyze <path>                       # Analyze single .md/.epub or folder of .md files
-ghostreader analyze-dir <directory>              # Explicit multi-chapter directory mode
-ghostreader chat <project>                       # Interactive follow-up chat with previous analysis
-ghostreader compare <file1> <file2>              # Draft comparison
-ghostreader config                               # View/edit configuration
+ghostreader analyze <path>                       # Analyze single .md/.epub or a folder of chapter .md files
+ghostreader companion <story> --chapter N        # End-of-chapter brief for Autonomicon (companion/HOOK.md)
+ghostreader canon-audit <story-or-stories>       # Audit Autonomicon Canon against itself and the prose (no LLM)
+ghostreader chat <path>                          # Interactive follow-up chat with previous analysis
+ghostreader compare <path1> <path2>              # Compare the last analyze reports of two drafts (no LLM)
+ghostreader config show | set                    # View/edit configuration
 Analysis Options (Flags)
 
---depth: quick | standard | deep (default: standard)
+--depth: quick (prose only) | standard | deep (analysts read whole chapters, not excerpts) (default: standard)
 --genre: e.g., literary, fantasy, thriller, romance, scifi (influences critique lens)
---style-guide: Path to a markdown file containing example "good" prose for voice comparison
+--style-guide: (not built) Path to a markdown file containing example "good" prose for voice comparison
 --model: Override default LLM (e.g., grok-beta, gemini-2.5-pro)
---format: markdown (default) | json
---no-cache: Force fresh analysis
+--format: terminal (default) | markdown | json (stdout is exactly one JSON object; progress goes to stderr)
+--json-out: Also write the JSON report to a file
+--no-cache: Skip cache reads and writes
 
 Output
 
@@ -47,8 +49,8 @@ The system uses a stateful LangGraph with the following specialized agents:
 Ingestion Node
 Loads .md or .epub
 Detects chapters/sections via markdown headers
-Creates hierarchical summaries (chapter → global context)
-Builds vector store (Chroma) for retrieval
+Creates hierarchical summaries (chapter → act → global) from whole chapters (long chapters are chunked, then combined); acts come from Autonomicon Canon when present
+Ingestion, fact extraction and repetition detection run before the graph; the graph runs the analysts and synthesis
 
 Prose Analyst
 Repetition detection (words, phrases, sentence structures, author tics)
@@ -80,7 +82,7 @@ Produces actionable revision suggestions
 
 Graph Features:
 
-Conditional routing (deeper analysis in “deep” mode)
+Conditional routing by depth (quick runs the prose analyst only)
 Shared state with original text chunks and summaries
 Visible chain-of-thought in terminal during processing
 
@@ -94,29 +96,27 @@ Agents: LangGraph + LangChain
 LLM: Grok, Gemini, Openai
 Markdown/Epub: markdown, ebooklib, beautifulsoup4
 Repetition: Custom (tf-idf + fuzzy matching)
-Vector Store: Chroma (local)
+Vector Store: LanceDB (local), built on demand for chat only
 Config: pydantic-settings + YAML
-Caching: Analysis chunks (to speed up re-runs)
+Caching: content-hash cache for fact sheets and summaries (an unchanged rerun makes no fact or summary calls)
 
 Project Structure:
 
 ghostreader/
 ├── ghostreader/
-│   ├── __init__.py
-│   ├── cli.py
-│   ├── config.py
-│   ├── core.py
-│   ├── graph/                  # LangGraph definition
-│   ├── agents/                 # Individual agent nodes
-│   ├── ingestion/              # text_loader.py, epub_converter.py
-│   ├── analyzers/              # prose.py, narrative.py, consistency.py
-│   ├── utils/                  # repetition_detector.py, chunking.py, etc.
-│   └── report/                 # report_generator.py
-├── projects/                   # User project folders
-├── reports/
+│   ├── cli.py, config.py, llm.py, paths.py, cache.py, llm_cache.py, excerpts.py, quotes.py
+│   ├── canon.py, canon_audit.py     # Autonomicon Canon reader and audit
+│   ├── graph/                  # LangGraph state and workflow
+│   ├── agents/                 # prose, narrative, consistency, synthesis, fact extraction
+│   ├── analyzers/              # repetition, thrash, register, voice-card detectors (no LLM)
+│   ├── ingestion/              # markdown/epub loaders, chunking, summarizer, LanceDB indexer
+│   ├── companion/              # end-of-chapter brief for Autonomicon
+│   ├── commands/               # chat, compare, companion
+│   ├── typesafe/               # TypeSafe.ai judgments
+│   └── report/                 # markdown, terminal and JSON reports
+├── tests/
 ├── config.yaml
-├── pyproject.toml
-└── README.md
+└── pyproject.toml
 6. Non-Functional Requirements
 
 Privacy: All processing happens locally or via user-provided API keys.

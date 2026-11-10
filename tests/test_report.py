@@ -664,3 +664,68 @@ class TestAnalyzeRepetitionFindings:
         from ghostreader import __version__ as pkg_ver
 
         assert payload["package_version"] == pkg_ver
+
+
+# ── #18: register, thrash and Canon sections in the Markdown report ──
+
+
+def test_markdown_machine_sections(sample_report: ReportOutput, tmp_path: Path) -> None:
+    from ghostreader.report import markdown_writer
+    from ghostreader.report.markdown_writer import write_markdown_report
+
+    plain = write_markdown_report(sample_report, output_dir=tmp_path, filename="a.md")
+    text = plain.read_text(encoding="utf-8")
+    for title in ("## Register", "## Word thrash", "## Canon audit"):
+        assert title not in text
+
+    sample_report.register_findings = [
+        {
+            "kind": "unearned_jargon",
+            "severity": "high",
+            "chapter": 1,
+            "summary": "Coined term before teach-in: the Weave",
+            "quote": "The Weave hummed.",
+        }
+    ]
+    sample_report.thrash_findings = [
+        {
+            "kind": "within_scene",
+            "lemma": "glint",
+            "phrase": None,
+            "count": 5,
+            "chapters": [2],
+            "chapter": 2,
+            "severity": "high",
+            "quote": "A glint, then another.",
+        },
+        {
+            "kind": "cross_chapter",
+            "lemma": "ozone",
+            "phrase": None,
+            "count": 9,
+            "chapters": [1, 4],
+            "chapter": None,
+            "severity": "moderate",
+            "quote": "",
+        },
+    ]
+    sample_report.canon_findings = [
+        {
+            "kind": "name_drift",
+            "severity": "moderate",
+            "file": "characters/mara.json",
+            "chapter": 3,
+            "summary": "Mara vs Marra",
+            "detail": "",
+        }
+    ] * (markdown_writer._SECTION_CAP + 2)
+    text = write_markdown_report(sample_report, output_dir=tmp_path, filename="b.md").read_text(
+        encoding="utf-8"
+    )
+    assert "## Register (opening window)" in text
+    assert "> The Weave hummed." in text
+    assert "`glint` (within_scene × 5; Ch 2)" in text
+    assert "`ozone` (cross_chapter × 9; chapters 1, 4)" in text
+    assert "## Canon audit" in text
+    assert "(Ch 3, characters/mara.json): Mara vs Marra" in text
+    assert "… 2 more in the JSON report" in text

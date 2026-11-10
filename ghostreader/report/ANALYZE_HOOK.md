@@ -109,7 +109,7 @@ TypeSafe. Chapters with no Canon entries before them are skipped.
 
 Repetition row notes vs companion: always `"focus_count": 0`; never `kind: dialogue_tag`; scope is whole-book chapter cardinality. Fancy dialogue-tag carpet lives under `thrash_findings` (`kind=dialogue_tag`), never bare `said`.
 
-Markdown reports include a thin “Algorithmic repetition” subsection when rows are non-empty. JSON is the machine contract. `register_findings` and `thrash_findings` are JSON-primary (no markdown subsection required in v1).
+Markdown reports include a thin “Algorithmic repetition” subsection when rows are non-empty. JSON is the machine contract. Since #18 the Markdown report also has short Register, Word thrash and Canon audit sections (30 rows each; the rest are in the JSON). JSON stays the full contract.
 
 ### `thrash_findings` row shape
 
