@@ -6,7 +6,11 @@ Autonomicon (and scripts) read analyze JSON from:
 ghostreader analyze … --format json
 ```
 
-Stdout / the report file is one JSON object. Ignore unknown fields.
+Stdout is exactly one JSON object. Progress, warnings and "Report saved"
+lines go to stderr (fixed in #18; before that they shared stdout). Add
+`--json-out PATH` to also write the same JSON to a file; that works with any
+`--format`. `--output` is still a copy of the Markdown report. Ignore unknown
+fields.
 
 ## Version fields
 

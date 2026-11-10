@@ -40,18 +40,14 @@ class TestConfigShow:
 
 
 class TestConfigSet:
-    def test_config_set_valid_key(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_config_set_valid_key(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / "config.yaml").write_text("depth: standard\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["config", "set", "depth", "deep"])
         assert result.exit_code == 0
         assert "deep" in result.output
 
-    def test_config_set_invalid_key(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_config_set_invalid_key(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         (tmp_path / "config.yaml").write_text("depth: standard\n", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["config", "set", "nonexistent", "value"])
@@ -67,14 +63,10 @@ def _stub_analyze_config(manuscript_dir: Path) -> None:
 
 
 def _json_payload_from_cli(result) -> dict:
-    """Analyze --format json still mixes Rich progress on stdout; scrape the object."""
+    """Analyze --format json: stdout is exactly one JSON object (#18)."""
     import json
 
-    text = result.stdout or result.output or ""
-    start = text.find("{")
-    end = text.rfind("}")
-    assert start >= 0 and end > start, f"no JSON object in CLI output: {text[:500]!r}"
-    return json.loads(text[start : end + 1])
+    return json.loads(result.stdout)
 
 
 class TestAnalyzeSmoke:
@@ -150,3 +142,34 @@ class TestAnalyzeSmoke:
         payload = _json_payload_from_cli(result)
         assert payload["register_findings_enabled"] is True
         assert payload["thrash_findings_enabled"] is True
+
+
+def test_analyze_json_stdout_is_pure_and_json_out(
+    tmp_manuscript_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    _stub_analyze_config(tmp_manuscript_dir)
+    monkeypatch.chdir(tmp_manuscript_dir)
+    out = tmp_manuscript_dir.parent / "out" / "report.json"
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            str(tmp_manuscript_dir),
+            "--model",
+            "stub",
+            "--no-cache",
+            "--no-typesafe",
+            "--format",
+            "json",
+            "--json-out",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert "ghostreader_version" in payload
+    assert "Analysis complete" in result.stderr
+    assert "Report saved" in result.stderr
+    assert json.loads(out.read_text(encoding="utf-8")) == payload

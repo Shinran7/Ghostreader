@@ -54,9 +54,7 @@ def row_weight(severity: str, count: int) -> float:
     return float(sev * (1 + math.floor(math.log10(max(int(count), 1)))))
 
 
-def hits_from_chapter_numbers(
-    nums: Sequence[int], *, weight: float = 1.0
-) -> list[Hit]:
+def hits_from_chapter_numbers(nums: Sequence[int], *, weight: float = 1.0) -> list[Hit]:
     """One chapter-level hit per distinct chapter number."""
     if weight <= 0:
         return []
@@ -91,11 +89,7 @@ def hits_from_repetition_data(repetition_data: Sequence[Mapping[str, Any]]) -> l
         kind = entry.get("kind") or "phrase"
         needle: str | None = str(entry.get("phrase") or "") or None
         if kind == "sentence_pattern":
-            examples = [
-                str(ex).strip()
-                for ex in (entry.get("examples") or [])
-                if str(ex).strip()
-            ]
+            examples = [str(ex).strip() for ex in (entry.get("examples") or []) if str(ex).strip()]
             if examples:
                 needle = examples[0][:80]
         locations = entry.get("locations") or []
@@ -212,9 +206,7 @@ def _centered_window(center: int, length: int, window_chars: int) -> tuple[int, 
     return (start, end)
 
 
-def _window_for_hit(
-    content: str, hit: Hit, window_chars: int
-) -> tuple[int, int] | None:
+def _window_for_hit(content: str, hit: Hit, window_chars: int) -> tuple[int, int] | None:
     """Return ``[start, end)`` for a hit, or None if no placeable window."""
     n = len(content)
     if n == 0 or window_chars <= 0:
@@ -254,9 +246,7 @@ def _interval_length(intervals: Sequence[tuple[int, int]]) -> int:
     return sum(e - s for s, e in intervals)
 
 
-def _truncate_intervals(
-    intervals: Sequence[tuple[int, int]], budget: int
-) -> list[tuple[int, int]]:
+def _truncate_intervals(intervals: Sequence[tuple[int, int]], budget: int) -> list[tuple[int, int]]:
     """Keep intervals in order until *budget* chars; truncate the last."""
     if budget <= 0:
         return []
@@ -290,9 +280,7 @@ def _select_intervals_by_priority(
             continue
         if _interval_length(chosen) >= alloc_c:
             break
-        chosen = _truncate_intervals(
-            _merge_intervals([*chosen, (start, end)]), alloc_c
-        )
+        chosen = _truncate_intervals(_merge_intervals([*chosen, (start, end)]), alloc_c)
         break
     return chosen
 
@@ -500,3 +488,25 @@ __all__ = [
     "quote_from_text",
     "row_weight",
 ]
+
+
+def head_tail(content: str, max_chars: int, *, tail_share: float = 0.4) -> str:
+    """Opening and closing passages of ``content`` within ``max_chars``.
+
+    Short text is returned whole. Otherwise the head and tail are cut at
+    whitespace and joined by a gap marker, so endings, hooks and payoffs
+    reach the model (#18).
+    """
+    if len(content) <= max_chars:
+        return content
+    tail_n = int(max_chars * tail_share)
+    head_n = max_chars - tail_n
+    head = content[:head_n]
+    cut = head.rfind(" ")
+    if cut > head_n * 0.8:
+        head = head[:cut]
+    tail = content[-tail_n:] if tail_n else ""
+    cut = tail.find(" ")
+    if 0 <= cut < tail_n * 0.2:
+        tail = tail[cut + 1 :]
+    return f"{head}\n[…]\n{tail}" if tail else head

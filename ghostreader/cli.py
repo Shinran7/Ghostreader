@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich import print as rprint
@@ -127,25 +129,37 @@ def analyze(
     ] = False,
     output: OutputOption = None,
     typesafe: TypesafeOption = None,
+    json_out: Annotated[
+        Path | None,
+        typer.Option("--json-out", help="Also write the analyze JSON to this path."),
+    ] = None,
 ) -> None:
     """Analyze a manuscript and produce a literary diagnostic report.
 
     Runs prose, narrative, and consistency agents against the manuscript,
     then saves a markdown report to .ghostreader/<name>/reports/.
+
+    With ``--format json``, stdout is exactly one JSON object; progress and
+    warnings go to stderr (#18).
     """
-    asyncio.run(
-        _run_analyze(
-            path,
-            depth=depth,
-            genre=genre,
-            model=model,
-            output_format=format,
-            no_cache=no_cache,
-            show_rewrites=show_rewrites,
-            output_path=output,
-            typesafe=typesafe,
+    stdout = sys.stdout
+    quiet = contextlib.redirect_stdout(sys.stderr) if format == "json" else contextlib.nullcontext()
+    with quiet:
+        asyncio.run(
+            _run_analyze(
+                path,
+                depth=depth,
+                genre=genre,
+                model=model,
+                output_format=format,
+                no_cache=no_cache,
+                show_rewrites=show_rewrites,
+                output_path=output,
+                typesafe=typesafe,
+                json_stream=stdout,
+                json_out=json_out,
+            )
         )
-    )
 
 
 async def _run_analyze(
@@ -159,6 +173,8 @@ async def _run_analyze(
     show_rewrites: bool = False,
     output_path: Path | None = None,
     typesafe: bool | None = None,
+    json_stream: Any = None,
+    json_out: Path | None = None,
 ) -> None:
     """Execute the full analysis pipeline: ingest → detect → analyze → report."""
     from ghostreader.analyzers.repetition_detector import RepetitionDetector
@@ -287,7 +303,17 @@ async def _run_analyze(
             raise typer.Exit(code=1)
 
     rprint("[cyan]Building summary hierarchy...[/cyan]")
-    hierarchy = await build_summary_hierarchy(chapters, llm)
+    from ghostreader.canon import find_canon_dir
+    from ghostreader.ingestion.summarizer import act_ranges_from_canon
+
+    act_ranges = None
+    if path.is_dir():
+        act_ranges = act_ranges_from_canon(
+            find_canon_dir(path), [c.chapter_number for c in chapters]
+        )
+        if act_ranges:
+            rprint(f"  Acts from Canon act-structure: [green]{len(act_ranges)}[/green]")
+    hierarchy = await build_summary_hierarchy(chapters, llm, act_ranges=act_ranges)
     rprint(
         f"  Summaries: [green]{len(hierarchy.chapter_summaries)}[/green] chapter, "
         f"[green]{len(hierarchy.act_summaries)}[/green] act, "
@@ -412,10 +438,19 @@ async def _run_analyze(
         report.rewrite_suggestions = await generate_rewrites(report.prioritized_findings, llm)
 
     # ── 6. Render output ──
+    json_text: str | None = None
     if fmt == "json":
-        export_json(report)
+        json_text = export_json(report, output=json_stream)
     else:
         render_report(report, show_rewrites=show_rewrites)
+    if json_out is not None:
+        json_out = json_out.resolve()
+        if json_text is None:
+            export_json(report, output_path=json_out)
+        else:  # same bytes as stdout
+            json_out.parent.mkdir(parents=True, exist_ok=True)
+            json_out.write_text(json_text + "\n", encoding="utf-8")
+        rprint(f"[green]JSON saved:[/green] {json_out}")
 
     # ── 6b. Always persist a markdown report ──
     from ghostreader.paths import next_report_path

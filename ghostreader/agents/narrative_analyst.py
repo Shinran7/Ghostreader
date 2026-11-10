@@ -98,14 +98,20 @@ def _format_summary_hierarchy(hierarchy: dict[str, Any]) -> str:
 
 
 def _format_chapter_excerpts(
-    chapters: list[dict[str, Any]], *, max_chars_per_chapter: int = 3000
+    chapters: list[dict[str, Any]], *, max_chars_per_chapter: int = 4000
 ) -> str:
-    """Build truncated chapter excerpts for narrative analysis."""
+    """Opening and closing passages of each chapter for narrative analysis.
+
+    The chapter summaries carry the middle; the ending is where hooks and
+    payoffs live, so it is always included (#18).
+    """
+    from ghostreader.excerpts import head_tail
+
     parts: list[str] = []
     for ch in chapters:
         title = ch.get("title", f"Chapter {ch.get('chapter_number', '?')}")
         number = ch.get("chapter_number", "?")
-        content = ch.get("content", "")[:max_chars_per_chapter]
+        content = head_tail(ch.get("content", ""), max_chars_per_chapter)
         parts.append(f"--- Chapter {number}: {title} ---\n{content}")
     return "\n\n".join(parts)
 
