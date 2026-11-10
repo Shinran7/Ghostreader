@@ -8,7 +8,6 @@ manuscript chunks and prior analysis findings.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +51,8 @@ def run_chat(
     from ghostreader.llm import get_llm
 
     db_path = state_dir / "lancedb"
+    if manuscript_path is not None and manuscript_path.exists():
+        _refresh_index(manuscript_path, state_dir, embedding_model)
 
     if not db_path.exists():
         _CONSOLE.print(
@@ -75,14 +76,9 @@ def run_chat(
         raise SystemExit(1)
 
     chunks_table = db.open_table(_CHUNKS_TABLE)
-    summaries_table = (
-        db.open_table(_SUMMARIES_TABLE)
-        if has_table(db, _SUMMARIES_TABLE)
-        else None
-    )
+    summaries_table = db.open_table(_SUMMARIES_TABLE) if has_table(db, _SUMMARIES_TABLE) else None
 
     llm = get_llm(model, manuscript_path=manuscript_path)
-
 
     _CONSOLE.print(
         Panel(
@@ -99,14 +95,26 @@ def run_chat(
         if summary:
             history.append(
                 SystemMessage(
-                    content=(
-                        "Here is the executive summary from the prior analysis:\n\n"
-                        + summary
-                    )
+                    content=("Here is the executive summary from the prior analysis:\n\n" + summary)
                 )
             )
 
     _chat_loop(llm, history, chunks_table, summaries_table, report, embedding_model)
+
+
+def _refresh_index(manuscript_path: Path, state_dir: Path, embedding_model: str) -> None:
+    """Build the chat index when missing or stale (#18); analyze no longer does."""
+    from ghostreader.ingestion import load_chapters
+    from ghostreader.ingestion.indexer import ensure_index, load_summaries
+
+    chapters = load_chapters(manuscript_path)
+    if not chapters:
+        return
+    hierarchy = load_summaries(state_dir)
+    with _CONSOLE.status("Updating the search index..."):
+        rebuilt, _ = ensure_index(chapters, hierarchy, state_dir, embedding_model=embedding_model)
+    if rebuilt:
+        _CONSOLE.print("[dim]Search index rebuilt for the current text.[/dim]")
 
 
 # ── Interactive loop ─────────────────────────────────────────────────
@@ -136,7 +144,10 @@ def _chat_loop(
 
         # Retrieve relevant context
         context = _retrieve_context(
-            question, chunks_table, summaries_table, report,
+            question,
+            chunks_table,
+            summaries_table,
+            report,
             embedding_model=embedding_model,
         )
 
@@ -180,12 +191,11 @@ def _retrieve_context(
 
     # Vector search over manuscript chunks
     from ghostreader.embed import get_embedder
+
     _embedder = get_embedder(embedding_model)
     query_vec = _embedder.embed([query])[0]
     try:
-        chunk_results = (
-            chunks_table.search(query_vec).limit(top_k).to_list()
-        )
+        chunk_results = chunks_table.search(query_vec).limit(top_k).to_list()
         for row in chunk_results:
             ch = row.get("chapter_number", "?")
             text = row.get("text", "")
@@ -196,9 +206,7 @@ def _retrieve_context(
     # Vector search over summaries
     if summaries_table is not None:
         try:
-            summary_results = (
-                summaries_table.search(query_vec).limit(3).to_list()
-            )
+            summary_results = summaries_table.search(query_vec).limit(3).to_list()
             for row in summary_results:
                 level = row.get("level", "?")
                 title = row.get("title", "")
@@ -234,9 +242,7 @@ def _findings_for_query(query: str, report: dict[str, Any]) -> str:
         summary = f.get("summary", "")
         evidence = f.get("evidence", "")
         ch = f.get("chapter_ref", "?")
-        lines.append(
-            f"#{rank} [{sev}] {dim}: {summary} (ch {ch})\n  Evidence: {evidence}"
-        )
+        lines.append(f"#{rank} [{sev}] {dim}: {summary} (ch {ch})\n  Evidence: {evidence}")
     return "\n".join(lines)
 
 
@@ -244,19 +250,10 @@ def _findings_for_query(query: str, report: dict[str, Any]) -> str:
 
 
 def _load_cached_report(state_dir: Path) -> dict[str, Any] | None:
-    """Load the cached analysis report from .ghostreader/cache.json."""
-    cache_path = state_dir / "cache.json"
-    if not cache_path.exists():
-        return None
-    try:
-        with open(cache_path, encoding="utf-8") as f:
-            data = json.load(f)
-        # cache.json stores the full AnalysisState; extract final_report
-        if isinstance(data, dict):
-            return data.get("final_report") or data
-    except (json.JSONDecodeError, OSError):
-        return None
-    return None
+    """The last analyze report (``last-report.json``, else legacy ``cache.json``)."""
+    from ghostreader.cache import load_last_report
+
+    return load_last_report(state_dir)
 
 
 __all__ = ["run_chat"]

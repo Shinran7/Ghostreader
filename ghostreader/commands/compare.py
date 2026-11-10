@@ -104,28 +104,11 @@ def run_compare(
 
 
 def _load_report(path: Path) -> dict[str, Any] | None:
-    """The last analyze report: ``last-report.json``, else legacy ``cache.json``."""
+    """The last analyze report for a manuscript (see ``load_last_report``)."""
+    from ghostreader.cache import load_last_report
     from ghostreader.paths import state_dir_for
 
-    state = state_dir_for(path)
-    for name in ("last-report.json", "cache.json"):
-        try:
-            data = json.loads((state / name).read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        if isinstance(data.get("final_report"), dict):
-            return data["final_report"]
-        entries = data.get("entries")
-        if isinstance(entries, list):  # CacheManager v1: report stored per chapter
-            results = [e.get("result") for e in entries if isinstance(e, dict)]
-            results = [r for r in results if isinstance(r, dict)]
-            if results:
-                return results[-1]
-            continue
-        return data
-    return None
+    return load_last_report(state_dir_for(path))
 
 
 # ── Scorecard construction ───────────────────────────────────────────

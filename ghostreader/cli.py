@@ -188,9 +188,8 @@ async def _run_analyze(
         repetition_report_to_dicts,
     )
     from ghostreader.graph.workflow import build_analysis_graph
-    from ghostreader.ingestion.epub_loader import load_epub
-    from ghostreader.ingestion.indexer import index_manuscript
-    from ghostreader.ingestion.markdown_loader import load_markdown
+    from ghostreader.ingestion import load_chapters
+    from ghostreader.ingestion.indexer import save_summaries
     from ghostreader.ingestion.summarizer import build_summary_hierarchy
     from ghostreader.llm import load_secrets
     from ghostreader.report import ReportOutput
@@ -273,12 +272,9 @@ async def _run_analyze(
     result_cache = ResultCache(state / "llm-cache", enabled=not no_cache)
     llm_model = model_key(llm, model)
 
-    # ── 1. Ingestion: load → summarize → index ──
+    # ── 1. Ingestion: load → summarize (the chat index is built by chat) ──
     rprint(f"[cyan]Loading manuscript from:[/cyan] {path}")
-    if path.is_file() and path.suffix.lower() == ".epub":
-        chapters = load_epub(path)
-    else:
-        chapters = load_markdown(path)
+    chapters = load_chapters(path)
     rprint(f"  Found [green]{len(chapters)}[/green] chapter(s)")
 
     # ── 1b. Chapter-level fact extraction for consistency checking ──
@@ -341,14 +337,9 @@ async def _run_analyze(
         f"[green]1[/green] global"
     )
 
-    rprint(f"[cyan]Indexing into LanceDB (embeddings: {cfg.embedding_model})...[/cyan]")
-    chunk_count, db_path = index_manuscript(
-        chapters,
-        hierarchy,
-        state,
-        embedding_model=cfg.embedding_model,
-    )
-    rprint(f"  Indexed [green]{chunk_count}[/green] chunks → {db_path}")
+    if not no_cache:
+        save_summaries(state, hierarchy)
+    db_path = state / "lancedb"
 
     # ── 2. Repetition detection (algorithmic, no LLM) ──
     rprint("[cyan]Running repetition detection...[/cyan]")
@@ -403,7 +394,6 @@ async def _run_analyze(
     )
     initial_state: dict = {
         "chapters": chapter_dicts,
-        "chunk_count": chunk_count,
         "summary_hierarchy": hierarchy_to_dict(hierarchy),
         "repetition_data": repetition_data,
         "config": config,
@@ -498,11 +488,9 @@ async def _run_analyze(
 
     # ── 7. Keep the last report once (not per chapter) ──
     if not no_cache:
-        import json as _json
+        from ghostreader.cache import save_last_report
 
-        (state / "last-report.json").write_text(
-            _json.dumps(final_report, ensure_ascii=False, default=str), encoding="utf-8"
-        )
+        save_last_report(state, final_report)
         rprint("[dim]Results cached.[/dim]")
 
 
@@ -586,8 +574,7 @@ def chat(
 
     path = path.resolve()
     state = state_dir_for(path)
-    db_path = state / "lancedb"
-    if not db_path.exists():
+    if not (state / "last-report.json").exists() and not (state / "lancedb").exists():
         rprint(f"[red]Error:[/red] No analysis found for '{path}'.")
         rprint("  Run [cyan]ghostreader analyze[/cyan] on it first.")
         raise typer.Exit(code=1)

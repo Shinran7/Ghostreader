@@ -110,7 +110,19 @@ def split_into_scenes(
     return scenes
 
 
+def load_chapters(path: Path) -> list[Chapter]:
+    """Load a manuscript: an ``.epub`` file, or Markdown (file or directory)."""
+    if path.is_file() and path.suffix.lower() == ".epub":
+        from ghostreader.ingestion.epub_loader import load_epub
+
+        return load_epub(path)
+    from ghostreader.ingestion.markdown_loader import load_markdown
+
+    return load_markdown(path)
+
+
 __all__ = [
+    "load_chapters",
     "Chapter",
     "ChapterSummary",
     "ActSummary",

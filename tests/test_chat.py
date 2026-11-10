@@ -124,9 +124,8 @@ class TestRunChat:
             "ghostreader.commands.chat.lancedb.connect", lambda *_a, **_k: _FakeDb()
         )
         monkeypatch.setattr("ghostreader.llm.get_llm", fake_get_llm)
-        monkeypatch.setattr(
-            "ghostreader.commands.chat._chat_loop", lambda *a, **k: None
-        )
+        monkeypatch.setattr("ghostreader.commands.chat._chat_loop", lambda *a, **k: None)
+        monkeypatch.setattr("ghostreader.commands.chat._refresh_index", lambda *a, **k: None)
         manuscript = tmp_path / "novel.md"
         manuscript.write_text("# x", encoding="utf-8")
         run_chat(tmp_path, model=None, manuscript_path=manuscript, label="novel")

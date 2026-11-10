@@ -18,7 +18,12 @@ summaries sit under `state/llm-cache/`, keyed on the input text, model and
 prompt version. An unchanged book makes no fact or summary calls; an edited
 chapter re-runs its own facts and summary, its act and the global summary.
 Analysis agents still run each time. `--no-cache` skips cache reads and
-writes. The last report is kept once at `state/last-report.json`.
+writes. The last report is kept once at `state/last-report.json` (read by
+`compare` and `chat`), and the summaries at `state/summaries.json`.
+
+Analyze no longer builds the LanceDB index; only `chat` uses it. `chat`
+builds it on first use, and rebuilds it when the chapter text, summaries or
+embedding model change.
 
 ## Version fields
 
