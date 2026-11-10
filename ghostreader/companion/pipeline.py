@@ -27,12 +27,14 @@ from ghostreader.companion.brief import (
 from ghostreader.companion.continuity import (
     COMPANION_GATE_DIMS,
     COMPANION_INFO_DIMS,
+    cited_chapters,
     collect_info_findings,
     continuity_parse_failed,
     ensure_info_ratings,
     partition_findings,
 )
 from ghostreader.companion.craft import run_companion_craft
+from ghostreader.companion.quote_recovery import recover_continuity_quotes
 from ghostreader.companion.discovery import DiscoveryResult, max_chapter_on_disk
 from ghostreader.companion.fact_memory import FactMemoryStore
 from ghostreader.companion.narrative import run_companion_narrative
@@ -63,6 +65,7 @@ from ghostreader.companion.voice_cards import load_voice_cards_with_warnings
 from ghostreader.graph import chapters_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.llm import message_text
+from ghostreader.quotes import QuoteIndex, verify_findings
 from ghostreader.report import DimensionRating, PrioritizedFinding
 from ghostreader.seed import find_seed_yaml
 from ghostreader.typesafe.routing import prioritization_sort_key
@@ -270,10 +273,26 @@ async def run_companion_pipeline(
     companion_voice_card_watch: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
+    quote_verification: bool = True,
+    quote_recovery_max: int = 5,
     json_mode: bool = False,
 ) -> CompanionBrief:
     """Facts → craft → continuity → partition → brief; update progress cursor."""
     warnings: list[str] = list(discovery.warnings)
+    quote_index = QuoteIndex(discovery.chapters) if quote_verification else None
+    quote_stats: dict[str, int] = {}
+
+    def _verify(raws: list[dict[str, Any]], *, demote: bool) -> list[dict[str, Any]]:
+        if not quote_index:
+            return raws
+        checked, demoted = verify_findings(
+            raws, quote_index, prefer_fn=cited_chapters, demote=demote
+        )
+        verified = sum(1 for f in checked if f.get("quote_verified"))
+        quote_stats["verified"] = quote_stats.get("verified", 0) + verified
+        quote_stats["unverified"] = quote_stats.get("unverified", 0) + len(checked) - verified
+        quote_stats["demoted"] = quote_stats.get("demoted", 0) + demoted
+        return checked
 
     disk_max = max_chapter_on_disk(discovery.chapters_dir)
     progress = clamp_progress_to_disk(story_state_dir, disk_max)
@@ -461,7 +480,8 @@ async def run_companion_pipeline(
             voice_card_block=vc_block,
             include_voice_card_dims=include_voice_card,
         )
-        prose_output = prose_result.get("prose_output") or {}
+        prose_output = dict(prose_result.get("prose_output") or {})
+        prose_output["findings"] = _verify(list(prose_output.get("findings") or []), demote=True)
         craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)
 
     if not craft_only:
@@ -536,6 +556,7 @@ async def run_companion_pipeline(
             f"Narrative dims: {len(nar_ratings_map)} ({len(nar_raw)} grounded concern(s))",
             quiet_stdout_json=json_mode,
         )
+        nar_raw = _verify(list(nar_raw), demote=True)
         narrative_findings = _rank_findings(nar_raw)
         narrative_ratings = _ratings_from_map(nar_ratings_map)
 
@@ -559,6 +580,28 @@ async def run_companion_pipeline(
         # concerns are demoted before they can reach the gate.
         continuity_raw, _, _ = demote_tone_plot_holes(continuity_raw)  # type: ignore[arg-type]
         continuity_raw, _, _ = demote_ungrounded_concerns(continuity_raw)  # type: ignore[arg-type]
+
+    if quote_index and continuity_raw:
+        # Continuity concerns keep their severity; unverified ones route to
+        # ungrounded. Fact-sheet paraphrases get one bounded quote fetch first.
+        continuity_raw = _verify(continuity_raw, demote=False)
+        if quote_recovery_max > 0:
+            continuity_raw, recovered, calls = await recover_continuity_quotes(
+                continuity_raw,
+                quote_index,
+                llm,
+                chapter_n=discovery.chapter_number,
+                max_calls=quote_recovery_max,
+            )
+            if calls:
+                quote_stats["recovered"] = recovered
+                quote_stats["recovery_calls"] = calls
+                quote_stats["verified"] = quote_stats.get("verified", 0) + recovered
+                quote_stats["unverified"] = quote_stats.get("unverified", 0) - recovered
+                _stderr(
+                    f"Quote recovery: {recovered}/{calls} continuity concern(s) verified",
+                    quiet_stdout_json=json_mode,
+                )
 
     partition = partition_findings(
         continuity_raw,
@@ -647,6 +690,7 @@ async def run_companion_pipeline(
         voice_card_findings=voice_card_findings,
         warnings=warnings,
         continuity_status=continuity_status,
+        quote_stats=quote_stats,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(UTC).isoformat(),

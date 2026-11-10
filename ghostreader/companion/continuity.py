@@ -114,6 +114,9 @@ def collect_info_findings(
             continue
         if mode == "progressive" and is_clearly_preexisting(f, N=N):
             continue
+        if f.get("quote_verified") is False:
+            ungrounded += 1
+            continue
         if mode == "sweep":
             if is_grounded_info_sweep(f):
                 kept.append(f)
@@ -183,6 +186,13 @@ def partition_findings(
         if f.get("dimension") not in COMPANION_GATE_DIMS:
             continue
         if f.get("severity") != "concern":
+            continue
+        if f.get("quote_verified") is False:
+            # Quotes not found in the manuscript (#17): never gate.
+            if mode == "progressive" and is_clearly_preexisting(f, N=N):
+                preexisting.append(f)
+            else:
+                ungrounded.append(f)
             continue
         if mode == "sweep":
             if is_grounded_sweep(f):

@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.4"
+GHOSTREADER_VERSION = "0.2.5"
 
 
 @dataclass
@@ -61,6 +61,9 @@ class CompanionBrief:
     # "ok" = continuity ran; "failed" = it could not be checked (parse failure
     # or poisoned fact sheets); "skipped" = --craft-only. Added in 0.2.4.
     continuity_status: Literal["ok", "failed", "skipped"] = "ok"
+    # Quote verification counts (#17, 0.2.5): verified / unverified / demoted /
+    # recovered / recovery_calls. Empty when verification is off.
+    quote_stats: dict[str, int] = field(default_factory=dict)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
     generated_at: str = ""
@@ -105,6 +108,10 @@ def finding_from_dict(raw: dict[str, Any], *, rank: int) -> PrioritizedFinding:
         evidence=str(raw.get("evidence") or ""),
         chapter_ref=str(raw.get("chapter_ref") or ""),
         counter_evidence=str(raw.get("counter_evidence") or ""),
+        signal_kind=str(raw.get("signal_kind") or ""),
+        id=str(raw.get("id") or ""),
+        quote_verified=raw.get("quote_verified"),
+        location=raw.get("location"),
     )
 
 
@@ -155,6 +162,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "voice_card_findings": list(brief.voice_card_findings),
         "warnings": list(brief.warnings),
         "continuity_status": brief.continuity_status,
+        "quote_stats": dict(brief.quote_stats),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,
     }

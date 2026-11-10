@@ -55,9 +55,11 @@ Return a JSON array of findings. Each finding must have:
   "narrative.themes", "narrative.structure", "narrative.world_building"
 - "severity": one of "strength", "neutral", "concern"
 - "summary": one-line description of the finding
-- "evidence": one or more DIRECT QUOTES from the manuscript text or summaries,
-  each prefixed with the chapter number, e.g. "Ch 5: 'His jaw flexed once.'"
-  Do not paraphrase — quote the actual words.
+- "evidence": one or more DIRECT QUOTES from the manuscript text (not the
+  summaries), each prefixed with the chapter number, e.g. "Ch 5: 'His jaw
+  flexed once.'" Do not paraphrase — quote the actual words.
+  Quotes are checked against the text. A concern whose quote is not found
+  there is dropped.
 - "chapter_ref": chapter number(s) where this applies, e.g. "3" or "5-7"
 
 Return ONLY the JSON array, no markdown fencing or commentary.

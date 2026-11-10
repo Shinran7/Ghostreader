@@ -79,6 +79,8 @@ Return a JSON array of findings. Each finding must have:
 - "counter_evidence": a DIRECT QUOTE from a different passage showing the
   contradicting fact, prefixed with the chapter number, e.g. "Ch 6: 'Clio stood
   opposite, projector steady, its casing cool under the fluorescent glare'"
+  Copy the words exactly; quotes are checked against the text, and a
+  concern whose quotes are not found there is dropped.
   (use empty string "" for foreshadowing/unresolved findings where only one
   side exists)
 - "chapter_ref": chapter number(s) where this applies, e.g. "3 vs 8"

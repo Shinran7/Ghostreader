@@ -40,7 +40,8 @@ Return a JSON array of findings. Each finding must have:
 - "severity": one of "strength", "neutral", "concern"
 - "summary": one-line description
 - "evidence": DIRECT QUOTE(s) from the focus chapter, prefixed with chapter number
-  (e.g. "Ch 18: '…'")
+  (e.g. "Ch 18: '…'"). Copy the words exactly; a concern whose quote is not
+  found in the text is demoted.
 - "chapter_ref": chapter number(s), e.g. "18"
 
 Return ONLY the JSON array, no markdown fencing or commentary.

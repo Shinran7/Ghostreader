@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.graph import AgentFinding, AgentOutput, AnalysisState
 from ghostreader.llm import message_text
+from ghostreader.quotes import QuoteIndex, quote_required, verify_findings
 
 _SYSTEM_PROMPT = """You are the Synthesis Agent in a multi-agent literary analysis pipeline.
 Your job is to combine findings from three specialist agents (Prose Analyst,
@@ -130,6 +131,70 @@ def omit_empty_evidence_strengths(
     for i, item in enumerate(kept, 1):
         item["rank"] = i
     return kept, omitted
+
+
+async def quote_gate(
+    prioritized: list[dict[str, Any]],
+    state: AnalysisState,
+    llm: BaseChatModel | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    """Check finding quotes against the manuscript (#17).
+
+    Returns ``(kept, unverified_concerns, stats)``. Consistency concerns whose
+    quotes do not verify (fact-sheet paraphrase) first get one bounded quote
+    fetch each (``quote_recovery_max``). Concerns still unverified leave the
+    prioritized list; strengths and neutrals stay, tagged with
+    ``quote_verified``. Kept rows are re-ranked.
+    """
+    config = state.get("config", {})
+    if not config.get("quote_verification", True) or not prioritized:
+        return prioritized, [], {}
+    index = QuoteIndex(state.get("chapters") or [])
+    if not index:
+        return prioritized, [], {}
+    from ghostreader.companion.continuity import cited_chapters
+    from ghostreader.companion.quote_recovery import (
+        needs_recovery_any_consistency,
+        recover_continuity_quotes,
+    )
+
+    checked, _ = verify_findings(
+        prioritized, index, prefer_fn=cited_chapters, demote=False
+    )
+    recovered = calls = 0
+    max_calls = int(config.get("quote_recovery_max", 5) or 0)
+    if llm is not None and max_calls > 0:
+        checked, recovered, calls = await recover_continuity_quotes(
+            checked,
+            index,
+            llm,
+            chapter_n=None,
+            max_calls=max_calls,
+            select=needs_recovery_any_consistency,
+        )
+    kept: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
+    for f in checked:
+        if (
+            f.get("severity") == "concern"
+            and f.get("quote_verified") is False
+            and quote_required(f)
+        ):
+            dropped.append(f)
+        else:
+            kept.append(f)
+    for i, f in enumerate(kept, 1):
+        f["rank"] = i
+    verified = sum(1 for f in checked if f.get("quote_verified"))
+    stats = {
+        "verified": verified,
+        "unverified": len(checked) - verified,
+        "dropped": len(dropped),
+    }
+    if calls:
+        stats["recovered"] = recovered
+        stats["recovery_calls"] = calls
+    return kept, dropped, stats
 
 
 def _counts_from_findings(findings: list[dict[str, Any]]) -> tuple[int, int, int]:
@@ -290,6 +355,7 @@ async def _synthesis_typesafe_path(
     prioritized, omitted = omit_empty_evidence_strengths(
         prioritized, enabled=omit_empty
     )
+    prioritized, unverified, quote_stats = await quote_gate(prioritized, state, llm)
     strengths_count, concerns_count, total_findings = _counts_from_findings(
         prioritized
     )
@@ -328,6 +394,8 @@ async def _synthesis_typesafe_path(
         "total_findings": total_findings,
         "raw_response": executive_summary,
         "typesafe": typesafe_stats,
+        "unverified_findings": unverified,
+        "quote_stats": quote_stats,
     }
     return {"final_report": report}
 
@@ -383,7 +451,10 @@ async def _synthesis_llm_path(
     prioritized, _omitted = omit_empty_evidence_strengths(
         prioritized, enabled=omit_empty
     )
+    prioritized, unverified, quote_stats = await quote_gate(prioritized, state, llm)
     report["prioritized_findings"] = prioritized
+    report["unverified_findings"] = unverified
+    report["quote_stats"] = quote_stats
     if had_prioritized:
         strengths_count, concerns_count, total_findings = _counts_from_findings(
             prioritized

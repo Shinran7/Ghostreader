@@ -32,6 +32,8 @@ class AnalysisConfig(TypedDict, total=False):
     analyze_repetition_findings_cap: int
     analyze_enrich_strengths: bool
     analyze_omit_empty_strengths: bool
+    quote_verification: bool
+    quote_recovery_max: int
 
 
 class AgentFinding(TypedDict, total=False):

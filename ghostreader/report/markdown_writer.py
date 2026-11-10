@@ -65,6 +65,7 @@ def write_markdown_report(
     sections.append(_severity_overview(report))
     sections.append(_dimension_ratings(report))
     sections.append(_findings(report))
+    sections.append(_unverified(report))
     sections.append(_algorithmic_repetition(report))
 
     if show_rewrites and report.rewrite_suggestions:
@@ -152,11 +153,36 @@ def _findings(report: ReportOutput) -> str:
                 f"**{indicator} #{f.rank} [{f.severity}]** {f.summary}{chapter_tag}\n"
             )
             if f.evidence:
-                parts.append(f"> {f.evidence}\n")
+                parts.append(f"> {f.evidence}{_where(f.location)}\n")
             if f.counter_evidence:
-                parts.append(f"> **vs.** {f.counter_evidence}\n")
+                parts.append(
+                    f"> **vs.** {f.counter_evidence}{_where(f.counter_location)}\n"
+                )
 
     return "\n".join(parts)
+
+
+def _where(location: dict | None) -> str:
+    """Verified quote position (#17), e.g. ` *(Ch 3, line 42)*`."""
+    if not location or location.get("chapter") is None:
+        return ""
+    return f" *(Ch {location['chapter']}, line {location.get('line', '?')})*"
+
+
+def _unverified(report: ReportOutput) -> str:
+    """Concerns dropped because their quotes are not in the manuscript (#17)."""
+    rows = report.unverified_findings
+    if not rows:
+        return ""
+    parts = [
+        "\n## Unverified Findings\n",
+        f"{len(rows)} concern(s) quoted text that is not in the manuscript. "
+        "They are not ranked or counted above.\n",
+    ]
+    for f in rows:
+        ref = f" *(Chapter {f.get('chapter_ref')})*" if f.get("chapter_ref") else ""
+        parts.append(f"- `{f.get('dimension', '')}` {f.get('summary', '')}{ref}")
+    return "\n".join(parts) + "\n"
 
 
 def _algorithmic_repetition(report: ReportOutput) -> str:

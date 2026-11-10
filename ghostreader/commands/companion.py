@@ -129,6 +129,8 @@ async def run_companion(
                     companion_voice_card_watch=cfg.companion_voice_card_watch,
                     typesafe_confidence_floor=cfg.typesafe_confidence_floor,
                     typesafe_noul_positive_threshold=cfg.typesafe_noul_positive_threshold,
+                    quote_verification=cfg.quote_verification,
+                    quote_recovery_max=cfg.quote_recovery_max,
                     json_mode=json_mode,
                 )
         else:
@@ -153,6 +155,8 @@ async def run_companion(
                 companion_voice_card_watch=cfg.companion_voice_card_watch,
                 typesafe_confidence_floor=cfg.typesafe_confidence_floor,
                 typesafe_noul_positive_threshold=cfg.typesafe_noul_positive_threshold,
+                quote_verification=cfg.quote_verification,
+                quote_recovery_max=cfg.quote_recovery_max,
                 json_mode=json_mode,
             )
     except Exception as exc:  # noqa: BLE001

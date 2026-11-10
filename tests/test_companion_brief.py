@@ -116,9 +116,9 @@ class TestJsonPayload:
         assert payload["repetition_findings"] == []
         assert payload["register_findings"] == []
         assert payload["voice_card_findings"] == []
-        assert GHOSTREADER_VERSION == "0.2.4"
+        assert GHOSTREADER_VERSION == "0.2.5"
         assert payload["continuity_status"] == "ok"
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert payload["package_version"] == pkg_ver
 
         buf = io.StringIO()
@@ -126,7 +126,7 @@ class TestJsonPayload:
         assert buf.getvalue() == text + "\n"
         parsed = json.loads(buf.getvalue())
         assert parsed["verdict"] == "ship"
-        assert parsed["ghostreader_version"] == "0.2.4"
+        assert parsed["ghostreader_version"] == "0.2.5"
         assert parsed["package_version"] == pkg_ver
         assert parsed["register_findings"] == []
         assert parsed["voice_card_findings"] == []
@@ -147,7 +147,7 @@ class TestJsonPayload:
         )
         payload = brief_to_payload(brief)
         assert payload["craft_window_chapters"] == [13, 14, 15, 16, 17, 18]
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert payload["repetition_findings"] == []
         assert payload["register_findings"] == []
         assert payload["voice_card_findings"] == []
@@ -181,7 +181,7 @@ class TestJsonPayload:
             repetition_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert payload["repetition_findings"] == [row]
         assert payload["register_findings"] == []
         assert payload["voice_card_findings"] == []
@@ -214,7 +214,7 @@ class TestJsonPayload:
             register_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert payload["register_findings"] == [row]
         assert payload["voice_card_findings"] == []
         assert all(
@@ -256,7 +256,7 @@ class TestJsonPayload:
             voice_card_findings=[row],
         )
         payload = brief_to_payload(brief)
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert payload["voice_card_findings"] == [row]
         assert all(
             r["kind"] in {"card_mismatch", "card_collapse"} for r in payload["voice_card_findings"]

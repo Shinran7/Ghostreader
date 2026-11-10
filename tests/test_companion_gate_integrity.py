@@ -119,7 +119,8 @@ def test_continuity_parse_failed() -> None:
 def _discovery(tmp_path: Path) -> DiscoveryResult:
     path = tmp_path / "chapter-001.md"
     path.write_text("# Chapter 1\n\nHer eyes were blue.\n", encoding="utf-8")
-    ch = Chapter(title="One", content="Her eyes were blue.", chapter_number=1, source_path=path)
+    content = "Her eyes were blue.\n\nHe looked into her brown eyes."
+    ch = Chapter(title="One", content=content, chapter_number=1, source_path=path)
     return DiscoveryResult(
         mode="progressive",
         path=tmp_path,

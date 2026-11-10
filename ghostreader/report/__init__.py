@@ -38,6 +38,11 @@ class PrioritizedFinding:
     chapter_ref: str
     counter_evidence: str = ""
     signal_kind: str = ""
+    # Quote verification (#17). None = not checked (algorithmic rows, kill switch).
+    id: str = ""
+    quote_verified: bool | None = None
+    location: dict[str, Any] | None = None
+    counter_location: dict[str, Any] | None = None
 
 
 @dataclass
@@ -76,6 +81,10 @@ class ReportOutput:
     # False when depth/kill-switch skipped the watcher (so [] ≠ "ran, found nothing").
     register_findings_enabled: bool = True
     thrash_findings_enabled: bool = True
+    # Concerns whose quotes were not found in the manuscript (#17); kept out of
+    # prioritized_findings and the counts. quote_stats: verified / unverified / dropped.
+    unverified_findings: list[dict[str, Any]] = field(default_factory=list)
+    quote_stats: dict[str, int] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -111,6 +120,10 @@ class ReportOutput:
                 chapter_ref=f.get("chapter_ref", ""),
                 counter_evidence=f.get("counter_evidence", ""),
                 signal_kind=str(f.get("signal_kind") or ""),
+                id=str(f.get("id") or ""),
+                quote_verified=f.get("quote_verified"),
+                location=f.get("location"),
+                counter_location=f.get("counter_location"),
             )
             for i, f in enumerate(report.get("prioritized_findings", []))
         ]
@@ -129,6 +142,8 @@ class ReportOutput:
             total_findings=report.get("total_findings", 0),
             manuscript_name=manuscript_name,
             warnings=merged_warnings,
+            unverified_findings=list(report.get("unverified_findings") or []),
+            quote_stats=dict(report.get("quote_stats") or {}),
             repetition_findings=list(repetition_findings or []),
             register_findings=list(register_findings or []),
             thrash_findings=list(thrash_findings or []),

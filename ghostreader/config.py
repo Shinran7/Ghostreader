@@ -51,6 +51,13 @@ class GhostreaderConfig(BaseModel):
     # Abort analyze/companion (exit 1) when any chapter fact sheet fails JSON parse.
     # Continuity on empty sheets looks "clean" and must not be trusted.
     abort_on_fact_parse_failure: bool = True
+    # Check every LLM finding quote against the manuscript (#17). Unverified
+    # concerns are demoted (craft / narrative / analyze) or kept out of the
+    # continuity gate. false = off.
+    quote_verification: bool = True
+    # Max LLM calls per run to fetch verbatim quotes for continuity concerns
+    # whose quotes did not verify (companion and analyze; 0 = no recovery).
+    quote_recovery_max: int = 5
     # Analyze repetition feed caps (always on; not gated by analyze_grounding_hardening).
     analyze_repetition_words: int = 50
     analyze_repetition_phrases: int = 40
@@ -181,6 +188,11 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Abort when fact-extraction JSON parse fails (empty sheets poison continuity).",
             f"abort_on_fact_parse_failure: {_fmt(self.abort_on_fact_parse_failure)}",
+            "",
+            "# Verify finding quotes against the manuscript; demote invented ones.",
+            f"quote_verification: {_fmt(self.quote_verification)}",
+            "# Max calls per run to fetch verbatim quotes for continuity concerns.",
+            f"quote_recovery_max: {_fmt(self.quote_recovery_max)}",
             "",
             "# Analyze repetition feed: max word / phrase / sentence-pattern rows.",
             "# Always applied (not gated by analyze_grounding_hardening).",

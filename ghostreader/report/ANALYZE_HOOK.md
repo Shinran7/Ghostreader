@@ -1,4 +1,4 @@
-# Analyze JSON hook (0.2.1)
+# Analyze JSON hook (0.2.2)
 
 Autonomicon (and scripts) read analyze JSON from:
 
@@ -12,12 +12,12 @@ Stdout / the report file is one JSON object. Ignore unknown fields.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.1`**. Bumps only when analyze payload shape changes. |
+| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.2`**. Bumps only when analyze payload shape changes. |
 | `package_version` | Installed package version (`ghostreader.__version__`). For correlating which install produced the file. |
 
-Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.4`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
+Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.5`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
 
-## Contract shape (0.2.1)
+## Contract shape (0.2.2)
 
 Always present:
 
@@ -26,6 +26,36 @@ Always present:
 - `thrash_findings` — additive reader-visible thrash rows (empty list OK). Emitted on **`standard` and `deep`** when `analyze_thrash_watch` is on; `quick` / kill-off → `[]`. Kinds: `within_scene` \| `chapter_rare` \| `phrase` \| `dialogue_tag` \| `common_word` \| `cross_chapter`. Machine rows are the v1 action surface for Autonomicon end-of-book cleanup. Soft `prose.uncommon_thrash` is **deferred** (not shipped in v1). Do not overload `prose.vocabulary` / `prose.repetition` for Zipf/#355 thrash. Do not overload `repetition_findings` for literary carpet. Optional `analyze_thrash_load_bearing` in `config.yaml` raises the common-word bar for listed motif lemmas (empty = ordinary thresholds).
 - `prioritized_findings` — ranked findings. Empty-evidence **strengths** are omitted after enrich (ratings may still show strength).
 - Continuity findings may carry additive `signal_kind` when enrich provided it.
+- `unverified_findings` — concerns whose quotes are not in the manuscript
+  (empty list OK). They are removed from `prioritized_findings` and from the
+  `overview` counts; `prioritized_findings` is re-ranked.
+- `quote_stats` — `{verified, unverified, dropped, recovered, recovery_calls}`
+  (`{}` when `quote_verification: false`).
+
+### Since 0.2.2: quote verification (#17)
+
+- Every LLM finding row (`prioritized_findings`, `continuity_findings`, and the
+  other finding lists) may carry:
+  - `id` — stable 12-character id from dimension plus quote position (or the
+    normalized evidence when the quote is not found). Use it for dedup and
+    "already fixed" tracking across runs.
+  - `quote_verified` — `true` when `evidence` (and `counter_evidence`, when
+    present) is in the manuscript; `false` when not; `null` when not checked
+    (algorithmic rows, `quote_verification: false`).
+  - `location` / `counter_location` — `{chapter, paragraph, line, char_start,
+    char_end, match}` for the first verified quote part. `line` and
+    `paragraph` are 1-based within the chapter text; `char_*` are offsets into
+    it. `match` is `exact` \| `normalized` (quote marks, dashes, spacing) \|
+    `fuzzy` (≥0.9 token similarity, ≥5 words).
+- `prose.repetition` rows are exempt: their evidence is often counts, not
+  passages. They are tagged but never demoted or dropped.
+- Consistency concerns that do not verify (fact-sheet paraphrase when
+  TypeSafe is off) first get one LLM quote fetch each, capped by
+  `quote_recovery_max` (default 5 per run). Recovered rows carry
+  `quote_recovered: true` and the original text in `evidence_claim` /
+  `counter_evidence_claim`. Strengths and neutrals are tagged, never removed.
+- Markdown: verified quotes show `(Ch N, line L)`; an "Unverified Findings"
+  section lists dropped concerns.
 
 Repetition row notes vs companion: always `"focus_count": 0`; never `kind: dialogue_tag`; scope is whole-book chapter cardinality. Fancy dialogue-tag carpet lives under `thrash_findings` (`kind=dialogue_tag`), never bare `said`.
 
@@ -56,7 +86,7 @@ Consumers that do not know `thrash_findings` or unknown kinds ignore them. Missi
 
 ```json
 {
-  "ghostreader_version": "0.2.1",
+  "ghostreader_version": "0.2.2",
   "package_version": "0.1.0",
   "repetition_findings": [],
   "register_findings": [],
