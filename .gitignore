@@ -11,8 +11,8 @@ vbrief/.eval/
 !.slizard/config.json
 !.slizard/rules.yml
 
-# Audit triage scratch (exports under history/audit-triage/ are committed)
-.tmp/audit-triage/
+# Local scratch (audit-triage exports under history/audit-triage/ are committed)
+.tmp/
 
 # Python
 __pycache__/
