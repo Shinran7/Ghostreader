@@ -92,6 +92,7 @@ class ReportOutput:
     # Continuity state of record (#16): "canon" | "facts" | "" (not run).
     continuity_source: str = ""
     canon_stats: dict[str, int] = field(default_factory=dict)
+    canon_findings: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -155,6 +156,7 @@ class ReportOutput:
             quote_stats=dict(report.get("quote_stats") or {}),
             continuity_source=str(report.get("continuity_source") or ""),
             canon_stats=dict(report.get("canon_stats") or {}),
+            canon_findings=list(report.get("canon_findings") or []),
             repetition_findings=list(repetition_findings or []),
             register_findings=list(register_findings or []),
             thrash_findings=list(thrash_findings or []),

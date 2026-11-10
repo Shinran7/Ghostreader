@@ -1,4 +1,4 @@
-# Analyze JSON hook (0.2.3)
+# Analyze JSON hook (0.2.4)
 
 Autonomicon (and scripts) read analyze JSON from:
 
@@ -12,12 +12,12 @@ Stdout / the report file is one JSON object. Ignore unknown fields.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.3`**. Bumps only when analyze payload shape changes. |
+| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.4`**. Bumps only when analyze payload shape changes. |
 | `package_version` | Installed package version (`ghostreader.__version__`). For correlating which install produced the file. |
 
-Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.6`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
+Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.7`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
 
-## Contract shape (0.2.3)
+## Contract shape (0.2.4)
 
 Always present:
 
@@ -31,6 +31,14 @@ Always present:
   `overview` counts; `prioritized_findings` is re-ranked.
 - `quote_stats` — `{verified, unverified, dropped, recovered, recovery_calls}`
   (`{}` when `quote_verification: false`).
+
+### Since 0.2.4: Canon audit (#16)
+
+- `canon_findings` — deterministic Canon audit rows over the whole book (empty
+  list OK). Empty when continuity did not use Canon. Same row shape and kinds
+  as the companion brief (see `companion/HOOK.md`, Since 0.2.7). Rows never
+  enter `prioritized_findings` or ratings.
+- Book-wide CLI: `ghostreader canon-audit <story-or-stories-dir>` (`--json`, `--out`).
 
 ### Since 0.2.3: Canon continuity (#16)
 
@@ -111,7 +119,7 @@ Consumers that do not know `thrash_findings` or unknown kinds ignore them. Missi
 
 ```json
 {
-  "ghostreader_version": "0.2.3",
+  "ghostreader_version": "0.2.4",
   "package_version": "0.1.0",
   "repetition_findings": [],
   "register_findings": [],

@@ -558,6 +558,7 @@ async def _canon_path(state: AnalysisState, llm: BaseChatModel) -> dict[str, Any
     None when no Canon sits beside the chapters (caller falls back to facts).
     """
     from ghostreader.agents.canon_consistency import check_book_against_canon
+    from ghostreader.canon_audit import audit_canon
     from ghostreader.typesafe.grounding import (
         demote_tone_plot_holes,
         demote_ungrounded_concerns,
@@ -588,6 +589,13 @@ async def _canon_path(state: AnalysisState, llm: BaseChatModel) -> dict[str, Any
     }
     output["continuity_source"] = "canon"  # type: ignore[typeddict-unknown-key]
     output["canon_stats"] = stats  # type: ignore[typeddict-unknown-key]
+    output["canon_findings"] = audit_canon(  # type: ignore[typeddict-unknown-key]
+        canon_dir,
+        {
+            int(c.get("chapter_number") or 0): str(c.get("content") or "")
+            for c in state.get("chapters", [])
+        },
+    )
     return {"consistency_output": output}
 
 

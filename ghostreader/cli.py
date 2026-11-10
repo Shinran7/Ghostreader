@@ -571,6 +571,37 @@ def compare(
     )
 
 
+@app.command("canon-audit")
+def canon_audit(
+    path: Annotated[
+        Path,
+        typer.Argument(help="A story dir (canon/ + chapters/) or a dir of story dirs."),
+    ],
+    json_out: Annotated[bool, typer.Option("--json", help="Print JSON rows.")] = False,
+    out: Annotated[Path | None, typer.Option("--out", help="Write the report here.")] = None,
+) -> None:
+    """Audit Autonomicon Canon against itself and the prose (no LLM)."""
+    import json
+
+    from ghostreader.canon_audit import audit_stories, audit_story, render_audit_markdown
+
+    one = audit_story(path)
+    results = [one] if one else audit_stories(path)
+    if not results:
+        rprint(f"[red]No story with canon/ and chapters/ under {path}[/red]")
+        raise typer.Exit(1)
+    text = (
+        json.dumps(results, indent=2, ensure_ascii=False)
+        if json_out
+        else render_audit_markdown(results)
+    )
+    if out:
+        out.write_text(text, encoding="utf-8")
+        rprint(f"Wrote {out}")
+    else:
+        typer.echo(text)
+
+
 # ── Config sub-commands ──────────────────────────────────────────
 
 

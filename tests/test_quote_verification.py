@@ -248,7 +248,7 @@ def test_analyze_payload_and_markdown(tmp_path: Path) -> None:
         manuscript_name="book",
     )
     payload = _build_payload(report)
-    assert ANALYZE_JSON_VERSION == "0.2.3"
+    assert ANALYZE_JSON_VERSION == "0.2.4"
     assert payload["unverified_findings"] == [INVENTED]
     assert payload["quote_stats"]["dropped"] == 1
     row = payload["prioritized_findings"][0]

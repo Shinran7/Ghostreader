@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.6)
+# Companion JSON hook (0.2.7)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.6`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.7`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.6`**). Independent of analyze JSON (`0.2.3`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.7`**). Independent of analyze JSON (`0.2.4`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -106,6 +106,38 @@ Always present (empty lists until filled):
 | `budget` | int \| null | Allowed unexplained count (default 3) |
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
+
+### Since 0.2.7
+
+Canon audit (#16 Phase 2). A deterministic check of Autonomicon Canon against
+itself and the chapter prose. No LLM call.
+
+- `canon_findings` — list of machine rows (empty list OK). Empty when there is
+  no Canon, in sweep mode, with `--craft-only`, or with `continuity_canon: false`.
+  Rows **never** flip the verdict. They report on the Updater's output, not on
+  the chapter.
+- The audit covers chapters **before N** (the Updater may not have run on N).
+- Row shape: `{kind, severity, file, entity, chapter, summary, detail}`.
+  `file` is relative to the canon dir; `entity`, `chapter` and `detail` may be
+  `null`/empty.
+- `severity` is `"concern"` or `"info"`.
+- Kinds:
+
+| Kind | Severity | Meaning |
+| --- | --- | --- |
+| `missing_file` | info | An expected Canon file is absent |
+| `empty_file` | info | File present but empty or unreadable |
+| `chapter_not_recorded` | info | A per-chapter file skips chapters (`detail` lists them) |
+| `death_chapter_missing` | concern | Deceased character with no `died_chapter` |
+| `seen_after_death` | concern | `last_seen_chapter` after `died_chapter` |
+| `seed_resolved_when_planted` | concern | Critical seed resolved in its planting chapter |
+| `seed_resolved_before_planted` | concern | Seed resolved before it was planted |
+| `timeline_vague` | info | Most chapter timestamps are blank or identical |
+| `name_drift` | concern | A key-fact name is absent from the prose; one similar name is present |
+| `character_not_in_prose` | concern | A character's name never appears in the chapters |
+
+- The same audit runs book-wide as `ghostreader canon-audit <story-or-stories-dir>`
+  (Markdown, or `--json`).
 
 ### Since 0.2.6
 

@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.6"
+GHOSTREADER_VERSION = "0.2.7"
 
 
 @dataclass
@@ -69,6 +69,9 @@ class CompanionBrief:
     continuity_source: str = ""
     # Canon load info: {entries, from_checkpoint (0/1)}; empty when facts.
     canon_stats: dict[str, int] = field(default_factory=dict)
+    # Canon audit rows (#16, 0.2.7): Canon against itself and the prose.
+    # Machine rows; never flip the verdict. Empty when no Canon.
+    canon_findings: list[dict[str, Any]] = field(default_factory=list)
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
     generated_at: str = ""
@@ -173,6 +176,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "quote_stats": dict(brief.quote_stats),
         "continuity_source": brief.continuity_source,
         "canon_stats": dict(brief.canon_stats),
+        "canon_findings": list(brief.canon_findings),
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,
     }

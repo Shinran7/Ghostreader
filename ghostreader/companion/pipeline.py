@@ -20,6 +20,7 @@ from ghostreader.agents.fact_extractor import (
 )
 from ghostreader.analyzers.repetition_detector import RepetitionDetector
 from ghostreader.canon import CanonState, find_canon_dir, load_canon_state
+from ghostreader.canon_audit import audit_canon
 from ghostreader.companion.brief import (
     CompanionBrief,
     compute_verdict,
@@ -228,6 +229,20 @@ def _ratings_for(
     return ratings, info_ratings
 
 
+def _canon_findings(discovery: DiscoveryResult, *, enabled: bool) -> list[dict[str, Any]]:
+    """Deterministic Canon audit rows for the brief (#16 Phase 2). Never gate."""
+    if not enabled or discovery.mode != "progressive":
+        return []
+    canon_dir = find_canon_dir(discovery.story_dir, discovery.chapters_dir)
+    if canon_dir is None:
+        return []
+    chapters = {
+        c.chapter_number: c.content for c in discovery.chapters if c.chapter_number is not None
+    }
+    # Canon should cover chapters before N; the Updater may not have run on N yet.
+    return audit_canon(canon_dir, chapters, through=discovery.chapter_number - 1)
+
+
 def _load_canon(
     discovery: DiscoveryResult, *, enabled: bool
 ) -> tuple[CanonState | None, list[str]]:
@@ -381,6 +396,7 @@ async def run_companion_pipeline(
             "entries": len(canon_state.entries),
             "from_checkpoint": int(canon_state.from_checkpoint),
         }
+    canon_findings = _canon_findings(discovery, enabled=continuity_canon and not craft_only)
     # Fact-sheet parse failures poison continuity only when fact sheets are
     # the state of record.
     facts_poison = bool(failed_facts) and continuity_source == "facts"
@@ -757,6 +773,7 @@ async def run_companion_pipeline(
         quote_stats=quote_stats,
         continuity_source=continuity_source,
         canon_stats=canon_stats,
+        canon_findings=canon_findings,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(UTC).isoformat(),

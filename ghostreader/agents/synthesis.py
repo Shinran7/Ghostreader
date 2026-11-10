@@ -298,10 +298,11 @@ def _continuity_source(state: AnalysisState) -> dict[str, Any]:
     """``continuity_source`` / ``canon_stats`` from the consistency output (#16)."""
     out = state.get("consistency_output") or {}
     if not isinstance(out, dict) or not out:
-        return {"continuity_source": "", "canon_stats": {}}
+        return {"continuity_source": "", "canon_stats": {}, "canon_findings": []}
     return {
         "continuity_source": str(out.get("continuity_source") or "facts"),
         "canon_stats": dict(out.get("canon_stats") or {}),
+        "canon_findings": list(out.get("canon_findings") or []),
     }
 
 

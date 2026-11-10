@@ -308,6 +308,10 @@ async def test_companion_catches_planted_contradictions(tmp_path: Path) -> None:
     payload = brief_to_payload(brief)
     assert payload["continuity_source"] == "canon"
     assert payload["continuity_findings"][0]["canon_ref"]["file"]
+    # Audit covers chapters before N; the fixture leaves ch 1 off chapter-locations.
+    audit = payload["canon_findings"]
+    assert {r["kind"] for r in audit} >= {"chapter_not_recorded"}
+    assert all(r["chapter"] is None or r["chapter"] < 3 for r in audit)
 
 
 @pytest.mark.asyncio
@@ -329,6 +333,7 @@ async def test_companion_sends_prose_and_filtered_state(tmp_path: Path) -> None:
 async def test_unknown_canon_ref_never_gates(tmp_path: Path) -> None:
     brief, _ = await _companion(make_story(tmp_path), canon_llm(invent_ref=True))
     assert brief.continuity_findings == []
+    assert brief.canon_findings  # audit rows present, yet never gate
     assert brief.verdict == "ship"
     assert len(brief.ungrounded_continuity_findings) == 4
 
@@ -343,6 +348,8 @@ async def test_no_canon_falls_back_to_facts(tmp_path: Path) -> None:
     facts_path.assert_awaited_once()
     assert brief.continuity_source == "facts"
     assert brief.canon_stats == {}
+    assert brief.canon_findings == []
+    assert brief_to_payload(brief)["canon_findings"] == []
 
 
 @pytest.mark.asyncio
@@ -394,6 +401,8 @@ async def test_analyze_checks_each_chapter_against_canon(tmp_path: Path) -> None
     assert {f["dimension"] for f in ch3} >= {"consistency.character", "consistency.timeline"}
     assert all(f.get("counter_source") == "canon" for f in ch3)
     assert _continuity_source(out)["continuity_source"] == "canon"  # type: ignore[arg-type]
+    assert isinstance(cons["canon_findings"], list)
+    assert _continuity_source(out)["canon_findings"] == cons["canon_findings"]  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -437,10 +446,12 @@ def test_analyze_payload_carries_source() -> None:
             ],
             "continuity_source": "canon",
             "canon_stats": {"chapters": 3},
+            "canon_findings": [{"kind": "name_drift", "severity": "concern"}],
         },
         manuscript_name="book",
     )
     payload = _build_payload(report)
     assert payload["continuity_source"] == "canon"
     assert payload["canon_stats"] == {"chapters": 3}
+    assert payload["canon_findings"][0]["kind"] == "name_drift"
     assert payload["prioritized_findings"][0]["canon_ref"]["id"] == "C2"
