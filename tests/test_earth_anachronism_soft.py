@@ -19,14 +19,14 @@ def test_soft_dim_emittable_and_hook_version() -> None:
     assert "prose.earth_anachronism" in COMPANION_REGISTER_DIMENSIONS
     bank = companion_prose_questions()
     assert "prose.earth_anachronism" in bank
-    assert GHOSTREADER_VERSION == "0.2.3"
+    assert GHOSTREADER_VERSION == "0.2.4"
 
 
 def test_register_kinds_unchanged_in_hook() -> None:
     hook = (
         Path(__file__).resolve().parents[1] / "ghostreader" / "companion" / "HOOK.md"
     ).read_text(encoding="utf-8")
-    assert "0.2.3" in hook
+    assert "0.2.4" in hook
     assert "0.2.2" in hook  # historical Since 0.2.2 register section remains
     assert "unearned_jargon" in hook
     assert "initiation_budget" in hook

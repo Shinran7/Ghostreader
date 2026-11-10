@@ -28,6 +28,7 @@ from ghostreader.companion.continuity import (
     COMPANION_GATE_DIMS,
     COMPANION_INFO_DIMS,
     collect_info_findings,
+    continuity_parse_failed,
     ensure_info_ratings,
     partition_findings,
 )
@@ -538,6 +539,27 @@ async def run_companion_pipeline(
         narrative_findings = _rank_findings(nar_raw)
         narrative_ratings = _ratings_from_map(nar_ratings_map)
 
+    continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
+    if failed_facts and not craft_only:
+        continuity_status = "failed"
+    if not craft_only and continuity_parse_failed(continuity_raw):
+        continuity_status = "failed"
+        warnings.append(
+            "Continuity check failed: the consistency model returned no structured "
+            "findings. Continuity was not checked (verdict=watch)."
+        )
+
+    if continuity_raw:
+        from ghostreader.typesafe.grounding import (
+            demote_tone_plot_holes,
+            demote_ungrounded_concerns,
+        )
+
+        # Same guards as analyze: tone understatement and empty-evidence
+        # concerns are demoted before they can reach the gate.
+        continuity_raw, _, _ = demote_tone_plot_holes(continuity_raw)  # type: ignore[arg-type]
+        continuity_raw, _, _ = demote_ungrounded_concerns(continuity_raw)  # type: ignore[arg-type]
+
     partition = partition_findings(
         continuity_raw,
         N=discovery.chapter_number,
@@ -582,6 +604,10 @@ async def run_companion_pipeline(
     if failed_facts and not craft_only:
         # Empty fact sheets make "clean continuity" meaningless for Autonomicon.
         verdict = "watch"
+    if continuity_status == "failed":
+        verdict = "watch"
+        if "continuity" not in drivers:
+            drivers.append("continuity")
     note = await _chapter_note(
         llm,
         chapter=focus,
@@ -620,6 +646,7 @@ async def run_companion_pipeline(
         register_findings=register_findings,
         voice_card_findings=voice_card_findings,
         warnings=warnings,
+        continuity_status=continuity_status,
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(UTC).isoformat(),

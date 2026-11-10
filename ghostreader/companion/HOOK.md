@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.3)
+# Companion JSON hook (0.2.4)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.3`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.4`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.3`**). Independent of analyze JSON (`0.2.1`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.4`**). Independent of analyze JSON (`0.2.1`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -36,6 +36,8 @@ side effect beyond the current contract.
 | Light narrative (`pacing` / `character_arcs`) | Only when narrative is **on** and the finding is **grounded to chapter N** | No |
 | Machine `register_findings` alone | **No** | No |
 | Machine `voice_card_findings` alone | **No** | No |
+
+A continuity pass that could not be checked (`continuity_status: "failed"`) also flips `watch` and adds `"continuity"` to `verdict_drivers`. Under `--fail-on-continuity` it exits `2`, as a gate concern does.
 
 `info` never flips ship by itself. Soft craft can. Narrative flips only when enabled and grounded. Algorithmic `register_findings` and `voice_card_findings` never flip `watch` or exit `2` by themselves.
 
@@ -102,6 +104,15 @@ Always present (empty lists until filled):
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
 
+### Since 0.2.4
+
+- `continuity_status` — `"ok"` \| `"failed"` \| `"skipped"`. `failed` means continuity was **not** checked: the consistency model returned no structured findings, or fact extraction failed for one or more chapters. `skipped` means `--craft-only`. Before 0.2.4 a parse failure produced an empty gate and could ship. Treat `failed` as blocking.
+- Exit codes under `--fail-on-continuity`: `2` when a gate concern lands **or** `continuity_status` is `failed` (fact-parse poisoning now exits `2`, not `1`). Without the flag, fact-parse poisoning still exits `1` when `abort_on_fact_parse_failure` is true.
+- Gate grounding changes (no new fields):
+  - A same-chapter contradiction now gates: chapter N is the only cited chapter, and `evidence` and `counter_evidence` are two different quotes. Identical quotes stay ungrounded.
+  - `chapter_ref` sub-locators (`scene 3`, `line 40`, `para 2`, `p. 7`) no longer count as chapters. `Ch. 12` and `Chapters 3 and 7` parse.
+  - Tone-understatement `plot_holes` concerns and empty-evidence concerns are demoted before the gate, as in analyze.
+
 ### Since 0.2.3
 
 - `voice_card_findings` — algorithmic book-so-far voice-vs-card rows (cap 15). **JSON-primary** (always on the payload; markdown/terminal need not render machine rows in v1). Empty when craft/voice-card watch is skipped (`--continuity-only` / kill switch), cards are missing, speakers are below `min_lines`, or nothing fired. Kinds are only `card_mismatch` \| `card_collapse`. Machine rows **alone** never flip `watch` or exit `2`. Soft `prose.voice_card` (when enabled) stays under craft / `"craft"` drivers.
@@ -132,7 +143,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 
 ```json
 {
-  "ghostreader_version": "0.2.3",
+  "ghostreader_version": "0.2.4",
   "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
@@ -178,6 +189,7 @@ Shape Autonomicon should accept (unknown keys ignored):
   "register_findings": [],
   "voice_card_findings": [],
   "warnings": [],
+  "continuity_status": "ok",
   "ungrounded_count": 0,
   "typesafe_enabled": true
 }
@@ -191,7 +203,7 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.3`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, and `package_version`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.4`; `continuity_status` is `ok`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.

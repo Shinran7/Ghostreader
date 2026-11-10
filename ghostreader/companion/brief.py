@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.3"
+GHOSTREADER_VERSION = "0.2.4"
 
 
 @dataclass
@@ -58,6 +58,9 @@ class CompanionBrief:
     # card_mismatch | card_collapse only. Alone never flips watch / exit 2.
     voice_card_findings: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # "ok" = continuity ran; "failed" = it could not be checked (parse failure
+    # or poisoned fact sheets); "skipped" = --craft-only. Added in 0.2.4.
+    continuity_status: Literal["ok", "failed", "skipped"] = "ok"
     ungrounded_count: int = 0
     typesafe_enabled: bool = False
     generated_at: str = ""
@@ -151,6 +154,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "register_findings": list(brief.register_findings),
         "voice_card_findings": list(brief.voice_card_findings),
         "warnings": list(brief.warnings),
+        "continuity_status": brief.continuity_status,
         "ungrounded_count": brief.ungrounded_count,
         "typesafe_enabled": brief.typesafe_enabled,
     }

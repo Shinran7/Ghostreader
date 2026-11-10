@@ -176,6 +176,16 @@ async def run_companion(
     fact_parse_poisoned = any(
         w.startswith("Fact extraction JSON parse failed") for w in brief.warnings
     )
+    if fail_on_continuity and not craft_only and (
+        fact_parse_poisoned or brief.continuity_status == "failed"
+    ):
+        # Hard gate: continuity could not be checked, so it must not ship.
+        _ERR.print(
+            "[bold red]Exiting 2:[/bold red] continuity could not be checked "
+            f"(continuity_status={brief.continuity_status}). Brief was still written."
+        )
+        return 2
+
     if fact_parse_poisoned and cfg.abort_on_fact_parse_failure and not craft_only:
         _ERR.print(
             "[bold red]Exiting 1:[/bold red] Fact extraction JSON parse failures "

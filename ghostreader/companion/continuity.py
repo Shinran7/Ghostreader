@@ -17,19 +17,27 @@ COMPANION_INFO_DIMS = frozenset({
     "consistency.unresolved",
 })
 
-_CH_PREFIX = re.compile(r"\bCh(?:apter)?\s*(\d+)\b", re.IGNORECASE)
+_CH_PREFIX = re.compile(r"\bCh(?:apters?|s)?\.?\s*(\d+)\b", re.IGNORECASE)
 _INT = re.compile(r"\d+")
+# Sub-chapter locators in chapter_ref ("scene 3", "line 40") are not chapters.
+_SUB_LOCATOR = re.compile(
+    r"\b(?:scenes?|lines?|para(?:graph)?s?|pages?|pp?\.|beats?|parts?|sections?)"
+    r"\.?\s*\d+(?:\s*(?:-|–|and|,)\s*\d+)*",
+    re.IGNORECASE,
+)
+_WS = re.compile(r"\s+")
 
 
 def cited_chapters(finding: dict[str, Any]) -> set[int]:
     """Deterministic chapter set for partition / involves_N.
 
     Sources (union):
-    1. All integers in ``chapter_ref``.
+    1. Integers in ``chapter_ref``, after removing sub-chapter locators
+       (``scene 3``, ``line 40``, ``para 2``, ``p. 7``).
     2. ``Ch`` / ``Chapter`` prefixes in ``evidence`` and ``counter_evidence``.
     """
     nums: set[int] = set()
-    ref = str(finding.get("chapter_ref") or "")
+    ref = _SUB_LOCATOR.sub(" ", str(finding.get("chapter_ref") or ""))
     nums.update(int(x) for x in _INT.findall(ref))
     for field_name in ("evidence", "counter_evidence"):
         text = str(finding.get(field_name) or "")
@@ -47,18 +55,28 @@ def is_clearly_preexisting(finding: dict[str, Any], *, N: int) -> bool:
     return bool(chs) and all(c < N for c in chs)
 
 
+def _norm_quote(text: str) -> str:
+    return _WS.sub(" ", text).strip().lower()
+
+
+def _two_distinct_quotes(finding: dict[str, Any]) -> bool:
+    evidence = _norm_quote(str(finding.get("evidence") or ""))
+    counter = _norm_quote(str(finding.get("counter_evidence") or ""))
+    return bool(evidence) and bool(counter) and evidence != counter
+
+
 def is_grounded_progressive(finding: dict[str, Any], *, N: int) -> bool:
-    evidence = str(finding.get("evidence") or "").strip()
-    counter = str(finding.get("counter_evidence") or "").strip()
+    """Evidence + counter, chapter N cited, and either another chapter cited
+    or a same-chapter contradiction (N only, two different quotes)."""
+    if not _two_distinct_quotes(finding):
+        return False
     chs = cited_chapters(finding)
-    return bool(evidence) and bool(counter) and (N in chs) and (len(chs) >= 2)
+    return N in chs and (len(chs) >= 2 or chs == {N})
 
 
 def is_grounded_sweep(finding: dict[str, Any]) -> bool:
-    evidence = str(finding.get("evidence") or "").strip()
-    counter = str(finding.get("counter_evidence") or "").strip()
-    chs = cited_chapters(finding)
-    return bool(evidence) and bool(counter) and (len(chs) >= 2)
+    """Evidence + counter (two different quotes) and ≥1 cited chapter."""
+    return _two_distinct_quotes(finding) and len(cited_chapters(finding)) >= 1
 
 
 def is_grounded_info_progressive(finding: dict[str, Any], *, N: int) -> bool:
@@ -126,6 +144,21 @@ def ensure_info_ratings(
     return out
 
 
+CONSISTENCY_PARSE_FAILED_DIM = "consistency.general"
+
+
+def continuity_parse_failed(findings: list[dict[str, Any]]) -> bool:
+    """True when the consistency pass returned no usable structured findings.
+
+    The parser surfaces that as a ``consistency.general`` concern. It is not a
+    gate dim, so without this check a failed pass would look like a clean one.
+    """
+    return any(
+        f.get("dimension") == CONSISTENCY_PARSE_FAILED_DIM and f.get("severity") == "concern"
+        for f in findings
+    )
+
+
 @dataclass
 class Partition:
     """Total partition of gate-dim concerns: gate / preexisting / ungrounded."""
@@ -171,9 +204,11 @@ def partition_findings(
 __all__ = [
     "COMPANION_GATE_DIMS",
     "COMPANION_INFO_DIMS",
+    "CONSISTENCY_PARSE_FAILED_DIM",
     "Partition",
     "cited_chapters",
     "collect_info_findings",
+    "continuity_parse_failed",
     "ensure_info_ratings",
     "involves_N",
     "is_grounded_info_progressive",
