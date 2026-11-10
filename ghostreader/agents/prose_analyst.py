@@ -75,11 +75,9 @@ def _format_repetition_data(repetition_data: list[dict[str, Any]]) -> str:
             f"(chapters: {ch_str}, severity: {severity})"
         )
         if kind == "sentence_pattern":
-            examples = [
-                str(ex).strip()
-                for ex in (entry.get("examples") or [])
-                if str(ex).strip()
-            ][:2]
+            examples = [str(ex).strip() for ex in (entry.get("examples") or []) if str(ex).strip()][
+                :2
+            ]
             if examples:
                 shown = "; ".join(f'"{ex}"' for ex in examples)
                 line = f"{line}; examples: {shown}"
@@ -110,20 +108,26 @@ def format_prose_manuscript(
     When ``analyze_grounding_hardening`` is true (default), use hit-weighted
     windows under ``min(budget, 4000*N)``. When false, legacy flat 4k heads.
     """
-    cfg = config or {}
-    if not cfg.get("analyze_grounding_hardening", True):
-        return _format_chapter_excerpts(chapters)
+    from ghostreader.excerpts import (
+        build_hit_weighted_excerpts,
+        chapter_chars,
+        hits_from_repetition_data,
+    )
 
-    from ghostreader.excerpts import build_hit_weighted_excerpts, hits_from_repetition_data
+    cfg = config or {}
+    per_chapter = chapter_chars(cfg)
+    if not cfg.get("analyze_grounding_hardening", True):
+        return _format_chapter_excerpts(chapters, max_chars_per_chapter=per_chapter)
+    scale = per_chapter // 4000
 
     hits = hits_from_repetition_data(repetition_data)
     return build_hit_weighted_excerpts(
         chapters,
         hits,
-        total_budget=int(cfg.get("analyze_excerpt_total_budget", 100000)),
+        total_budget=int(cfg.get("analyze_excerpt_total_budget", 100000)) * scale,
         window_chars=int(cfg.get("analyze_excerpt_window_chars", 900)),
         min_per_chapter=int(cfg.get("analyze_excerpt_min_per_chapter", 400)),
-        legacy_per_chapter=4000,
+        legacy_per_chapter=per_chapter,
     )
 
 
@@ -234,12 +238,8 @@ async def _prose_typesafe_path(
     enrich_strengths = bool(config.get("analyze_enrich_strengths", True))
 
     ts_state = build_prose_state(state)
-    response = await ask(
-        typesafe_client, state=ts_state, questions=prose_questions()
-    )
-    findings, ratings = choices_to_findings(
-        response, PROSE_DIMENSIONS, confidence_floor=floor
-    )
+    response = await ask(typesafe_client, state=ts_state, questions=prose_questions())
+    findings, ratings = choices_to_findings(response, PROSE_DIMENSIONS, confidence_floor=floor)
 
     enrich_dims = [
         f["dimension"]

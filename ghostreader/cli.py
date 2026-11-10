@@ -47,7 +47,10 @@ DepthOption = Annotated[
     str | None,
     typer.Option(
         "--depth",
-        help="Analysis depth: quick, standard, or deep. [default: standard]",
+        help=(
+            "Analysis depth: quick (prose only), standard, or deep (analysts read "
+            "whole chapters, not excerpts; more tokens). [default: standard]"
+        ),
     ),
 ]
 GenreOption = Annotated[
@@ -604,13 +607,10 @@ def chat(
 def compare(
     path1: Annotated[Path, typer.Argument(help="First manuscript path.")],
     path2: Annotated[Path, typer.Argument(help="Second manuscript path.")],
-    depth: DepthOption = None,
-    genre: GenreOption = None,
-    model: ModelOption = None,
     format: FormatOption = None,
     no_cache: NoCacheOption = False,
 ) -> None:
-    """Compare two manuscripts with a side-by-side quality scorecard."""
+    """Compare the last analyze reports of two manuscripts (no LLM calls)."""
     from ghostreader.commands.compare import run_compare
 
     run_compare(

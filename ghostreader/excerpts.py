@@ -28,6 +28,18 @@ class Hit:
     needle: str | None = None
 
 
+# Per-chapter text the analysts see: excerpts on quick/standard, whole
+# chapters (up to this cap) on deep (#18).
+STANDARD_CHAPTER_CHARS = 4000
+DEEP_CHAPTER_CHARS = 16000
+
+
+def chapter_chars(config: Mapping[str, Any] | None) -> int:
+    """Per-chapter character budget for the analysts at this depth."""
+    deep = (config or {}).get("depth") == "deep"
+    return DEEP_CHAPTER_CHARS if deep else STANDARD_CHAPTER_CHARS
+
+
 def quote_from_text(term: str, text: str, *, max_len: int = 160) -> str | None:
     """Return one short verbatim span from *text* containing *term*, if any."""
     if not term or not text:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, TypedDict
 
 from ghostreader.ingestion import Chapter, SummaryHierarchy
@@ -59,24 +58,13 @@ class AgentOutput(TypedDict):
     raw_response: str  # full LLM response text for debugging
 
 
-@dataclass
-class RepetitionEntry:
-    """A single repetition detection result from the algorithmic pre-processor."""
-
-    phrase: str
-    count: int
-    chapters: list[int]
-    severity: str  # "high" | "moderate" | "low"
-
-
 class AnalysisState(TypedDict, total=False):
     """Shared state flowing through the LangGraph analysis workflow.
 
-    Fields are populated progressively by each node:
-    - ingestion_node fills chapters, chunks, summary_hierarchy, config
-    - repetition_node fills repetition_data
-    - prose/narrative/consistency analysts append to agent_outputs
-    - synthesis reads agent_outputs and produces final_report
+    Ingestion, facts and repetition run before the graph and fill chapters,
+    summary_hierarchy, config, scene_facts and repetition_data. The
+    prose/narrative/consistency analysts fill their outputs; synthesis reads them and produces
+    final_report.
     """
 
     # ── Ingestion products ──
@@ -85,12 +73,11 @@ class AnalysisState(TypedDict, total=False):
     summary_hierarchy: dict[str, Any]  # serialized SummaryHierarchy
     config: AnalysisConfig
 
-    # ── Scene segmentation ──
-    scenes: list[dict[str, Any]]  # serialized Scene data
+    # ── Fact extraction ──
     scene_facts: list[dict[str, Any]]  # SceneFact dicts from fact extraction
 
     # ── Repetition detection ──
-    repetition_data: list[dict[str, Any]]  # serialized RepetitionEntry list
+    repetition_data: list[dict[str, Any]]  # algorithmic repetition rows
 
     # ── Agent outputs (accumulated) ──
     prose_output: AgentOutput
@@ -171,10 +158,12 @@ def _locations_payload(
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for loc in locations[:max_locations]:
-        out.append({
-            "chapter_number": loc.chapter_number,
-            "approximate_position": loc.approximate_position,
-        })
+        out.append(
+            {
+                "chapter_number": loc.chapter_number,
+                "approximate_position": loc.approximate_position,
+            }
+        )
     return out
 
 
@@ -229,16 +218,18 @@ def repetition_report_to_dicts(
     pattern_rows: list[dict[str, Any]] = []
     for pattern in report.sentence_patterns:
         examples = [ex for ex in (pattern.examples or []) if str(ex).strip()][:3]
-        pattern_rows.append({
-            "phrase": pattern.description or pattern.pattern_type,
-            "kind": "sentence_pattern",
-            "count": max(len(pattern.examples or []), 1),
-            "chapters": [pattern.chapter_number],
-            "severity": _pattern_severity(pattern.similarity_score),
-            "pattern_type": pattern.pattern_type,
-            "examples": examples,
-            "_similarity": pattern.similarity_score,
-        })
+        pattern_rows.append(
+            {
+                "phrase": pattern.description or pattern.pattern_type,
+                "kind": "sentence_pattern",
+                "count": max(len(pattern.examples or []), 1),
+                "chapters": [pattern.chapter_number],
+                "severity": _pattern_severity(pattern.similarity_score),
+                "pattern_type": pattern.pattern_type,
+                "examples": examples,
+                "_similarity": pattern.similarity_score,
+            }
+        )
 
     pattern_rows.sort(
         key=lambda e: (
@@ -258,7 +249,6 @@ __all__ = [
     "AnalysisState",
     "AgentFinding",
     "AgentOutput",
-    "RepetitionEntry",
     "chapters_to_dicts",
     "hierarchy_to_dict",
     "repetition_report_to_dicts",

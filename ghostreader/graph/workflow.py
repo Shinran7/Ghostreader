@@ -1,13 +1,15 @@
 """LangGraph workflow definition for Ghostreader analysis pipeline.
 
 Graph topology:
-    ingestion_node → repetition_node → [prose + narrative + consistency] → synthesis
+    START → [prose + narrative + consistency] → synthesis
 
-The three analyst nodes run in parallel after repetition detection.
+Ingestion, fact extraction and repetition detection run before the graph
+and fill the initial state. The analyst nodes run in parallel.
 The --depth flag controls which analysts run:
     - "quick": prose only (skip narrative + consistency)
     - "standard": prose + narrative + consistency (default)
-    - "deep": same as standard (extensible for future deep-dive agents)
+    - "deep": all three, and the analysts see whole chapters (up to 16k
+      chars each) in place of 4k excerpts; costs more tokens
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, START, StateGraph
 
 from ghostreader.agents.consistency_checker import (
     consistency_checker_node,
@@ -27,28 +29,6 @@ from ghostreader.agents.synthesis import synthesis_node
 from ghostreader.graph import AnalysisState
 
 
-# ── Stub nodes for ingestion and repetition ─────────────────────────
-# These are pass-through stubs. The real ingestion and repetition
-# detection run *before* the graph is invoked and populate state
-# externally. The nodes exist so the graph topology is explicit and
-# can be extended later to run ingestion/repetition inside the graph.
-
-
-async def ingestion_node(state: AnalysisState) -> dict[str, Any]:
-    """Pass-through: ingestion data is pre-loaded into initial state."""
-    return {}
-
-
-async def repetition_node(state: AnalysisState) -> dict[str, Any]:
-    """Pass-through: repetition data is pre-computed and loaded into state."""
-    return {}
-
-
-async def fact_extraction_node(state: AnalysisState) -> dict[str, Any]:
-    """Pass-through: scene facts are pre-extracted and loaded into state."""
-    return {}
-
-
 # ── Node wrappers that close over the LLM ───────────────────────────
 # LangGraph nodes receive only state. We use partial application to
 # bind the LLM instance at graph-build time.
@@ -57,26 +37,28 @@ async def fact_extraction_node(state: AnalysisState) -> dict[str, Any]:
 def _make_prose_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
         return await prose_analyst_node(state, llm, typesafe_client=typesafe_client)
+
     return _node
 
 
 def _make_narrative_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
         return await narrative_analyst_node(state, llm, typesafe_client=typesafe_client)
+
     return _node
 
 
 def _make_consistency_node(llm: BaseChatModel, typesafe_client: Any = None):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
-        return await scene_consistency_checker_node(
-            state, llm, typesafe_client=typesafe_client
-        )
+        return await scene_consistency_checker_node(state, llm, typesafe_client=typesafe_client)
+
     return _node
 
 
 def _make_synthesis_node(llm: BaseChatModel):  # noqa: ANN202
     async def _node(state: AnalysisState) -> dict[str, Any]:
         return await synthesis_node(state, llm)
+
     return _node
 
 
@@ -100,11 +82,6 @@ def _route_after_repetition(
     return ["prose_analyst", "narrative_analyst", "consistency_checker"]
 
 
-def _route_to_synthesis(state: AnalysisState) -> str:
-    """Always route to synthesis after analysts complete."""
-    return "synthesis"
-
-
 # ── Graph builder ────────────────────────────────────────────────────
 
 
@@ -126,25 +103,15 @@ def build_analysis_graph(
     graph = StateGraph(AnalysisState)
 
     # ── Add nodes ──
-    graph.add_node("ingestion", ingestion_node)
-    graph.add_node("fact_extraction", fact_extraction_node)
-    graph.add_node("repetition", repetition_node)
     graph.add_node("prose_analyst", _make_prose_node(llm, typesafe_client))
     graph.add_node("narrative_analyst", _make_narrative_node(llm, typesafe_client))
-    graph.add_node(
-        "consistency_checker", _make_consistency_node(llm, typesafe_client)
-    )
+    graph.add_node("consistency_checker", _make_consistency_node(llm, typesafe_client))
     graph.add_node("synthesis", _make_synthesis_node(llm))
 
     # ── Define edges ──
-    # Linear: ingestion → fact_extraction → repetition
-    graph.set_entry_point("ingestion")
-    graph.add_edge("ingestion", "fact_extraction")
-    graph.add_edge("fact_extraction", "repetition")
-
-    # Conditional fan-out: repetition → [prose, narrative, consistency]
+    # Fan-out by depth: START → [prose, narrative, consistency]
     graph.add_conditional_edges(
-        "repetition",
+        START,
         _route_after_repetition,
         {
             "prose_analyst": "prose_analyst",

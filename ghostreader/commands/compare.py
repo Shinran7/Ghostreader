@@ -104,25 +104,28 @@ def run_compare(
 
 
 def _load_report(path: Path) -> dict[str, Any] | None:
-    """Load final_report from a manuscript's state directory."""
+    """The last analyze report: ``last-report.json``, else legacy ``cache.json``."""
     from ghostreader.paths import state_dir_for
 
     state = state_dir_for(path)
-    cache_path = state / "cache.json"
-
-    if not cache_path.exists():
-        return None
-
-    try:
-        with open(cache_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return None
-
-    if not isinstance(data, dict):
-        return None
-
-    return data.get("final_report") or data
+    for name in ("last-report.json", "cache.json"):
+        try:
+            data = json.loads((state / name).read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if isinstance(data.get("final_report"), dict):
+            return data["final_report"]
+        entries = data.get("entries")
+        if isinstance(entries, list):  # CacheManager v1: report stored per chapter
+            results = [e.get("result") for e in entries if isinstance(e, dict)]
+            results = [r for r in results if isinstance(r, dict)]
+            if results:
+                return results[-1]
+            continue
+        return data
+    return None
 
 
 # ── Scorecard construction ───────────────────────────────────────────
@@ -209,9 +212,7 @@ def _delta_label(delta: int) -> str:
 # ── Rich table rendering ─────────────────────────────────────────────
 
 
-def _render_table(
-    scorecard: dict[str, Any], path_a: Path, path_b: Path
-) -> None:
+def _render_table(scorecard: dict[str, Any], path_a: Path, path_b: Path) -> None:
     """Render the side-by-side comparison table in the terminal."""
     table = Table(
         title="Manuscript Comparison Scorecard",
@@ -236,7 +237,9 @@ def _render_table(
             current_group = group
             table.add_row(
                 Text(group.upper(), style="bold white"),
-                "", "", "",
+                "",
+                "",
+                "",
             )
 
         sev_a = entry["manuscript_a"]
@@ -264,9 +267,7 @@ def _render_table(
     _CONSOLE.print(table)
 
 
-def _render_summary(
-    scorecard: dict[str, Any], path_a: Path, path_b: Path
-) -> None:
+def _render_summary(scorecard: dict[str, Any], path_a: Path, path_b: Path) -> None:
     """Render aggregate severity count comparison."""
     summary = scorecard["summary"]
     a = summary["manuscript_a"]

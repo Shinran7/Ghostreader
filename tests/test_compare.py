@@ -109,12 +109,8 @@ class TestBuildScorecard:
         assert "manuscript_b" in sc
 
     def test_delta_calculation(self, tmp_path: Path) -> None:
-        report_a = _make_report(
-            dimension_ratings={"prose.repetition": {"severity": "concern"}}
-        )
-        report_b = _make_report(
-            dimension_ratings={"prose.repetition": {"severity": "strength"}}
-        )
+        report_a = _make_report(dimension_ratings={"prose.repetition": {"severity": "concern"}})
+        report_b = _make_report(dimension_ratings={"prose.repetition": {"severity": "strength"}})
         sc = _build_scorecard(report_a, report_b, tmp_path / "a.md", tmp_path / "b.md")
         rep_dim = next(d for d in sc["dimensions"] if d["dimension"] == "prose.repetition")
         assert rep_dim["delta"] > 0  # concern → strength is improvement
@@ -144,3 +140,40 @@ class TestRunCompare:
                 no_cache=True,
             )
         assert exc_info.value.code == 1
+
+
+# ── Report loading (#18) ─────────────────────────────────────────────
+
+
+def _state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    import ghostreader.paths as paths
+
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setattr(paths, "state_dir_for", lambda _p: state)
+    return state
+
+
+def test_load_report_prefers_last_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ghostreader.commands.compare import _load_report
+
+    state = _state(tmp_path, monkeypatch)
+    assert _load_report(tmp_path) is None
+    (state / "cache.json").write_text(
+        json.dumps({"version": 1, "entries": [{"chapter_number": 1, "result": {"v": "old"}}]}),
+        encoding="utf-8",
+    )
+    assert _load_report(tmp_path) == {"v": "old"}
+    (state / "last-report.json").write_text(json.dumps({"v": "new"}), encoding="utf-8")
+    assert _load_report(tmp_path) == {"v": "new"}
+
+
+def test_load_report_skips_bad_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ghostreader.commands.compare import _load_report
+
+    state = _state(tmp_path, monkeypatch)
+    (state / "last-report.json").write_text("{bad", encoding="utf-8")
+    (state / "cache.json").write_text(json.dumps({"final_report": {"v": 1}}), encoding="utf-8")
+    assert _load_report(tmp_path) == {"v": 1}
+    (state / "cache.json").write_text(json.dumps({"entries": []}), encoding="utf-8")
+    assert _load_report(tmp_path) is None

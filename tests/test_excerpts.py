@@ -369,3 +369,22 @@ class TestPositionNeedleExcerpts:
         )
         assert "HEADSTART" in out
 
+
+def test_deep_depth_shows_whole_chapters() -> None:
+    """#18: deep is real: analysts see up to 16k chars per chapter, not 4k."""
+    from ghostreader.agents.narrative_analyst import _format_chapter_excerpts as narrative
+    from ghostreader.excerpts import DEEP_CHAPTER_CHARS, chapter_chars
+
+    assert chapter_chars({"depth": "deep"}) == DEEP_CHAPTER_CHARS
+    assert chapter_chars({"depth": "standard"}) == 4000
+    assert chapter_chars(None) == 4000
+    text = "word " * 2400  # 12k chars
+    chapters = [{"chapter_number": n, "title": f"C{n}", "content": text} for n in (1, 2, 3)]
+    deep = format_prose_manuscript(chapters, [], {"depth": "deep"})
+    std = format_prose_manuscript(chapters, [], {"depth": "standard"})
+    assert len(deep) > 33_000
+    assert len(std) < 13_000
+    flat = {"depth": "deep", "analyze_grounding_hardening": False}
+    assert len(format_prose_manuscript(chapters, [], flat)) > 33_000
+    full = narrative(chapters, max_chars_per_chapter=chapter_chars({"depth": "deep"}))
+    assert "[…]" not in full

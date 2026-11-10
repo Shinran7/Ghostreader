@@ -18,6 +18,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ghostreader.agents.genre_prompts import get_genre_preamble
+from ghostreader.excerpts import chapter_chars
 from ghostreader.graph import AgentFinding, AgentOutput, AnalysisState
 from ghostreader.seed import build_author_intent_block
 
@@ -81,8 +82,7 @@ def _format_summary_hierarchy(hierarchy: dict[str, Any]) -> str:
             ch_range = act.get("chapter_range", [])
             range_str = f"{ch_range[0]}-{ch_range[1]}" if len(ch_range) == 2 else "?"
             parts.append(
-                f"Act {act.get('act_number', '?')} "
-                f"(chapters {range_str}): {act.get('summary', '')}"
+                f"Act {act.get('act_number', '?')} (chapters {range_str}): {act.get('summary', '')}"
             )
 
     chapter_summaries = hierarchy.get("chapter_summaries", [])
@@ -146,9 +146,7 @@ def _parse_findings(raw: str) -> list[AgentFinding]:
     ]
 
 
-async def _narrative_llm_path(
-    state: AnalysisState, llm: BaseChatModel
-) -> dict[str, Any]:
+async def _narrative_llm_path(state: AnalysisState, llm: BaseChatModel) -> dict[str, Any]:
     """Original chat-LLM JSON judgment path."""
     config = state.get("config", {})
     genre = config.get("genre")
@@ -164,7 +162,7 @@ async def _narrative_llm_path(
     )
 
     hierarchy_block = _format_summary_hierarchy(hierarchy)
-    chapter_block = _format_chapter_excerpts(chapters)
+    chapter_block = _format_chapter_excerpts(chapters, max_chars_per_chapter=chapter_chars(config))
 
     user_message = (
         f"Analyze the narrative structure of this manuscript.\n\n"
@@ -213,12 +211,8 @@ async def _narrative_typesafe_path(
     enrich_strengths = bool(config.get("analyze_enrich_strengths", True))
 
     ts_state = build_narrative_state(state)
-    response = await ask(
-        typesafe_client, state=ts_state, questions=narrative_questions()
-    )
-    findings, ratings = choices_to_findings(
-        response, NARRATIVE_DIMENSIONS, confidence_floor=floor
-    )
+    response = await ask(typesafe_client, state=ts_state, questions=narrative_questions())
+    findings, ratings = choices_to_findings(response, NARRATIVE_DIMENSIONS, confidence_floor=floor)
 
     enrich_dims = [
         f["dimension"]
@@ -235,7 +229,8 @@ async def _narrative_typesafe_path(
     hierarchy = state.get("summary_hierarchy", {})
     context = (
         f"## Summary Hierarchy\n{_format_summary_hierarchy(hierarchy)}\n\n"
-        f"## Manuscript Text\n{_format_chapter_excerpts(chapters)}"
+        f"## Manuscript Text\n"
+        f"{_format_chapter_excerpts(chapters, max_chars_per_chapter=chapter_chars(config))}"
     )
 
     enrich_raw: dict[str, Any] = {}

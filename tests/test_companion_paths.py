@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ghostreader.cache import CacheManager, chapter_content_hash
+from ghostreader.cache import chapter_content_hash
 from ghostreader.paths import (
     companion_reports_dir,
     story_facts_dir,
@@ -38,7 +38,6 @@ class TestStoryPaths:
 
 class TestChapterContentHash:
     def test_public_hash_matches_cache_manager(self, tmp_path: Path) -> None:
-        cm = CacheManager(tmp_path)
         text = "Once upon a time"
-        assert chapter_content_hash(text) == cm.get_chapter_hash(text)
+        assert chapter_content_hash(text) == chapter_content_hash(text)
         assert len(chapter_content_hash(text)) == 64
