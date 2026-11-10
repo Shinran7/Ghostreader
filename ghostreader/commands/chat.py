@@ -9,17 +9,19 @@ manuscript chunks and prior analysis findings.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import lancedb
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
-from ghostreader.lancedb_util import has_table
+from ghostreader.lancedb_util import has_table, require_lancedb
 from ghostreader.llm import message_text
+
+if TYPE_CHECKING:
+    import lancedb
 
 _CONSOLE = Console()
 
@@ -66,7 +68,7 @@ def run_chat(
     report = _load_cached_report(state_dir)
 
     # Connect to LanceDB
-    db = lancedb.connect(str(db_path))
+    db = require_lancedb().connect(str(db_path))
 
     if not has_table(db, _CHUNKS_TABLE):
         _CONSOLE.print(

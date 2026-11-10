@@ -19,15 +19,20 @@ dependencies = [
     "langchain-ollama>=0.2",
     "langchain-xai>=0.2",
     "langchain-google-genai>=4.2.6",
-    "lancedb>=0.9",
     "ebooklib>=0.18",
     "scikit-learn>=1.4",
-    "sentence-transformers>=3.0",
     "typesafe-sdk>=0.7.0",
 ]
 
 [project.optional-dependencies]
+# The chat index (LanceDB) and local embeddings (torch). Companion and analyze
+# do not need them, so a companion-only install stays light.
+chat = [
+    "lancedb>=0.9",
+    "sentence-transformers>=3.0",
+]
 dev = [
+    "ghostreader[chat]",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-mock>=3.14",

@@ -4,6 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
+CHAT_EXTRA_HINT = (
+    "The chat index needs the optional 'chat' extra: "
+    "uv sync --extra chat (or pip install 'ghostreader[chat]')."
+)
+
+
+def require_lancedb() -> Any:
+    """Import lancedb, or exit with an install hint (it is an optional extra)."""
+    try:
+        import lancedb
+    except ImportError as exc:
+        raise SystemExit(CHAT_EXTRA_HINT) from exc
+    return lancedb
+
 
 def list_table_names(db: Any) -> list[str]:
     """Return table names from ``db.list_tables()``.
@@ -22,4 +36,4 @@ def has_table(db: Any, name: str) -> bool:
     return name in list_table_names(db)
 
 
-__all__ = ["has_table", "list_table_names"]
+__all__ = ["CHAT_EXTRA_HINT", "has_table", "list_table_names", "require_lancedb"]

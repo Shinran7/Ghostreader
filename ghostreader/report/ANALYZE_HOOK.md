@@ -23,7 +23,9 @@ writes. The last report is kept once at `state/last-report.json` (read by
 
 Analyze no longer builds the LanceDB index; only `chat` uses it. `chat`
 builds it on first use, and rebuilds it when the chapter text, summaries or
-embedding model change.
+embedding model change. LanceDB and local embeddings (torch) are the optional
+`chat` extra (`uv sync --extra chat`, or `pip install 'ghostreader[chat]'`;
+`dev` includes it). Companion and analyze do not need them.
 
 ## Version fields
 

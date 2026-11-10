@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -121,7 +122,8 @@ class TestRunChat:
             return _Stub()
 
         monkeypatch.setattr(
-            "ghostreader.commands.chat.lancedb.connect", lambda *_a, **_k: _FakeDb()
+            "ghostreader.commands.chat.require_lancedb",
+            lambda: SimpleNamespace(connect=lambda *_a, **_k: _FakeDb()),
         )
         monkeypatch.setattr("ghostreader.llm.get_llm", fake_get_llm)
         monkeypatch.setattr("ghostreader.commands.chat._chat_loop", lambda *a, **k: None)

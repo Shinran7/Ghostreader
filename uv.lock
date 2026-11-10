@@ -798,7 +798,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ebooklib" },
-    { name = "lancedb" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-google-genai" },
@@ -810,18 +809,23 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "scikit-learn" },
-    { name = "sentence-transformers" },
     { name = "typer" },
     { name = "typesafe-sdk" },
 ]
 
 [package.optional-dependencies]
+chat = [
+    { name = "lancedb" },
+    { name = "sentence-transformers" },
+]
 dev = [
+    { name = "lancedb" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "ruff" },
+    { name = "sentence-transformers" },
 ]
 
 [package.dev-dependencies]
@@ -832,7 +836,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ebooklib", specifier = ">=0.18" },
-    { name = "lancedb", specifier = ">=0.9" },
+    { name = "ghostreader", extras = ["chat"], marker = "extra == 'dev'" },
+    { name = "lancedb", marker = "extra == 'chat'", specifier = ">=0.9" },
     { name = "langchain-anthropic", specifier = ">=0.2" },
     { name = "langchain-core", specifier = ">=0.3" },
     { name = "langchain-google-genai", specifier = ">=4.2.6" },
@@ -849,11 +854,11 @@ requires-dist = [
     { name = "rich", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
-    { name = "sentence-transformers", specifier = ">=3.0" },
+    { name = "sentence-transformers", marker = "extra == 'chat'", specifier = ">=3.0" },
     { name = "typer", extras = ["all"], specifier = ">=0.12" },
     { name = "typesafe-sdk", specifier = ">=0.7.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["chat", "dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest-asyncio", specifier = ">=1.4.0" }]

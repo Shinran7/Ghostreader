@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
-
-import lancedb
-import pyarrow as pa
+from typing import TYPE_CHECKING
 
 from ghostreader.embed import Embedder, StubEmbedder, get_embedder
 from ghostreader.ingestion import ActSummary, Chapter, ChapterSummary, SummaryHierarchy
 from ghostreader.ingestion.chunking import TextChunk, chunk_text
-from ghostreader.lancedb_util import has_table
+from ghostreader.lancedb_util import has_table, require_lancedb
+
+if TYPE_CHECKING:
+    import lancedb
 
 _CHUNKS_TABLE = "chunks"
 _SUMMARIES_TABLE = "summaries"
@@ -34,7 +35,7 @@ def index_manuscript(
     db_path = state_dir / "lancedb"
     db_path.mkdir(parents=True, exist_ok=True)
 
-    db = lancedb.connect(str(db_path))
+    db = require_lancedb().connect(str(db_path))
     embedder = get_embedder(embedding_model)
 
     # ── Chunk all chapters ──
@@ -94,6 +95,8 @@ def _write_chunks_table(
                 "vector": vec,
             }
         )
+
+    import pyarrow as pa
 
     schema = pa.schema(
         [
@@ -155,6 +158,8 @@ def _write_summaries_table(
 
     vectors = embedder.embed(summary_texts)
     records = [{**m, "vector": v} for m, v in zip(meta, vectors)]
+
+    import pyarrow as pa
 
     schema = pa.schema(
         [
