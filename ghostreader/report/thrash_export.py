@@ -51,6 +51,7 @@ def analyze_thrash_findings(
     cap: int = DEFAULT_THRASH_FINDINGS_CAP,
     enabled: bool = True,
     load_bearing: set[str] | frozenset[str] | None = None,
+    within_scene: bool = True,
 ) -> list[dict[str, Any]]:
     """Run thrash heuristics and merge for analyze JSON.
 
@@ -60,6 +61,9 @@ def analyze_thrash_findings(
 
     ``load_bearing`` raises common-word thresholds (LOAD_BEARING_*) for those
     lemmas on the analyze product path.
+
+    ``within_scene=False`` (#19) leaves scene-local repeats to
+    GhostCopyeditor. Those rows still feed the cross-chapter rollup.
     """
     if not enabled:
         return []
@@ -93,6 +97,8 @@ def analyze_thrash_findings(
         finding_to_dict(r) for r in within_rows + chapter_rare_rows + other_additive + cross_rows
     ]
     cleaned = [r for r in merged if str(r.get("kind") or "") in _ALLOWED_KINDS]
+    if not within_scene:
+        cleaned = [r for r in cleaned if r.get("kind") != "within_scene"]
 
     def _sort_key(row: dict[str, Any]) -> tuple[int, int, int, str]:
         sev = _SEVERITY_RANK.get(str(row.get("severity") or "low"), 99)

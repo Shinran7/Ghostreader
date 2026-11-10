@@ -148,6 +148,7 @@ async def run_companion(
                     quote_verification=cfg.quote_verification,
                     quote_recovery_max=cfg.quote_recovery_max,
                     continuity_canon=cfg.continuity_canon,
+                    drop_dimensions=cfg.dropped_dimensions(),
                     json_mode=json_mode,
                     chapter_note=note or not json_mode,
                 )
@@ -177,6 +178,7 @@ async def run_companion(
                 quote_verification=cfg.quote_verification,
                 quote_recovery_max=cfg.quote_recovery_max,
                 continuity_canon=cfg.continuity_canon,
+                drop_dimensions=cfg.dropped_dimensions(),
                 json_mode=json_mode,
                 chapter_note=note or not json_mode,
             )

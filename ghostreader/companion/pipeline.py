@@ -142,10 +142,11 @@ def _ratings_from_map(ratings: dict[str, dict[str, str]]) -> list[DimensionRatin
 
 def _craft_findings_and_ratings(
     prose_output: dict[str, Any],
+    drop_dimensions: frozenset[str] = frozenset(),
 ) -> tuple[list[PrioritizedFinding], list[DimensionRating]]:
+    from ghostreader.report.check_homes import drop_finding_dimensions
+
     findings_raw = list(prose_output.get("findings") or [])
-    # Prefer concern/strength findings; keep all for craft list ranking
-    ranked = _rank_findings(findings_raw)
     raw_response = prose_output.get("raw_response") or {}
     ratings_map: dict[str, dict[str, str]] = {}
     if isinstance(raw_response, dict):
@@ -159,6 +160,12 @@ def _craft_findings_and_ratings(
                     "severity": str(f.get("severity") or "neutral"),
                     "note": str(f.get("summary") or ""),
                 }
+    # One home per check (#19): checks left to GhostCopyeditor never reach
+    # the brief, so they cannot drive the verdict.
+    findings_raw, ratings_map, _ = drop_finding_dimensions(
+        findings_raw, dict(ratings_map), drop_dimensions
+    )
+    ranked = _rank_findings(findings_raw)
     return ranked, _ratings_from_map(ratings_map)
 
 
@@ -324,6 +331,7 @@ async def run_companion_pipeline(
     continuity_canon: bool = True,
     json_mode: bool = False,
     chapter_note: bool = True,
+    drop_dimensions: frozenset[str] = frozenset(),
 ) -> CompanionBrief:
     """Facts → craft → continuity → partition → brief; update progress cursor.
 
@@ -556,7 +564,7 @@ async def run_companion_pipeline(
         )
         prose_output = dict(prose_result.get("prose_output") or {})
         prose_output["findings"] = _verify(list(prose_output.get("findings") or []), demote=True)
-        craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output)
+        craft_findings, craft_ratings = _craft_findings_and_ratings(prose_output, drop_dimensions)
 
     if not craft_only:
         info_status = "on" if companion_info_dims else "off"
@@ -793,6 +801,7 @@ async def run_companion_pipeline(
         ungrounded_count=ungrounded_count,
         typesafe_enabled=typesafe_enabled,
         generated_at=datetime.now(UTC).isoformat(),
+        check_homes={"dropped_dimensions": sorted(drop_dimensions)},
     )
 
     max_in_run = max(

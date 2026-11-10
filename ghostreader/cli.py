@@ -450,10 +450,23 @@ async def _run_analyze(
             cap=cfg.analyze_thrash_findings_cap,
             enabled=thrash_enabled,
             load_bearing=set(cfg.analyze_thrash_load_bearing),
+            within_scene=cfg.check_on("thrash_within_scene"),
         ),
         register_findings_enabled=register_enabled,
         thrash_findings_enabled=thrash_enabled,
     )
+
+    # ── 5a. One home per check (#19) ──
+    from ghostreader.report.check_homes import dedupe_repetition, drop_report_dimensions
+
+    dropped_dims = sorted(cfg.dropped_dimensions())
+    report.check_homes = {
+        "gce_in_pipeline": cfg.gce_in_pipeline,
+        "dropped_dimensions": dropped_dims,
+        "thrash_within_scene": cfg.check_on("thrash_within_scene"),
+        "dropped_findings": drop_report_dimensions(report, dropped_dims),
+        "deduped": dedupe_repetition(report),
+    }
 
     # ── 5b. Optional rewrite suggestions ──
     # Rewrites use only rewrite_writer, never the analysis model (#19).
@@ -737,8 +750,10 @@ def config_set(
 
     # Coerce value to the right type
     current = data[key]
-    if isinstance(current, bool):
-        coerced: object = value.lower() in ("true", "1", "yes")
+    if value.lower() in ("null", "none") and key in GhostreaderConfig.nullable_flags():
+        coerced: object = None
+    elif isinstance(current, bool) or key in GhostreaderConfig.nullable_flags():
+        coerced = value.lower() in ("true", "1", "yes")
     elif isinstance(current, float) or key in ("temperature",):
         coerced = float(value)
     elif isinstance(current, int) or key in ("max_tokens",):

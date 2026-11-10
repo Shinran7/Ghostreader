@@ -126,6 +126,14 @@ Cost and input (#19).
 - Per-job models: `facts`, `continuity`, `craft`, `narrative` and `synthesis`
   in `config.yaml` can each name a model. A job with no model uses the main
   model. The probe runs on each distinct model.
+- `check_homes` — `{dropped_dimensions: [...]}`. One home per check: with
+  `gce_in_pipeline: true` in `config.yaml`, `prose.rhythm`,
+  `prose.vocabulary` and `prose.earth_anachronism` are left to
+  GhostCopyeditor. They are removed from `craft_findings` and
+  `craft_ratings` and cannot drive the verdict. Per-check flags
+  (`prose_rhythm`, `prose_vocabulary`, `earth_anachronism`; `null` = follow
+  `gce_in_pipeline`) override. Default: nothing dropped. `human_door`,
+  `jargon_earn` and `voice_card` ratings always stay.
 
 ### Since 0.2.7
 

@@ -95,6 +95,9 @@ class ReportOutput:
     canon_findings: list[dict[str, Any]] = field(default_factory=list)
     # LLM calls and tokens for this run (#19).
     usage: dict[str, Any] = field(default_factory=dict)
+    # One home per check (#19): which checks this run left to GhostCopyeditor
+    # and how many overlapping repetition rows were removed.
+    check_homes: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod

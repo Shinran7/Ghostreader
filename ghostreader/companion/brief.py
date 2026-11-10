@@ -67,6 +67,9 @@ class CompanionBrief:
     # LLM calls and tokens for this run (#19, 0.2.8): {llm_calls, input_tokens,
     # output_tokens, total_tokens, by_model}. Empty when not tracked.
     usage: dict[str, Any] = field(default_factory=dict)
+    # One home per check (#19, 0.2.8): {dropped_dimensions: [...]} — soft
+    # dimensions left to GhostCopyeditor this run.
+    check_homes: dict[str, Any] = field(default_factory=dict)
     # Continuity state of record (#16, 0.2.6): "canon" (Autonomicon Canon +
     # chapter prose) | "facts" (Ghostreader fact sheets) | "" (skipped).
     continuity_source: str = ""
@@ -178,6 +181,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "continuity_status": brief.continuity_status,
         "quote_stats": dict(brief.quote_stats),
         "usage": dict(brief.usage),
+        "check_homes": dict(brief.check_homes),
         "continuity_source": brief.continuity_source,
         "canon_stats": dict(brief.canon_stats),
         "canon_findings": list(brief.canon_findings),

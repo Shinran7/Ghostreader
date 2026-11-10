@@ -61,6 +61,18 @@ Always present:
   a warning.
 - The JSON probe result is cached per model per day in the analyze state
   directory (`json-probe.json`). `--no-cache` probes again.
+- `check_homes` — `{gce_in_pipeline, dropped_dimensions, thrash_within_scene,
+  dropped_findings, deduped: {thrash_phrase_rows, prose_repetition_findings}}`.
+  One home per check: with `gce_in_pipeline: true`, `prose.rhythm`,
+  `prose.vocabulary` and `prose.earth_anachronism` are removed from
+  `prioritized_findings`, `dimension_ratings` and `unverified_findings`, and
+  `within_scene` thrash rows are left out (they still feed `cross_chapter`).
+  Per-check flags in `config.yaml` override (`null` = follow
+  `gce_in_pipeline`). Default: nothing dropped.
+- Repetition dedupe (always on): a `phrase` thrash row that repeats a
+  `repetition_findings` phrase is dropped, and a `prose.repetition` concern
+  that names a machine row's phrase or word is dropped from
+  `prioritized_findings` (re-ranked). Machine rows win.
 
 ### Since 0.2.4: Canon audit (#16)
 

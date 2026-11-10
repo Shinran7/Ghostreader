@@ -106,6 +106,14 @@ class GhostreaderConfig(BaseModel):
     # Motif / load-bearing lemmas for common-word thrash (higher threshold).
     # Empty = ordinary thresholds for every word (KD-5 protect set may be empty).
     analyze_thrash_load_bearing: list[str] = []
+    # One home per check (#19). GhostCopyeditor owns sentence- and scene-level
+    # copy editing. When gce_in_pipeline is true, the four checks below default
+    # off; set one to true or false to override. null = follow gce_in_pipeline.
+    gce_in_pipeline: bool = False
+    prose_rhythm: bool | None = None
+    prose_vocabulary: bool | None = None
+    thrash_within_scene: bool | None = None
+    earth_anachronism: bool | None = None
     # Per-job models (#19). null model = main model (rewrite_writer: no rewrites).
     facts: ModelSettings = ModelSettings()
     continuity: ModelSettings = ModelSettings()
@@ -113,6 +121,25 @@ class GhostreaderConfig(BaseModel):
     narrative: ModelSettings = ModelSettings()
     synthesis: ModelSettings = ModelSettings()
     rewrite_writer: ModelSettings = ModelSettings()
+
+    @staticmethod
+    def nullable_flags() -> tuple[str, ...]:
+        """Check flags where null means "follow gce_in_pipeline" (#19)."""
+        return ("prose_rhythm", "prose_vocabulary", "thrash_within_scene", "earth_anachronism")
+
+    def check_on(self, name: str) -> bool:
+        """Whether a copy-edit check runs (#19): explicit value, else not GCE."""
+        value = getattr(self, name)
+        return (not self.gce_in_pipeline) if value is None else bool(value)
+
+    def dropped_dimensions(self) -> frozenset[str]:
+        """Soft prose dimensions this run leaves to GhostCopyeditor (#19)."""
+        dims = {
+            "prose_rhythm": "prose.rhythm",
+            "prose_vocabulary": "prose.vocabulary",
+            "earth_anachronism": "prose.earth_anachronism",
+        }
+        return frozenset(dim for flag, dim in dims.items() if not self.check_on(flag))
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -285,6 +312,14 @@ class GhostreaderConfig(BaseModel):
             "# Motif / load-bearing words for common-word thrash (higher bar).",
             "# Empty list = ordinary thresholds for every word.",
             f"analyze_thrash_load_bearing: {_fmt_str_list(self.analyze_thrash_load_bearing)}",
+            "",
+            "# GhostCopyeditor runs in the same pipeline (#19). When true, the",
+            "# copy-edit checks below default off (null = follow this flag).",
+            f"gce_in_pipeline: {_fmt(self.gce_in_pipeline)}",
+            f"prose_rhythm: {_fmt(self.prose_rhythm)}",
+            f"prose_vocabulary: {_fmt(self.prose_vocabulary)}",
+            f"thrash_within_scene: {_fmt(self.thrash_within_scene)}",
+            f"earth_anachronism: {_fmt(self.earth_anachronism)}",
             "",
             *job_lines,
             "",

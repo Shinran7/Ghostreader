@@ -92,6 +92,7 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
         "canon_stats": dict(report.canon_stats),
         "canon_findings": list(report.canon_findings),
         "usage": dict(report.usage),
+        "check_homes": dict(report.check_homes),
         "repetition_findings": list(report.repetition_findings),
         "register_findings": list(report.register_findings),
         "register_findings_enabled": bool(report.register_findings_enabled),
