@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.7"
+GHOSTREADER_VERSION = "0.2.8"
 
 
 @dataclass
@@ -64,6 +64,9 @@ class CompanionBrief:
     # Quote verification counts (#17, 0.2.5): verified / unverified / demoted /
     # recovered / recovery_calls. Empty when verification is off.
     quote_stats: dict[str, int] = field(default_factory=dict)
+    # LLM calls and tokens for this run (#19, 0.2.8): {llm_calls, input_tokens,
+    # output_tokens, total_tokens, by_model}. Empty when not tracked.
+    usage: dict[str, Any] = field(default_factory=dict)
     # Continuity state of record (#16, 0.2.6): "canon" (Autonomicon Canon +
     # chapter prose) | "facts" (Ghostreader fact sheets) | "" (skipped).
     continuity_source: str = ""
@@ -174,6 +177,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "warnings": list(brief.warnings),
         "continuity_status": brief.continuity_status,
         "quote_stats": dict(brief.quote_stats),
+        "usage": dict(brief.usage),
         "continuity_source": brief.continuity_source,
         "canon_stats": dict(brief.canon_stats),
         "canon_findings": list(brief.canon_findings),

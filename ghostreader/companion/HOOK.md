@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.7)
+# Companion JSON hook (0.2.8)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.7`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.8`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.7`**). Independent of analyze JSON (`0.2.4`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.8`**). Independent of analyze JSON (`0.2.5`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -106,6 +106,26 @@ Always present (empty lists until filled):
 | `budget` | int \| null | Allowed unexplained count (default 3) |
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
+
+### Since 0.2.8
+
+Cost and input (#19).
+
+- `usage` — `{llm_calls, input_tokens, output_tokens, total_tokens, by_model}`
+  for this run. `by_model` maps a model name to `{calls, input_tokens,
+  output_tokens, total_tokens}`. Providers that report no token counts add
+  calls but zero tokens. The JSON probe counts as a call when it runs.
+- `chapter_note` is now `""` with `--format json` unless you pass `--note`.
+  This saves one LLM call per chapter. The key is still present. Terminal
+  output always writes the note.
+- The JSON probe result is cached per model per day in
+  `state/stories/<story>/json-probe.json`. A model that passed today is not
+  probed again. Failures are never cached.
+- Craft and narrative now read the whole focus chapter (head and tail past
+  60,000 characters), not a short excerpt.
+- Per-job models: `facts`, `continuity`, `craft`, `narrative` and `synthesis`
+  in `config.yaml` can each name a model. A job with no model uses the main
+  model. The probe runs on each distinct model.
 
 ### Since 0.2.7
 
@@ -239,7 +259,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 
 ```json
 {
-  "ghostreader_version": "0.2.5",
+  "ghostreader_version": "0.2.8",
   "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
@@ -299,7 +319,7 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.5`; `continuity_status` is `ok`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, and `package_version`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.8`; `continuity_status` is `ok`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.

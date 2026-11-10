@@ -10,9 +10,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ghostreader.agents.genre_prompts import get_genre_preamble
 from ghostreader.agents.prose_analyst import (
     _SYSTEM_PROMPT_TEMPLATE,
-    _format_chapter_excerpts,
     _parse_findings,
 )
+from ghostreader.excerpts import whole_chapter_block
 from ghostreader.graph import AgentOutput, AnalysisState, chapters_to_dicts
 from ghostreader.ingestion import Chapter
 from ghostreader.llm import message_text
@@ -97,7 +97,7 @@ def _companion_prose_typesafe_state(
         "repetition_data": repetition_block,
         "register_data": register_block or None,
         "voice_card_data": voice_card_block or None,
-        "manuscript": _format_chapter_excerpts(chapters),
+        "manuscript": whole_chapter_block(chapters),
         "mode_bias": mode_bias,
     }
 
@@ -167,7 +167,7 @@ async def _companion_prose_llm_path(
         system_prompt = system_prompt + _COMPANION_REGISTER_DIM_FRAGMENT
     if include_voice_card_dims:
         system_prompt = system_prompt + _COMPANION_VOICE_CARD_DIM_FRAGMENT
-    chapter_block = _format_chapter_excerpts(chapters)
+    chapter_block = whole_chapter_block(chapters)
     user_message = _companion_craft_context(
         repetition_block=repetition_block,
         register_block=effective_register,
@@ -251,7 +251,7 @@ async def _companion_prose_typesafe_path(
         repetition_block=repetition_block,
         register_block=effective_register,
         voice_card_block=effective_voice,
-        chapter_block=_format_chapter_excerpts(chapters),
+        chapter_block=whole_chapter_block(chapters),
     )
 
     enrich_raw: dict[str, Any] = {}

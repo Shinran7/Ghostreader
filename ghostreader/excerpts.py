@@ -502,6 +502,22 @@ __all__ = [
 ]
 
 
+# Companion craft and narrative read the whole focus chapter (#19). Only a
+# chapter past this size is cut, to its head and tail.
+COMPANION_CHAPTER_CHARS = 60_000
+
+
+def whole_chapter_block(chapters: list[dict[str, Any]]) -> str:
+    """Chapter text with headers, each chapter whole up to ``COMPANION_CHAPTER_CHARS``."""
+    parts: list[str] = []
+    for ch in chapters:
+        number = ch.get("chapter_number", "?")
+        title = ch.get("title") or f"Chapter {number}"
+        content = head_tail(ch.get("content") or "", COMPANION_CHAPTER_CHARS)
+        parts.append(f"--- Chapter {number}: {title} ---\n{content}")
+    return "\n\n".join(parts)
+
+
 def head_tail(content: str, max_chars: int, *, tail_share: float = 0.4) -> str:
     """Opening and closing passages of ``content`` within ``max_chars``.
 

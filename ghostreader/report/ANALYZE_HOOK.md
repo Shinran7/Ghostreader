@@ -1,4 +1,4 @@
-# Analyze JSON hook (0.2.4)
+# Analyze JSON hook (0.2.5)
 
 Autonomicon (and scripts) read analyze JSON from:
 
@@ -29,12 +29,12 @@ embedding model change.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.4`**. Bumps only when analyze payload shape changes. |
+| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.5`**. Bumps only when analyze payload shape changes. |
 | `package_version` | Installed package version (`ghostreader.__version__`). For correlating which install produced the file. |
 
-Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.7`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
+Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.8`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
 
-## Contract shape (0.2.4)
+## Contract shape (0.2.5)
 
 Always present:
 
@@ -48,6 +48,19 @@ Always present:
   `overview` counts; `prioritized_findings` is re-ranked.
 - `quote_stats` — `{verified, unverified, dropped, recovered, recovery_calls}`
   (`{}` when `quote_verification: false`).
+
+### Since 0.2.5: usage and per-job models (#19)
+
+- `usage` — `{llm_calls, input_tokens, output_tokens, total_tokens, by_model}`
+  for this run; same shape as the companion brief (`companion/HOOK.md`,
+  Since 0.2.8). Cached facts and summaries make no calls, so reruns show
+  fewer.
+- Per-job models in `config.yaml` (`facts`, `continuity`, `craft`,
+  `narrative`, `synthesis`, `rewrite_writer`). `--show-rewrites` uses only
+  `rewrite_writer`; with no `rewrite_writer.model` it skips rewrites and adds
+  a warning.
+- The JSON probe result is cached per model per day in the analyze state
+  directory (`json-probe.json`). `--no-cache` probes again.
 
 ### Since 0.2.4: Canon audit (#16)
 
@@ -136,7 +149,7 @@ Consumers that do not know `thrash_findings` or unknown kinds ignore them. Missi
 
 ```json
 {
-  "ghostreader_version": "0.2.4",
+  "ghostreader_version": "0.2.5",
   "package_version": "0.1.0",
   "repetition_findings": [],
   "register_findings": [],

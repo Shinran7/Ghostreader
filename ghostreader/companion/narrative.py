@@ -94,10 +94,19 @@ def finalize_narrative_ratings(
     return out
 
 
-def _excerpt_chapter(chapter: Chapter, *, max_chars: int = 3000) -> str:
-    title = chapter.title or f"Chapter {chapter.chapter_number}"
-    content = (chapter.content or "")[:max_chars]
-    return f"--- Chapter {chapter.chapter_number}: {title} ---\n{content}"
+def _excerpt_chapter(chapter: Chapter) -> str:
+    """The whole focus chapter (head and tail only past the companion cap, #19)."""
+    from ghostreader.excerpts import whole_chapter_block
+
+    return whole_chapter_block(
+        [
+            {
+                "chapter_number": chapter.chapter_number,
+                "title": chapter.title,
+                "content": chapter.content,
+            }
+        ]
+    )
 
 
 def _companion_narrative_state(
@@ -224,9 +233,7 @@ async def _narrative_typesafe_path(
         for dim in enrich_dims:
             f = by_dim.get(dim)
             if f and dim in ratings:
-                ratings[dim]["note"] = str(
-                    f.get("summary", ratings[dim].get("note", ""))
-                )
+                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
 
     plain: list[dict[str, Any]] = []
     for f in findings:
@@ -290,8 +297,7 @@ async def run_companion_narrative(
 
     if log_stderr and dropped:
         print(
-            f"Narrative ungrounded drops: {dropped} "
-            f"(kept {len(grounded)} grounded concern(s))",
+            f"Narrative ungrounded drops: {dropped} (kept {len(grounded)} grounded concern(s))",
             file=sys.stderr,
         )
 

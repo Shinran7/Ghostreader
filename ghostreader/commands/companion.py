@@ -33,6 +33,7 @@ async def run_companion(
     fail_on_continuity: bool = False,
     model: str | None = None,
     genre: str | None = None,
+    note: bool = False,
 ) -> int:
     """Run companion pipeline. Returns process exit code (0/1/2)."""
     from ghostreader.llm import get_job_llms, get_llm, load_secrets
@@ -68,6 +69,9 @@ async def run_companion(
             return 1
 
     llm = get_llm(model, manuscript_path=path)
+    from ghostreader.usage import start_usage
+
+    usage_tracker = start_usage()
     # Per-job models (#19); a job with no model uses llm.
     job_llms, job_warnings = get_job_llms(cfg, llm, manuscript_path=path)
     for w in job_warnings:
@@ -88,13 +92,20 @@ async def run_companion(
         )
 
     if cfg.llm_json_probe:
-        from ghostreader.llm import probe_json_contract
+        from ghostreader.llm import probe_job_models
 
         _ERR.print("[cyan]Probing LLM JSON contract...[/cyan]")
-        probe_ok, probe_detail = await probe_json_contract(llm)
+        probe_ok, probe_detail, probe_model = await probe_job_models(
+            llm,
+            job_llms,
+            requested=model,
+            state_dir=story_state_dir_for(path),
+            use_cache=not no_cache,
+        )
         if not probe_ok:
             _ERR.print(
-                "[bold red]Aborting:[/bold red] Chat model failed the JSON contract probe "
+                f"[bold red]Aborting:[/bold red] Chat model {probe_model!r} failed the "
+                "JSON contract probe "
                 "after normalization + one repair retry.\n"
                 "  Companion continuity would run on empty fact sheets.\n"
                 "  Switch models, fix provider wiring, or set llm_json_probe: false "
@@ -138,6 +149,7 @@ async def run_companion(
                     quote_recovery_max=cfg.quote_recovery_max,
                     continuity_canon=cfg.continuity_canon,
                     json_mode=json_mode,
+                    chapter_note=note or not json_mode,
                 )
         else:
             brief = await run_companion_pipeline(
@@ -166,10 +178,13 @@ async def run_companion(
                 quote_recovery_max=cfg.quote_recovery_max,
                 continuity_canon=cfg.continuity_canon,
                 json_mode=json_mode,
+                chapter_note=note or not json_mode,
             )
     except Exception as exc:  # noqa: BLE001
         _ERR.print(f"[red]Error:[/red] Companion failed: {exc}")
         return 1
+
+    brief.usage = usage_tracker.summary()
 
     try:
         reports_dir = companion_reports_dir(story_state)

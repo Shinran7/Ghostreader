@@ -323,6 +323,7 @@ async def run_companion_pipeline(
     quote_recovery_max: int = 5,
     continuity_canon: bool = True,
     json_mode: bool = False,
+    chapter_note: bool = True,
 ) -> CompanionBrief:
     """Facts → craft → continuity → partition → brief; update progress cursor.
 
@@ -742,14 +743,18 @@ async def run_companion_pipeline(
         verdict = "watch"
         if "continuity" not in drivers:
             drivers.append("continuity")
-    note = await _chapter_note(
-        llm,
-        chapter=focus,
-        continuity=gate,
-        craft=craft_findings,
-        verdict=verdict,
-        narrative=narrative_findings or None,
-    )
+    # The note is for people; Autonomicon does not read it, so JSON runs
+    # skip the call unless --note asks for it (#19). The key stays, empty.
+    note = ""
+    if chapter_note:
+        note = await _chapter_note(
+            llm,
+            chapter=focus,
+            continuity=gate,
+            craft=craft_findings,
+            verdict=verdict,
+            narrative=narrative_findings or None,
+        )
 
     for w in warnings:
         _stderr(f"Warning: {w}", quiet_stdout_json=json_mode)

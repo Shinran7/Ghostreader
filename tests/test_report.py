@@ -210,7 +210,7 @@ class TestJsonExport:
         data = json.loads(text)
         assert data["manuscript_name"] == "Test Manuscript"
         assert data["overview"]["total_findings"] == 2
-        assert data["ghostreader_version"] == "0.2.4"
+        assert data["ghostreader_version"] == "0.2.5"
         assert data["repetition_findings"] == []
         assert data["register_findings"] == []
         assert data["register_findings_enabled"] is True
@@ -235,9 +235,9 @@ class TestJsonExport:
         from ghostreader import __version__ as pkg_ver
         from ghostreader.report.json_export import ANALYZE_JSON_VERSION, _build_payload
 
-        assert ANALYZE_JSON_VERSION == "0.2.4"
+        assert ANALYZE_JSON_VERSION == "0.2.5"
         payload = _build_payload(sample_report)
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         assert "repetition_findings" in payload
         assert payload["repetition_findings"] == []
         assert "register_findings" in payload
@@ -660,7 +660,7 @@ class TestAnalyzeRepetitionFindings:
         sample_report.repetition_findings = [row]
         payload = _build_payload(sample_report)
         assert payload["repetition_findings"] == [row]
-        assert payload["ghostreader_version"] == "0.2.4"
+        assert payload["ghostreader_version"] == "0.2.5"
         from ghostreader import __version__ as pkg_ver
 
         assert payload["package_version"] == pkg_ver

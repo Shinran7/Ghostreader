@@ -93,6 +93,8 @@ class ReportOutput:
     continuity_source: str = ""
     canon_stats: dict[str, int] = field(default_factory=dict)
     canon_findings: list[dict[str, Any]] = field(default_factory=list)
+    # LLM calls and tokens for this run (#19).
+    usage: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
 
     @classmethod

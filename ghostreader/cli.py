@@ -224,6 +224,9 @@ async def _run_analyze(
             raise typer.Exit(code=1) from exc
 
     llm = _get_llm(model, manuscript_path=path)
+    from ghostreader.usage import start_usage
+
+    usage_tracker = start_usage()
     from ghostreader.llm import get_job_llms
 
     # Per-job models (#19); a job with no model uses llm.
@@ -245,13 +248,16 @@ async def _run_analyze(
         rprint(f"[cyan]TypeSafe judgments: on[/cyan] (jev-latest, confidence floor {floor})")
 
     if cfg.llm_json_probe:
-        from ghostreader.llm import probe_json_contract
+        from ghostreader.llm import probe_job_models
 
         rprint("[cyan]Probing LLM JSON contract...[/cyan]")
-        probe_ok, probe_detail = await probe_json_contract(llm)
+        probe_ok, probe_detail, probe_model = await probe_job_models(
+            llm, job_llms, requested=model, state_dir=state, use_cache=not no_cache
+        )
         if not probe_ok:
             rprint(
-                "[bold red]Aborting:[/bold red] Chat model failed the JSON contract probe "
+                f"[bold red]Aborting:[/bold red] Chat model {probe_model!r} failed the "
+                "JSON contract probe "
                 "after normalization + one repair retry.\n"
                 "  Continuity/fact extraction would produce empty sheets and false "
                 "'no contradictions' results.\n"
@@ -460,6 +466,8 @@ async def _run_analyze(
         rprint("[cyan]Generating rewrite suggestions...[/cyan]")
         report.rewrite_suggestions = await generate_rewrites(report.prioritized_findings, writer)
 
+    report.usage = usage_tracker.summary()
+
     # ── 6. Render output ──
     json_text: str | None = None
     if fmt == "json":
@@ -543,6 +551,13 @@ def companion(
             help="Exit 2 when gate-list grounded continuity concerns exist (optional hard gate).",
         ),
     ] = False,
+    note: Annotated[
+        bool,
+        typer.Option(
+            "--note",
+            help="Write the LLM chapter note with --format json (always on for terminal).",
+        ),
+    ] = False,
     model: ModelOption = None,
     genre: GenreOption = None,
 ) -> None:
@@ -571,6 +586,7 @@ def companion(
             fail_on_continuity=fail_on_continuity,
             model=model,
             genre=genre,
+            note=note,
         )
     )
     raise typer.Exit(code=code)

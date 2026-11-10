@@ -216,6 +216,76 @@ async def probe_json_contract(llm: BaseChatModel) -> tuple[bool, str]:
     return False, repair or text
 
 
+PROBE_CACHE_FILE = "json-probe.json"
+
+
+async def probe_json_contract_cached(
+    llm: BaseChatModel,
+    *,
+    model: str,
+    state_dir: Path | None,
+    use_cache: bool = True,
+) -> tuple[bool, str]:
+    """Run ``probe_json_contract`` at most once per model per day (#19).
+
+    A pass is recorded as ``{model: "YYYY-MM-DD"}`` in
+    ``<state_dir>/json-probe.json``. A failure is never recorded, so the
+    next run probes again. ``use_cache=False`` (``--no-cache``) always probes.
+    """
+    import json
+    from datetime import UTC, datetime
+
+    today = datetime.now(UTC).date().isoformat()
+    path = state_dir / PROBE_CACHE_FILE if state_dir is not None else None
+    seen: dict[str, str] = {}
+    if path is not None and use_cache:
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            seen = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+        except (OSError, ValueError):
+            seen = {}
+        if seen.get(model) == today:
+            return True, f"passed earlier today ({today})"
+    ok, detail = await probe_json_contract(llm)
+    if ok and path is not None and use_cache and getattr(llm, "_llm_type", None) != "stub":
+        seen[model] = today
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(seen, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+    return ok, detail
+
+
+async def probe_job_models(
+    main_llm: BaseChatModel,
+    job_llms: dict[str, BaseChatModel],
+    *,
+    requested: str | None,
+    state_dir: Path | None,
+    use_cache: bool = True,
+) -> tuple[bool, str, str]:
+    """Probe each distinct JSON-producing model: main plus jobs (not rewrite_writer).
+
+    Returns ``(ok, detail, model)``; on failure *model* names the one that failed.
+    """
+    from ghostreader.llm_cache import model_key
+
+    models: list[BaseChatModel] = [main_llm]
+    for name, job_llm in job_llms.items():
+        if name != "rewrite_writer" and all(job_llm is not m for m in models):
+            models.append(job_llm)
+    detail = ""
+    for i, m in enumerate(models):
+        key = model_key(m, requested if i == 0 else None)
+        ok, detail = await probe_json_contract_cached(
+            m, model=key, state_dir=state_dir, use_cache=use_cache
+        )
+        if not ok:
+            return False, detail, key
+    return True, detail, ""
+
+
 def load_secrets() -> None:
     """Load API keys from secrets/llm.env if it exists.
 
