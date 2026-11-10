@@ -59,6 +59,9 @@ class GhostreaderConfig(BaseModel):
     companion_register_watch: bool = True
     # Companion voice-vs-card watch (heuristic rows + soft prose.voice_card). Default on.
     companion_voice_card_watch: bool = True
+    # Anti-tidy narrative shape watch (#8): one LLM call, progressive only,
+    # watch rows in shape_findings. Default on.
+    companion_shape_watch: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -252,6 +255,9 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Companion voice-vs-card watch (heuristic + soft prose.voice_card; false = off).",
             f"companion_voice_card_watch: {_fmt(self.companion_voice_card_watch)}",
+            "",
+            "# Anti-tidy narrative shape watch (progressive; watch rows; false = off).",
+            f"companion_shape_watch: {_fmt(self.companion_shape_watch)}",
             "",
             "# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",

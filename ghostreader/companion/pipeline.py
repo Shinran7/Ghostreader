@@ -324,6 +324,7 @@ async def run_companion_pipeline(
     companion_light_narrative: bool = True,
     companion_register_watch: bool = True,
     companion_voice_card_watch: bool = True,
+    companion_shape_watch: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     quote_verification: bool = True,
@@ -427,6 +428,7 @@ async def run_companion_pipeline(
     repetition_findings: list[dict[str, Any]] = []
     register_findings: list[dict[str, Any]] = []
     voice_card_findings: list[dict[str, Any]] = []
+    shape_findings: list[dict[str, Any]] = []
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
     info_ratings_map: dict[str, dict[str, str]] = {}
@@ -660,6 +662,24 @@ async def run_companion_pipeline(
         narrative_findings = _rank_findings(nar_raw)
         narrative_ratings = _ratings_from_map(nar_ratings_map)
 
+    # Anti-tidy shape watch (#8): progressive only; watch rows, never the verdict.
+    if companion_shape_watch and discovery.mode == "progressive" and not continuity_only:
+        from ghostreader.companion.shape import run_shape_watch
+
+        _stderr("Running shape watch…", quiet_stdout_json=json_mode)
+        shape_findings, shape_warnings = await run_shape_watch(
+            focus=focus,
+            prior_facts=[f for f in cont_facts if f["chapter_number"] < discovery.chapter_number],
+            llm=narrative_llm,
+            genre=genre,
+            seed_meta=discovery.seed_meta,
+        )
+        warnings.extend(shape_warnings)
+        _stderr(
+            f"Shape watch: kept {len(shape_findings)} row(s)",
+            quiet_stdout_json=json_mode,
+        )
+
     continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
     if facts_poison:
         continuity_status = "failed"
@@ -792,6 +812,7 @@ async def run_companion_pipeline(
         repetition_findings=repetition_findings,
         register_findings=register_findings,
         voice_card_findings=voice_card_findings,
+        shape_findings=shape_findings,
         warnings=warnings,
         continuity_status=continuity_status,
         quote_stats=quote_stats,
