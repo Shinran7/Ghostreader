@@ -178,7 +178,6 @@ async def _run_analyze(
 ) -> None:
     """Execute the full analysis pipeline: ingest → detect → analyze → report."""
     from ghostreader.analyzers.repetition_detector import RepetitionDetector
-    from ghostreader.cache import CacheManager
     from ghostreader.graph import (
         AnalysisConfig,
         chapters_to_dicts,
@@ -264,9 +263,12 @@ async def _run_analyze(
     if seed_meta:
         rprint(f"[cyan]Loaded seed.yaml metadata[/cyan] ({len(seed_meta)} field(s))")
 
-    # ── Cache check ──
-    cache = CacheManager(state)
-    cache.load_cache()
+    # ── Cache (#18): content-hash keyed; --no-cache skips reads and writes ──
+    from ghostreader.llm_cache import ResultCache, model_key
+    from ghostreader.paths import story_state_dir_for
+
+    result_cache = ResultCache(state / "llm-cache", enabled=not no_cache)
+    llm_model = model_key(llm, model)
 
     # ── 1. Ingestion: load → summarize → index ──
     rprint(f"[cyan]Loading manuscript from:[/cyan] {path}")
@@ -284,9 +286,20 @@ async def _run_analyze(
     )
 
     rprint(f"[cyan]Extracting chapter facts ({len(chapters)} chapters, 10 concurrent)...[/cyan]")
-    chapter_facts: list[dict] = list(await extract_all_facts(chapters, llm))
+    if no_cache:
+        chapter_facts: list[dict] = list(await extract_all_facts(chapters, llm))
+        rprint(f"  Extracted [green]{len(chapter_facts)}[/green] fact sheet(s)")
+    else:
+        # Shared with companion mode: one hash-keyed fact store per story.
+        from ghostreader.companion.fact_memory import FactMemoryStore
+
+        fact_store = FactMemoryStore(story_state_dir_for(path))
+        chapter_facts = list(await fact_store.ensure_facts(chapters, llm))
+        rprint(
+            f"  Facts: [green]{fact_store.last_reused}[/green] reused, "
+            f"[green]{fact_store.last_extracted}[/green] extracted"
+        )
     failed_facts = count_parse_failed(chapter_facts)  # type: ignore[arg-type]
-    rprint(f"  Extracted [green]{len(chapter_facts)}[/green] fact sheet(s)")
     pipeline_warnings: list[str] = []
     if failed_facts:
         warn = parse_failed_warning(failed_facts, len(chapter_facts))
@@ -313,7 +326,12 @@ async def _run_analyze(
         )
         if act_ranges:
             rprint(f"  Acts from Canon act-structure: [green]{len(act_ranges)}[/green]")
-    hierarchy = await build_summary_hierarchy(chapters, llm, act_ranges=act_ranges)
+    hierarchy = await build_summary_hierarchy(
+        chapters, llm, act_ranges=act_ranges, cache=result_cache, model=llm_model
+    )
+    reused = sum(v for k, v in result_cache.hits.items() if k.startswith("summary"))
+    if reused:
+        rprint(f"  Summaries reused from cache: [green]{reused}[/green]")
     rprint(
         f"  Summaries: [green]{len(hierarchy.chapter_summaries)}[/green] chapter, "
         f"[green]{len(hierarchy.act_summaries)}[/green] act, "
@@ -475,16 +493,13 @@ async def _run_analyze(
         )
         rprint(f"[green]Report copied to:[/green] {output_path}")
 
-    # ── 7. Cache results ──
+    # ── 7. Keep the last report once (not per chapter) ──
     if not no_cache:
-        for ch in chapters:
-            cache.update_cache_entry(
-                ch.chapter_number,
-                ch.content,
-                final_report,
-            )
-        cache.save_cache()
-        cache.clear_checkpoint()
+        import json as _json
+
+        (state / "last-report.json").write_text(
+            _json.dumps(final_report, ensure_ascii=False, default=str), encoding="utf-8"
+        )
         rprint("[dim]Results cached.[/dim]")
 
 

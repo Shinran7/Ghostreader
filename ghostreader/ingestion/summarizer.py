@@ -26,11 +26,14 @@ from ghostreader.ingestion import (
     SummaryHierarchy,
 )
 from ghostreader.llm import message_text
+from ghostreader.llm_cache import ResultCache, cache_key
 
 DEFAULT_CHAPTERS_PER_ACT = 5
 # One call covers a chapter up to this size; longer chapters are chunked.
 DEFAULT_CHUNK_CHARS = 16_000
 DEFAULT_CONCURRENCY = 6
+# Bump when a summary prompt changes so cached summaries are not reused.
+SUMMARY_PROMPT_VERSION = "2"
 
 _SYSTEM_PROMPT = (
     "You are a literary analyst summarizing fiction manuscripts. "
@@ -52,6 +55,8 @@ async def build_summary_hierarchy(
     act_ranges: Sequence[tuple[int, int]] | None = None,
     concurrency: int = DEFAULT_CONCURRENCY,
     chunk_chars: int = DEFAULT_CHUNK_CHARS,
+    cache: ResultCache | None = None,
+    model: str = "",
 ) -> SummaryHierarchy:
     """Build the full chapter → act → global summary hierarchy.
 
@@ -59,14 +64,31 @@ async def build_summary_hierarchy(
     Pass 2: Group chapters into acts (``act_ranges`` when given, e.g. from
     Canon, else fixed groups of ``chapters_per_act``), summarize each act,
     then summarize globally.
+
+    With ``cache``, each summary is keyed on its input text, ``model`` and
+    the prompt version: an unchanged book makes no calls, and an edited
+    chapter re-runs only its summary, its act and the global summary.
     """
+    from ghostreader.cache import chapter_content_hash
+
     sem = asyncio.Semaphore(max(1, concurrency))
     hierarchy = SummaryHierarchy()
+    store = cache or ResultCache(Path("."), enabled=False)
+    v = SUMMARY_PROMPT_VERSION
+
+    async def _chapter(ch: Chapter) -> str:
+        key = cache_key(
+            v, model, chunk_chars, ch.chapter_number, ch.title, chapter_content_hash(ch.content)
+        )
+        hit = store.get("summary-chapter", key)
+        if isinstance(hit, str):
+            return hit
+        text = await _summarize_chapter(ch, llm, sem, chunk_chars=chunk_chars)
+        store.put("summary-chapter", key, text)
+        return text
 
     # ── Pass 1: Chapter summaries ──
-    texts = await asyncio.gather(
-        *(_summarize_chapter(ch, llm, sem, chunk_chars=chunk_chars) for ch in chapters)
-    )
+    texts = await asyncio.gather(*(_chapter(ch) for ch in chapters))
     for chapter, summary_text in zip(chapters, texts, strict=True):
         hierarchy.chapter_summaries.append(
             ChapterSummary(
@@ -85,8 +107,12 @@ async def build_summary_hierarchy(
         act_text = "\n\n".join(
             f"Chapter {cs.chapter_number} ({cs.title}): {cs.summary}" for cs in act_chapters
         )
-        async with sem:
-            text = await _summarize_act(act_num, act_text, llm)
+        key = cache_key(v, model, act_num, act_text)
+        text = store.get("summary-act", key)
+        if not isinstance(text, str):
+            async with sem:
+                text = await _summarize_act(act_num, act_text, llm)
+            store.put("summary-act", key, text)
         return ActSummary(
             act_number=act_num,
             chapter_range=(act_chapters[0].chapter_number, act_chapters[-1].chapter_number),
@@ -102,7 +128,12 @@ async def build_summary_hierarchy(
         f"Act {a.act_number} (chapters {a.chapter_range[0]}-{a.chapter_range[1]}): {a.summary}"
         for a in hierarchy.act_summaries
     )
-    hierarchy.global_summary = await _summarize_global(all_acts, llm)
+    key = cache_key(v, model, all_acts)
+    text = store.get("summary-global", key)
+    if not isinstance(text, str):
+        text = await _summarize_global(all_acts, llm)
+        store.put("summary-global", key, text)
+    hierarchy.global_summary = text
 
     return hierarchy
 

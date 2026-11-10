@@ -12,6 +12,14 @@ lines go to stderr (fixed in #18; before that they shared stdout). Add
 `--format`. `--output` is still a copy of the Markdown report. Ignore unknown
 fields.
 
+Reruns are cached by content hash (#18). Chapter fact sheets share the
+companion fact store (`state/stories/<story>/`); chapter, act and global
+summaries sit under `state/llm-cache/`, keyed on the input text, model and
+prompt version. An unchanged book makes no fact or summary calls; an edited
+chapter re-runs its own facts and summary, its act and the global summary.
+Analysis agents still run each time. `--no-cache` skips cache reads and
+writes. The last report is kept once at `state/last-report.json`.
+
 ## Version fields
 
 | Field | Meaning |
