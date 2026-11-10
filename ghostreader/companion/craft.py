@@ -271,7 +271,7 @@ async def _companion_prose_typesafe_path(
         for dim in enrich_dims:
             f = by_dim.get(dim)
             if f and dim in ratings:
-                ratings[dim]["note"] = str(f.get("summary", ratings[dim].get("note", "")))
+                ratings[dim]["note"] = str(f.get("summary") or ratings[dim].get("note") or "")
 
     stats = {
         "judgments": len(dims),
