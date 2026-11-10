@@ -98,6 +98,7 @@ Markdown/Epub: markdown, ebooklib, beautifulsoup4
 Repetition: Custom (tf-idf + fuzzy matching)
 Vector Store: LanceDB (local), built on demand for chat only
 Config: pydantic-settings + YAML
+Models: one main model, plus optional per-job models (facts, continuity, craft, narrative, synthesis, rewrite_writer) in config.yaml. A job with no model uses the main model. Rewrites (--show-rewrites) use only rewrite_writer and are skipped when it is unset.
 Caching: content-hash cache for fact sheets and summaries (an unchanged rerun makes no fact or summary calls)
 
 Project Structure:

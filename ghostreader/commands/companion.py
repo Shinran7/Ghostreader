@@ -35,7 +35,7 @@ async def run_companion(
     genre: str | None = None,
 ) -> int:
     """Run companion pipeline. Returns process exit code (0/1/2)."""
-    from ghostreader.llm import get_llm, load_secrets
+    from ghostreader.llm import get_job_llms, get_llm, load_secrets
     from ghostreader.typesafe import (
         ensure_typesafe_api_key,
         ensure_typesafe_sdk,
@@ -68,6 +68,10 @@ async def run_companion(
             return 1
 
     llm = get_llm(model, manuscript_path=path)
+    # Per-job models (#19); a job with no model uses llm.
+    job_llms, job_warnings = get_job_llms(cfg, llm, manuscript_path=path)
+    for w in job_warnings:
+        _ERR.print(f"[yellow]Warning:[/yellow] {w}")
     if typesafe_on:
         llm_type = getattr(llm, "_llm_type", None)
         if llm_type == "stub" and (model or "").strip().lower() != "stub":
@@ -111,6 +115,7 @@ async def run_companion(
                 brief = await run_companion_pipeline(
                     discovery,
                     llm=llm,
+                    job_llms=job_llms,
                     typesafe_client=typesafe_client,
                     typesafe_enabled=True,
                     story_state_dir=story_state,
@@ -138,6 +143,7 @@ async def run_companion(
             brief = await run_companion_pipeline(
                 discovery,
                 llm=llm,
+                job_llms=job_llms,
                 typesafe_client=None,
                 typesafe_enabled=False,
                 story_state_dir=story_state,
@@ -182,8 +188,10 @@ async def run_companion(
     fact_parse_poisoned = any(
         w.startswith("Fact extraction JSON parse failed") for w in brief.warnings
     )
-    if fail_on_continuity and not craft_only and (
-        fact_parse_poisoned or brief.continuity_status == "failed"
+    if (
+        fail_on_continuity
+        and not craft_only
+        and (fact_parse_poisoned or brief.continuity_status == "failed")
     ):
         # Hard gate: continuity could not be checked, so it must not ship.
         _ERR.print(

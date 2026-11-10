@@ -89,6 +89,7 @@ def build_analysis_graph(
     llm: BaseChatModel,
     *,
     typesafe_client: Any | None = None,
+    job_llms: dict[str, BaseChatModel] | None = None,
 ) -> Any:
     """Build and compile the LangGraph analysis workflow.
 
@@ -96,17 +97,26 @@ def build_analysis_graph(
         llm: The langchain BaseChatModel to use for all agent LLM calls.
         typesafe_client: Optional live AsyncTypeSafeClient closed over by
             analyst nodes. Never stored in AnalysisState.
+        job_llms: Optional per-job models (#19): ``craft`` (prose analyst),
+            ``narrative``, ``continuity`` and ``synthesis``. A missing job
+            uses *llm*.
 
     Returns:
         A compiled LangGraph that can be invoked with AnalysisState.
     """
     graph = StateGraph(AnalysisState)
+    jobs = job_llms or {}
+
+    def job(name: str) -> BaseChatModel:
+        return jobs.get(name) or llm
 
     # ── Add nodes ──
-    graph.add_node("prose_analyst", _make_prose_node(llm, typesafe_client))
-    graph.add_node("narrative_analyst", _make_narrative_node(llm, typesafe_client))
-    graph.add_node("consistency_checker", _make_consistency_node(llm, typesafe_client))
-    graph.add_node("synthesis", _make_synthesis_node(llm))
+    graph.add_node("prose_analyst", _make_prose_node(job("craft"), typesafe_client))
+    graph.add_node("narrative_analyst", _make_narrative_node(job("narrative"), typesafe_client))
+    graph.add_node(
+        "consistency_checker", _make_consistency_node(job("continuity"), typesafe_client)
+    )
+    graph.add_node("synthesis", _make_synthesis_node(job("synthesis")))
 
     # ── Define edges ──
     # Fan-out by depth: START → [prose, narrative, consistency]

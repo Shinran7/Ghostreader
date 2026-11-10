@@ -12,7 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from rich import print as rprint
 
-from ghostreader.config import GhostreaderConfig
+from ghostreader.config import GhostreaderConfig, ModelSettings
 
 FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
 DEFAULT_MODEL = "gemini-3.8-flash"
@@ -173,7 +173,7 @@ _JSON_PROBE_SYSTEM = (
     '{"ok": true}. No markdown fences. No commentary.'
 )
 _JSON_PROBE_REPAIR = (
-    "Your previous reply was not valid JSON. Return ONLY {\"ok\": true} "
+    'Your previous reply was not valid JSON. Return ONLY {"ok": true} '
     "with no markdown and no other keys."
 )
 
@@ -206,7 +206,7 @@ async def probe_json_contract(llm: BaseChatModel) -> tuple[bool, str]:
         [
             SystemMessage(content=_JSON_PROBE_REPAIR),
             HumanMessage(
-                content=f"Previous invalid reply:\n{text[:1000]}\n\nReturn {{\"ok\": true}} only."
+                content=f'Previous invalid reply:\n{text[:1000]}\n\nReturn {{"ok": true}} only.'
             ),
         ],
     )
@@ -237,9 +237,7 @@ def load_secrets() -> None:
             os.environ[key] = value
 
 
-def resolve_model_name(
-    model: str | None = None, manuscript_path: Path | None = None
-) -> str | None:
+def resolve_model_name(model: str | None = None, manuscript_path: Path | None = None) -> str | None:
     """Determine which model to use: --model flag > config.yaml > None."""
     if model:
         return model
@@ -296,27 +294,24 @@ def _stub_chat_model() -> BaseChatModel:
         def _llm_type(self) -> str:
             return "stub"
 
-        def _generate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> object:
+        def _generate(self, messages: list[BaseMessage], **kwargs: object) -> object:
             from langchain_core.outputs import ChatGeneration, ChatResult
 
             last = messages[-1].content if messages else ""
             text = f"[stub summary of {len(str(last))} chars]"
-            return ChatResult(
-                generations=[ChatGeneration(message=AIMessage(content=text))]
-            )
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=text))])
 
-        async def _agenerate(
-            self, messages: list[BaseMessage], **kwargs: object
-        ) -> object:
+        async def _agenerate(self, messages: list[BaseMessage], **kwargs: object) -> object:
             return self._generate(messages, **kwargs)
 
     return _StubChatModel()
 
 
 def get_llm(
-    model: str | None = None, manuscript_path: Path | None = None
+    model: str | None = None,
+    manuscript_path: Path | None = None,
+    *,
+    settings: ModelSettings | None = None,
 ) -> BaseChatModel:
     """Create a langchain ChatModel from config or --model override.
 
@@ -325,12 +320,22 @@ def get_llm(
 
     Raises typer.Exit if no model is configured and --model is not given
     (unless model is explicitly 'stub' for testing).
+
+    With *settings* (a per-job model, #19), the model and its parameters
+    come from *settings* alone; config ``temperature`` / ``max_tokens`` are
+    not used.
     """
     import typer
 
     load_secrets()
-    model_name = resolve_model_name(model, manuscript_path=manuscript_path)
     cfg = GhostreaderConfig.load(manuscript_path)
+    if settings is not None:
+        model_name = settings.model or resolve_model_name(model, manuscript_path=manuscript_path)
+        params = settings
+    else:
+        model_name = resolve_model_name(model, manuscript_path=manuscript_path)
+        params = ModelSettings(temperature=cfg.temperature, max_tokens=cfg.max_tokens)
+    effort = params.reasoning_effort
 
     if not model_name:
         rprint(
@@ -340,19 +345,17 @@ def get_llm(
         raise typer.Exit(code=1)
 
     extra_kwargs: dict[str, object] = {}
-    if cfg.temperature is not None:
-        extra_kwargs["temperature"] = cfg.temperature
-    if cfg.max_tokens is not None:
-        extra_kwargs["max_tokens"] = cfg.max_tokens
+    if params.temperature is not None:
+        extra_kwargs["temperature"] = params.temperature
+    if params.max_tokens is not None:
+        extra_kwargs["max_tokens"] = params.max_tokens
 
     # Branch order: ollama → fireworks → gemini → openai → claude → grok → stub
     if model_name.startswith("ollama:"):
         try:
             from langchain_ollama import ChatOllama
 
-            return ChatOllama(
-                model=model_name.removeprefix("ollama:"), **extra_kwargs
-            )  # type: ignore[arg-type]
+            return ChatOllama(model=model_name.removeprefix("ollama:"), **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -375,12 +378,12 @@ def get_llm(
         try:
             from langchain_openai import ChatOpenAI
 
-            effort = _fireworks_reasoning_effort(model_id)
+            fw_effort = _fireworks_reasoning_effort(model_id, effort)
             return ChatOpenAI(
                 model=model_id,
                 api_key=api_key,
                 base_url=FIREWORKS_BASE_URL,
-                extra_body={"reasoning_effort": effort},
+                extra_body={"reasoning_effort": fw_effort},
                 **extra_kwargs,
             )  # type: ignore[arg-type]
         except Exception:
@@ -400,7 +403,7 @@ def get_llm(
             kwargs: dict[str, object] = {
                 "model": model_name,
                 "api_key": api_key,
-                "thinking_level": "low",
+                "thinking_level": effort or "low",
                 "max_retries": 1,
                 **extra_kwargs,
             }
@@ -412,6 +415,8 @@ def get_llm(
         try:
             from langchain_openai import ChatOpenAI
 
+            if effort:
+                extra_kwargs["reasoning_effort"] = effort
             return ChatOpenAI(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
@@ -420,7 +425,9 @@ def get_llm(
         try:
             from langchain_anthropic import ChatAnthropic
 
-            return ChatAnthropic(model=model_name, **extra_kwargs)  # type: ignore[arg-type]
+            # Current Claude models reject `temperature`.
+            claude_kwargs = {k: v for k, v in extra_kwargs.items() if k != "temperature"}
+            return ChatAnthropic(model=model_name, **claude_kwargs)  # type: ignore[arg-type]
         except Exception:
             pass
 
@@ -439,6 +446,47 @@ def get_llm(
         )
 
     return _stub_chat_model()
+
+
+def _is_stub(llm: object) -> bool:
+    return getattr(llm, "_llm_type", None) == "stub"
+
+
+def get_job_llms(
+    cfg: GhostreaderConfig,
+    main_llm: BaseChatModel,
+    manuscript_path: Path | None = None,
+) -> tuple[dict[str, BaseChatModel], list[str]]:
+    """Build the LLM for each job in ``JOB_NAMES`` (#19).
+
+    A job with no model uses *main_llm*. ``rewrite_writer`` has no fallback:
+    it is absent from the result unless its model is set. A job whose model
+    cannot start falls back the same way, with a warning for the report.
+    """
+    from ghostreader.config import JOB_NAMES
+
+    llms: dict[str, BaseChatModel] = {}
+    warnings: list[str] = []
+    for name in JOB_NAMES:
+        settings: ModelSettings = getattr(cfg, name)
+        if not settings.model:
+            if name != "rewrite_writer":
+                llms[name] = main_llm
+            continue
+        llm = get_llm(manuscript_path=manuscript_path, settings=settings)
+        if _is_stub(llm) and settings.model != "stub":
+            if name == "rewrite_writer":
+                warnings.append(
+                    f"rewrite_writer: could not start '{settings.model}'; rewrites skipped."
+                )
+            else:
+                warnings.append(
+                    f"{name}: could not start '{settings.model}'; using the main model."
+                )
+                llms[name] = main_llm
+            continue
+        llms[name] = llm
+    return llms, warnings
 
 
 # Compatibility aliases used by older call sites / tests

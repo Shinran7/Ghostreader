@@ -17,6 +17,20 @@ from pydantic import BaseModel
 from ghostreader.paths import config_path as _find_config_path
 
 
+class ModelSettings(BaseModel):
+    """Model and parameters for one job (#19). Unset fields use provider defaults."""
+
+    model: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+
+
+# Jobs that may name their own model. A job with no model uses the main
+# model, except rewrite_writer: rewrites never use the analysis model.
+JOB_NAMES = ("facts", "continuity", "craft", "narrative", "synthesis", "rewrite_writer")
+
+
 class GhostreaderConfig(BaseModel):
     """Ghostreader configuration."""
 
@@ -92,6 +106,13 @@ class GhostreaderConfig(BaseModel):
     # Motif / load-bearing lemmas for common-word thrash (higher threshold).
     # Empty = ordinary thresholds for every word (KD-5 protect set may be empty).
     analyze_thrash_load_bearing: list[str] = []
+    # Per-job models (#19). null model = main model (rewrite_writer: no rewrites).
+    facts: ModelSettings = ModelSettings()
+    continuity: ModelSettings = ModelSettings()
+    craft: ModelSettings = ModelSettings()
+    narrative: ModelSettings = ModelSettings()
+    synthesis: ModelSettings = ModelSettings()
+    rewrite_writer: ModelSettings = ModelSettings()
 
     @classmethod
     def load(cls, manuscript_path: Path | None = None) -> GhostreaderConfig:
@@ -124,6 +145,24 @@ class GhostreaderConfig(BaseModel):
             if not cleaned:
                 return "[]"
             return "\n" + "\n".join(f"  - {v}" for v in cleaned)
+
+        def _fmt_job(name: str) -> list[str]:
+            st: ModelSettings = getattr(self, name)
+            return [
+                f"{name}:",
+                f"  model: {_fmt(st.model)}",
+                f"  temperature: {_fmt(st.temperature)}",
+                f"  max_tokens: {_fmt(st.max_tokens)}",
+                f"  reasoning_effort: {_fmt(st.reasoning_effort)}",
+            ]
+
+        job_lines = [
+            "# Per-job models. A null model uses the main model and its settings.",
+            "# rewrite_writer has no fallback: --show-rewrites runs only when it is set.",
+            "# reasoning_effort goes to OpenAI, Fireworks and Gemini (low/medium/high).",
+        ]
+        for name in JOB_NAMES:
+            job_lines.extend(_fmt_job(name))
 
         lines = [
             # LLM model (required). Examples: gemini-3.8-flash,
@@ -246,6 +285,8 @@ class GhostreaderConfig(BaseModel):
             "# Motif / load-bearing words for common-word thrash (higher bar).",
             "# Empty list = ordinary thresholds for every word.",
             f"analyze_thrash_load_bearing: {_fmt_str_list(self.analyze_thrash_load_bearing)}",
+            "",
+            *job_lines,
             "",
         ]
 

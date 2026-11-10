@@ -224,6 +224,12 @@ async def _run_analyze(
             raise typer.Exit(code=1) from exc
 
     llm = _get_llm(model, manuscript_path=path)
+    from ghostreader.llm import get_job_llms
+
+    # Per-job models (#19); a job with no model uses llm.
+    job_llms, job_warnings = get_job_llms(cfg, llm, manuscript_path=path)
+    for w in job_warnings:
+        rprint(f"[yellow]Warning:[/yellow] {w}")
 
     if typesafe_on:
         llm_type = getattr(llm, "_llm_type", None)
@@ -286,20 +292,20 @@ async def _run_analyze(
 
     rprint(f"[cyan]Extracting chapter facts ({len(chapters)} chapters, 10 concurrent)...[/cyan]")
     if no_cache:
-        chapter_facts: list[dict] = list(await extract_all_facts(chapters, llm))
+        chapter_facts: list[dict] = list(await extract_all_facts(chapters, job_llms["facts"]))
         rprint(f"  Extracted [green]{len(chapter_facts)}[/green] fact sheet(s)")
     else:
         # Shared with companion mode: one hash-keyed fact store per story.
         from ghostreader.companion.fact_memory import FactMemoryStore
 
         fact_store = FactMemoryStore(story_state_dir_for(path))
-        chapter_facts = list(await fact_store.ensure_facts(chapters, llm))
+        chapter_facts = list(await fact_store.ensure_facts(chapters, job_llms["facts"]))
         rprint(
             f"  Facts: [green]{fact_store.last_reused}[/green] reused, "
             f"[green]{fact_store.last_extracted}[/green] extracted"
         )
     failed_facts = count_parse_failed(chapter_facts)  # type: ignore[arg-type]
-    pipeline_warnings: list[str] = []
+    pipeline_warnings: list[str] = list(job_warnings)
     if failed_facts:
         warn = parse_failed_warning(failed_facts, len(chapter_facts))
         pipeline_warnings.append(warn)
@@ -407,10 +413,10 @@ async def _run_analyze(
         from typesafe_sdk import AsyncTypeSafeClient
 
         async with AsyncTypeSafeClient() as typesafe_client:
-            graph = build_analysis_graph(llm, typesafe_client=typesafe_client)
+            graph = build_analysis_graph(llm, typesafe_client=typesafe_client, job_llms=job_llms)
             result = await graph.ainvoke(initial_state)
     else:
-        graph = build_analysis_graph(llm, typesafe_client=None)
+        graph = build_analysis_graph(llm, typesafe_client=None, job_llms=job_llms)
         result = await graph.ainvoke(initial_state)
 
     final_report = result.get("final_report", {})
@@ -444,9 +450,15 @@ async def _run_analyze(
     )
 
     # ── 5b. Optional rewrite suggestions ──
-    if show_rewrites and report.prioritized_findings:
+    # Rewrites use only rewrite_writer, never the analysis model (#19).
+    writer = job_llms.get("rewrite_writer")
+    if show_rewrites and writer is None:
+        msg = "Rewrites skipped: set rewrite_writer.model in config.yaml."
+        rprint(f"[yellow]Warning:[/yellow] {msg}")
+        report.warnings.append(msg)
+    elif show_rewrites and report.prioritized_findings:
         rprint("[cyan]Generating rewrite suggestions...[/cyan]")
-        report.rewrite_suggestions = await generate_rewrites(report.prioritized_findings, llm)
+        report.rewrite_suggestions = await generate_rewrites(report.prioritized_findings, writer)
 
     # ── 6. Render output ──
     json_text: str | None = None
@@ -682,6 +694,25 @@ def config_set(
 
     cfg = GhostreaderConfig.load()
     data = cfg.model_dump()
+
+    job, _, field = key.partition(".")
+    if field:
+        # Per-job model setting (#19), e.g. rewrite_writer.model
+        from ghostreader.config import JOB_NAMES, ModelSettings
+
+        if job not in JOB_NAMES or field not in ModelSettings.model_fields:
+            rprint(f"[red]Error:[/red] Unknown config key '{key}'.")
+            rprint(f"Jobs: {', '.join(JOB_NAMES)}; fields: {', '.join(ModelSettings.model_fields)}")
+            raise typer.Exit(code=1)
+        job_value: object = None if value.lower() in ("null", "none", "") else value
+        if job_value is not None and field == "temperature":
+            job_value = float(value)
+        elif job_value is not None and field == "max_tokens":
+            job_value = int(value)
+        data[job][field] = job_value
+        GhostreaderConfig(**data).save(root)
+        rprint(f"[green]Set[/green] {key} = {job_value}")
+        return
 
     if key not in data:
         rprint(f"[red]Error:[/red] Unknown config key '{key}'.")

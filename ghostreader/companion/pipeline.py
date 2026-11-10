@@ -303,6 +303,7 @@ async def run_companion_pipeline(
     typesafe_client: Any | None,
     typesafe_enabled: bool,
     story_state_dir: Path,
+    job_llms: dict[str, BaseChatModel] | None = None,
     genre: str | None,
     no_cache: bool = False,
     continuity_only: bool = False,
@@ -323,7 +324,17 @@ async def run_companion_pipeline(
     continuity_canon: bool = True,
     json_mode: bool = False,
 ) -> CompanionBrief:
-    """Facts → craft → continuity → partition → brief; update progress cursor."""
+    """Facts → craft → continuity → partition → brief; update progress cursor.
+
+    *job_llms* (#19) picks the model for ``facts``, ``craft``,
+    ``continuity`` and ``narrative``; a missing job uses *llm*. The chapter
+    note uses *llm*.
+    """
+    jobs = job_llms or {}
+    facts_llm = jobs.get("facts") or llm
+    craft_llm = jobs.get("craft") or llm
+    continuity_llm = jobs.get("continuity") or llm
+    narrative_llm = jobs.get("narrative") or llm
     warnings: list[str] = list(discovery.warnings)
     quote_index = QuoteIndex(discovery.chapters) if quote_verification else None
     quote_stats: dict[str, int] = {}
@@ -358,7 +369,7 @@ async def run_companion_pipeline(
         f"{' (force re-extract)' if no_cache else ''}…",
         quiet_stdout_json=json_mode,
     )
-    all_facts = await store.ensure_facts(discovery.chapters, llm, force=no_cache)
+    all_facts = await store.ensure_facts(discovery.chapters, facts_llm, force=no_cache)
     facts_reused = store.last_reused
     facts_extracted = store.last_extracted
     _stderr(
@@ -535,7 +546,7 @@ async def run_companion_pipeline(
             focus_chapters=focus_chapters,
             repetition_block=repetition_block,
             config=config,
-            llm=llm,
+            llm=craft_llm,
             typesafe_client=typesafe_client,
             register_block=reg_block,
             include_register_dims=include_register,
@@ -564,7 +575,7 @@ async def run_companion_pipeline(
                 title=focus.title,
                 content=focus.content,
                 state=canon_state,
-                llm=llm,
+                llm=continuity_llm,
                 genre=genre,
                 seed_meta=discovery.seed_meta,
             )
@@ -584,7 +595,7 @@ async def run_companion_pipeline(
             }
             cont_result = await run_companion_consistency(
                 cont_state,  # type: ignore[arg-type]
-                llm,
+                continuity_llm,
                 typesafe_client,
                 chapter_n=discovery.chapter_number,
                 mode=discovery.mode,
@@ -598,7 +609,7 @@ async def run_companion_pipeline(
         else:
             continuity_raw, continuity_ratings_map, info_ratings_map = await _run_llm_consistency(
                 facts=cont_facts,
-                llm=llm,
+                llm=continuity_llm,
                 genre=genre,
                 seed_meta=discovery.seed_meta,
                 chapter_n=discovery.chapter_number,
@@ -620,7 +631,7 @@ async def run_companion_pipeline(
             prior_facts=cont_facts,
             genre=genre,
             seed_meta=discovery.seed_meta,
-            llm=llm,
+            llm=narrative_llm,
             typesafe_client=typesafe_client,
             typesafe_enabled=typesafe_enabled,
             typesafe_confidence_floor=typesafe_confidence_floor,
@@ -669,7 +680,7 @@ async def run_companion_pipeline(
             continuity_raw, recovered, calls = await recover_continuity_quotes(
                 continuity_raw,
                 quote_index,
-                llm,
+                continuity_llm,
                 chapter_n=discovery.chapter_number,
                 max_calls=quote_recovery_max,
             )
