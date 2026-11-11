@@ -173,3 +173,17 @@ def test_analyze_json_stdout_is_pure_and_json_out(
     assert "Analysis complete" in result.stderr
     assert "Report saved" in result.stderr
     assert json.loads(out.read_text(encoding="utf-8")) == payload
+
+
+class TestConfigSetBadNumber:
+    @pytest.mark.parametrize("key", ["craft.temperature", "craft.max_tokens", "quote_recovery_max"])
+    def test_bad_number_is_a_clean_error(
+        self, key: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "config.yaml").write_text("depth: standard\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["config", "set", key, "abc"])
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "must be a" in result.output
+        assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "depth: standard\n"

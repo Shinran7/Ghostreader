@@ -107,6 +107,9 @@ TypeSafe. Chapters with no Canon entries before them are skipped.
   null`, and does not gate.
 - Canon is read only for chapters before N. Live Canon is filtered by chapter;
   a deceased character whose `died_chapter` is N or later reads as active.
+  A secret whose state changed in chapter N or later shows only what was
+  true before N (hidden, or revealed since its first reveal); its knowers are
+  not stated, since Canon keeps only the latest list.
 - Kill switch: `continuity_canon: false` in `config.yaml` (fact sheets only).
 
 ### Since 0.2.2: quote verification (#17)

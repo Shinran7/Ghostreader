@@ -262,20 +262,30 @@ def _plot(b: _Builder, root: Path, loaded: list[str]) -> None:
         if b.before(r.get("planted_chapter"))
     ]
     for r in secrets[:_MAX_SECRETS]:
-        knowers = r.get("knowers") or []
-        if isinstance(knowers, list):
-            knowers = ", ".join(str(k.get("slug") if isinstance(k, dict) else k) for k in knowers)
+        since = _int(r.get("state_since_chapter"))
+        if since is not None and since >= b.n:
+            # Live Canon holds only the latest state and knowers. The state
+            # changed in this chapter or later, so neither is known for N.
+            revealed = _int(r.get("first_revealed_chapter"))
+            if revealed is not None and revealed < b.n:
+                state = f"revealed since Ch {revealed}"
+            else:
+                state = "hidden"
+                revealed = None
+            tail = f"state {state}; knowers before Ch {b.n} not recorded"
+            chapter = revealed or r.get("planted_chapter")
+        else:
+            knowers = r.get("knowers") or []
+            if isinstance(knowers, list):
+                knowers = ", ".join(
+                    str(k.get("slug") if isinstance(k, dict) else k) for k in knowers
+                )
+            tail = f"state {r.get('state') or '?'}; known by {knowers or 'no one recorded'}"
+            chapter = since or r.get("planted_chapter")
         text = (
-            f"{r.get('name') or r.get('slug')}: {_clip(r.get('description_summary'), 140)}; "
-            f"state {r.get('state') or '?'}; known by {knowers or 'no one recorded'}"
+            f"{r.get('name') or r.get('slug')}: {_clip(r.get('description_summary'), 140)}; {tail}"
         )
-        b.add(
-            "S",
-            "secret",
-            text,
-            r.get("state_since_chapter") or r.get("planted_chapter"),
-            "plot/secrets-registry.json",
-        )
+        b.add("S", "secret", text, chapter, "plot/secrets-registry.json")
     seeds = _rows(_read(root, "plot/unresolved-seeds.json", loaded))
     open_seeds = [
         r

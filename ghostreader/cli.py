@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 
 import typer
 from rich import print as rprint
@@ -708,6 +708,12 @@ def config_show(
     rprint(table)
 
 
+def _bad_config_value(key: str, value: str, *, whole: bool) -> NoReturn:
+    kind = "a whole number" if whole else "a number"
+    rprint(f"[red]Error:[/red] {key} must be {kind}, not '{value}'.")
+    raise typer.Exit(code=1)
+
+
 @config_app.command("set")
 def config_set(
     key: Annotated[str, typer.Argument(help="Config key to set.")],
@@ -734,10 +740,13 @@ def config_set(
             rprint(f"Jobs: {', '.join(JOB_NAMES)}; fields: {', '.join(ModelSettings.model_fields)}")
             raise typer.Exit(code=1)
         job_value: object = None if value.lower() in ("null", "none", "") else value
-        if job_value is not None and field == "temperature":
-            job_value = float(value)
-        elif job_value is not None and field == "max_tokens":
-            job_value = int(value)
+        try:
+            if job_value is not None and field == "temperature":
+                job_value = float(value)
+            elif job_value is not None and field == "max_tokens":
+                job_value = int(value)
+        except ValueError:
+            _bad_config_value(key, value, whole=field == "max_tokens")
         data[job][field] = job_value
         GhostreaderConfig(**data).save(root)
         rprint(f"[green]Set[/green] {key} = {job_value}")
@@ -754,12 +763,16 @@ def config_set(
         coerced: object = None
     elif isinstance(current, bool) or key in GhostreaderConfig.nullable_flags():
         coerced = value.lower() in ("true", "1", "yes")
-    elif isinstance(current, float) or key in ("temperature",):
-        coerced = float(value)
-    elif isinstance(current, int) or key in ("max_tokens",):
-        coerced = int(value)
     else:
-        coerced = value
+        try:
+            if isinstance(current, float) or key in ("temperature",):
+                coerced = float(value)
+            elif isinstance(current, int) or key in ("max_tokens",):
+                coerced = int(value)
+            else:
+                coerced = value
+        except ValueError:
+            _bad_config_value(key, value, whole=not isinstance(current, float))
 
     data[key] = coerced
     updated = GhostreaderConfig(**data)

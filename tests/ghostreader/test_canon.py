@@ -103,3 +103,29 @@ def test_block_and_entry_shapes(tmp_path: Path) -> None:
     e2 = CanonEntry(id="P1", kind="physical state", text="t", chapter=2, file="f")
     assert e2.as_counter_evidence() == "Canon Ch 2 (physical state): t"
     assert e2.as_ref() == {"id": "P1", "kind": "physical state", "chapter": 2, "file": "f"}
+
+
+def _secret_state(tmp_path: Path, chapter_n: int, **row: object) -> str:
+    canon = tmp_path / "canon"
+    (canon / "plot").mkdir(parents=True)
+    base = {"slug": "will", "name": "The will", "description_summary": "Tom left Mara the cellar"}
+    (canon / "plot/secrets-registry.json").write_text(
+        json.dumps([{**base, "planted_chapter": 1, **row}]), encoding="utf-8"
+    )
+    (text,) = _texts(load_canon_state(canon, chapter_n), "S")
+    return text
+
+
+def test_secret_state_changed_later_is_not_leaked(tmp_path: Path) -> None:
+    later = {"state": "public", "state_since_chapter": 5, "knowers": ["mara", "ivo"]}
+    # Hidden until a reveal in chapter 5: chapter 3 sees it hidden, no knowers.
+    text = _secret_state(tmp_path / "a", 3, first_revealed_chapter=5, **later)
+    assert "state hidden; knowers before Ch 3 not recorded" in text
+    assert "public" not in text and "ivo" not in text
+    # Partly revealed in 2, public in 5: chapter 3 knows only the first reveal.
+    text = _secret_state(tmp_path / "b", 3, first_revealed_chapter=2, **later)
+    assert "state revealed since Ch 2" in text
+    assert "public" not in text
+    # Chapter 6 comes after the change: the latest state applies.
+    text = _secret_state(tmp_path / "c", 6, first_revealed_chapter=2, **later)
+    assert "state public; known by mara, ivo" in text
