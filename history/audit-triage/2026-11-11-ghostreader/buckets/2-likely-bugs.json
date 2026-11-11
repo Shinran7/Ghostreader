@@ -1,0 +1,30 @@
+{
+  "bucket": "2-likely-bugs",
+  "count": 2,
+  "auditCommit": "5e0d603",
+  "triageDir": ".tmp/audit-triage/2026-11-11-ghostreader",
+  "findings": [
+    {
+      "findingId": "0db3df07c7b60ec3",
+      "severity": "P2",
+      "filePath": "ghostreader/cache.py",
+      "line": 49,
+      "category": "Wrong Report Loaded",
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "cache.py:48-53 returns results[-1] from the legacy per-chapter entries layout. Commit b2de792 shows those entries held one chapter's agent result, not a synthesis report, so compare._extract_ratings (compare.py:116-130) finds no dimension_ratings and prints all '-' instead of saying there is no report. This happens only for state dirs left by older versions.",
+      "message": "ghostreader/cache.py:49\u201355 \u2014 Wrong report loaded. Users comparing manuscripts are hurt: a legacy cache can supply a per-chapter result as the full report, leaving scorecard data missing or invalid."
+    },
+    {
+      "findingId": "e93490ffa3ed441e",
+      "severity": "P3",
+      "filePath": "ghostreader/canon.py",
+      "line": 237,
+      "category": "Time-Inaccurate Secret State",
+      "verdict": "likely-bug",
+      "bucket": "fix",
+      "evidence": "canon.py:237-255 _plot filters secrets only by planted_chapter < N, then prints the current state and knowers. With live Canon (no checkpoint, canon.py:94-98), a reveal recorded after chapter N leaks into the state for chapter N. Unlike cast deaths (canon.py:162-164), it does not check state_since_chapter >= N.",
+      "message": "ghostreader/canon.py:237-255 \u2014 Time-inaccurate secret state. Authors may receive false continuity findings or miss real secret-knowledge contradictions when an earlier chapter is checked against a later reveal state."
+    }
+  ]
+}

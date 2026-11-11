@@ -1,0 +1,217 @@
+{
+  "bucket": "5-wontfix",
+  "count": 19,
+  "auditCommit": "5e0d603",
+  "triageDir": ".tmp/audit-triage/2026-11-11-ghostreader",
+  "findings": [
+    {
+      "findingId": "063610bb2a11ede3",
+      "severity": "P1",
+      "filePath": "ghostreader/quotes.py",
+      "line": 348,
+      "category": "Stale Index Validation",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "The real anchor is ingestion/indexer.py:226-248, not quotes.py:348. The stamp lives inside db_path and is written only after index_manuscript completes (indexer.py:245-247), so deleting the db also deletes the stamp. A stale match needs a crashed rebuild followed by reverting to exactly the old content, or hand-deleting tables while keeping the stamp.",
+      "message": "ghostreader/ingestion/indexer.py:218-224 \u2014 Incomplete index validation. Chat users can proceed with a missing or incomplete LanceDB index when its stamp still matches, rather than rebuilding it."
+    },
+    {
+      "findingId": "09828a72af9a248c",
+      "severity": "P2",
+      "filePath": "ghostreader/cache.py",
+      "line": 20,
+      "category": "Wrong Last-Report Selection",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "cache.py:20-55: last-report.json is per state dir and is the first file tried. A wrong-run result needs last-report.json to be unreadable and a legacy cache.json to also exist, and a corrupt file yields None, not corrupted output. The real legacy-shape problem is tracked separately in 0db3df07c7b60ec3.",
+      "message": "ghostreader/cache.py:20 \u2014 Wrong last-report selection. Users of compare and other report readers are hurt: fallback loading can return no report, corrupted output, or a report from the wrong run."
+    },
+    {
+      "findingId": "099395ab1ba26d6d",
+      "severity": "P3",
+      "filePath": "ghostreader/ingestion/summarizer.py",
+      "line": 106,
+      "category": "Empty-Range Handling",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "summarizer.py:102-104: '... if act_ranges else []' sends an empty act_ranges to _group_into_acts. _group_by_ranges also drops empty groups (summarizer.py:266), so act_chapters[0] at line ~118 always has an element.",
+      "message": "ghostreader/ingestion/summarizer.py:106 \u2014 Empty act-range handling. Callers supplying an empty `act_ranges` sequence can hit an `IndexError` while grouping summaries, interrupting summary generation."
+    },
+    {
+      "findingId": "20c0887ab87acf30",
+      "severity": "P3",
+      "filePath": "ghostreader/canon_audit.py",
+      "line": 333,
+      "category": "Empty-Name Handling",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "_drift_match (canon_audit.py:294-303) is only called with names from names_in, which yields names of 2 or more capitalized words (canon_audit.py:111-130), so a[0] and b[0] always exist. The cast loop at canon_audit.py:338-346 guards with 'if tokens'. _anchor is unused, and audit_canon also catches errors per part (canon_audit.py:382-385).",
+      "message": "ghostreader/canon_audit.py:333 \u2014 Empty-name handling. Canon audit callers with a non-word character name can trigger an `IndexError` during name-drift comparison, aborting that check."
+    },
+    {
+      "findingId": "30eb2c30a921fd35",
+      "severity": "P3",
+      "filePath": "ghostreader/canon_audit.py",
+      "line": 382,
+      "category": "Chapter Coverage Range",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "_coverage uses range(1, through+1) (canon_audit.py:166), matching the 1-based chapter-*.md convention that discovery also assumes ('missing chapter file(s) in 1..N'). The companion caller passes through explicitly (pipeline.py:244). An empty chapter map means there is nothing to cover.",
+      "message": "ghostreader/canon_audit.py:382-385 \u2014 Incorrect coverage range. Authors auditing excerpts whose chapter numbering starts above 1 can receive false missing-chapter findings; an empty chapter map also skips coverage checks."
+    },
+    {
+      "findingId": "32eaa9b03f27bf4e",
+      "severity": "P2",
+      "filePath": "ghostreader/graph/workflow.py",
+      "line": 122,
+      "category": "Invocation Cancellation Cleanup",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "workflow.py:87-140 only builds a standard LangGraph StateGraph with no custom task management. Cancellation propagates through the ainvoke coroutines, and no caller in the repo cancels or abandons a run partway.",
+      "message": "ghostreader/graph/workflow.py:122 \u2014 Missing cancellation cleanup. Callers who cancel or abandon an invocation can leave in-flight node work running and allow stale results to continue through the workflow."
+    },
+    {
+      "findingId": "66818454963565d9",
+      "severity": "P3",
+      "filePath": "ghostreader/canon_audit.py",
+      "line": 267,
+      "category": "Empty Timestamp Handling",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "_timeline returns early when len(stamps) < 3 (canon_audit.py:260-261), so len(values) >= 3 at the division on canon_audit.py:267. Empty timestamps count as blank, not as zero length.",
+      "message": "ghostreader/canon_audit.py:267 \u2014 Empty-timestamp handling. Canon audit callers with empty timestamps can trigger a division-by-zero error during timeline checking, preventing that check from completing."
+    },
+    {
+      "findingId": "76c4907b2c07cad2",
+      "severity": "P2",
+      "filePath": "ghostreader/excerpts.py",
+      "line": 284,
+      "category": "Priority Selection Truncation",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "excerpts.py:284-294: the loop keeps adding windows while the merged length fits alloc_c. It breaks only when chosen already fills alloc_c, or after truncating to exactly alloc_c, so no budget is left over.",
+      "message": "ghostreader/excerpts.py:284 \u2014 Priority selection truncation. Callers with multiple prioritized hits are hurt: selection stops after the first interval, so later hits are omitted even when budget remains."
+    },
+    {
+      "findingId": "a530a29534a20844",
+      "severity": "P2",
+      "filePath": "ghostreader/ingestion/summarizer.py",
+      "line": 146,
+      "category": "Invalid Chunk-Size Handling",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "split_chunks (summarizer.py:141-165) would loop forever with chunk_chars<=0, but the only production caller (cli.py:341) never passes chunk_chars, so it uses DEFAULT_CHUNK_CHARS. No config exposes it.",
+      "message": "ghostreader/ingestion/summarizer.py:146-154 \u2014 Invalid chunk-size handling. Callers using a nonpositive `chunk_chars` for a long chapter can hang during hard splitting, preventing summarization from completing."
+    },
+    {
+      "findingId": "b5737bbde6bfd814",
+      "severity": "P1",
+      "filePath": "ghostreader/report/markdown_writer.py",
+      "line": 193,
+      "category": "Thrash Key Display Fallback",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "markdown_writer.py:234 does prefer phrase over lemma and normalized_key, but thrash producers set phrase only for phrase-kind rows (thrash_detector.py:867-878) and leave lemma rows with an empty phrase, which falls through. Nothing emits a whitespace-only phrase.",
+      "message": "ghostreader/report/markdown_writer.py:224 \u2014 Thrash key display fallback. Readers of Word thrash rows are hurt: a whitespace-only `phrase` is selected, hiding a valid `normalized_key` such as `ice-blue`."
+    },
+    {
+      "findingId": "c09402c1b534e5ab",
+      "severity": "P2",
+      "filePath": "ghostreader/companion/shape.py",
+      "line": 151,
+      "category": "Finding Deduplication",
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "shape.py:127-133: unquoted rows are allowed only for BOOK_KINDS (book-level single-track/flat-escalation), and the key (kind,-1) keeps one per kind on purpose. Two such rows would also get identical finding_id values (shape.py:150-157: same dimension, location None, evidence=kind), so the dedup is required.",
+      "message": "ghostreader/companion/shape.py:151 \u2014 Overbroad deduplication. Authors can lose distinct book-level shape findings of the same kind because unquoted rows share the same deduplication key."
+    },
+    {
+      "findingId": "c43ef16314a1a4ae",
+      "severity": "P2",
+      "filePath": "ghostreader/report/check_homes.py",
+      "line": 56,
+      "category": "Report Count Corruption",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "check_homes.py:55-61 clamps every count with max(0, ...), so counts cannot go negative. The only caller, drop_report_dimensions (check_homes.py:69), builds gone as a unique subset of prioritized_findings, so the counts are not undercounted either.",
+      "message": "ghostreader/report/check_homes.py:56 \u2014 Report count corruption. Consumers of `ReportOutput` are hurt: duplicate or pre-filtered findings can make `concerns_count` and `total_findings` negative or undercounted."
+    },
+    {
+      "findingId": "c4ef2a6cb7d093e7",
+      "severity": "P1",
+      "filePath": "ghostreader/agents/prose_analyst.py",
+      "line": 120,
+      "category": "Zero Excerpt Budget",
+      "verdict": "speculative",
+      "bucket": "wontfix",
+      "evidence": "per_chapter comes from excerpts.py:37-40 chapter_chars(), which only returns STANDARD_CHAPTER_CHARS=4000 or DEEP_CHAPTER_CHARS=16000 (excerpts.py:33-34), so scale = per_chapter // 4000 at prose_analyst.py:121 is never 0; no config produces a sub-4000 cap.",
+      "message": "ghostreader/agents/prose_analyst.py:120\u2013128 \u2014 A positive per-chapter excerpt cap below 4,000 yields a zero total budget. Users then get prose analysis without manuscript excerpts, producing incomplete or unsupported findings."
+    },
+    {
+      "findingId": "cba5578c38a1d40f",
+      "severity": "P1",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 219,
+      "category": "Canon Chapter Range",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "pipeline.py:244 passes through=N-1; for N=1, through=0 makes _coverage range(1,1) empty and _timeline/_names_vs_prose filter to nothing (canon_audit.py:152-180,254-260,338). load_canon_state(canon,1) correctly has no entries before ch1, and pipeline.py:264-268 falls back to fact sheets with a warning, which is the intended behavior.",
+      "message": "ghostreader/companion/pipeline.py:219, 244 \u2014 Invalid Canon range. Users running progressive continuity on chapter 1 or 0 can receive an audit through chapter 0 or -1, and Canon may be treated as empty instead of using the appropriate prior state."
+    },
+    {
+      "findingId": "de28da1edc5d2442",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/canon_consistency.py",
+      "line": 68,
+      "category": "Misattributed Canon Citation",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "canon_consistency.py:101-107: refs are built from the same extract_json_array output with the same isinstance(d, dict) filter that consistency_checker._parse_findings uses (consistency_checker.py:166-168), so findings and refs stay one-to-one. Invalid non-dict entries are skipped on both sides.",
+      "message": "ghostreader/agents/canon_consistency.py:68-90 \u2014 Misattributed Canon citation. Authors may see a finding paired with counter-evidence and a Canon reference for a different fact when invalid raw entries disrupt the one-to-one ordering."
+    },
+    {
+      "findingId": "e3e6e55247eb54c6",
+      "severity": "P2",
+      "filePath": "ghostreader/agents/consistency_checker.py",
+      "line": 563,
+      "category": "Incorrect Grounding",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "demote_ungrounded_concerns only checks the manuscript evidence field (grounding.py:39-40,454), never counter_evidence. quotes.py:343 skips the lookup when canon_counter() is true (quotes.py:318-322, counter_source='canon' set at canon_consistency.py:91), so Canon counter-evidence is never treated as a manuscript quote.",
+      "message": "ghostreader/agents/consistency_checker.py:563-575 \u2014 Incorrect grounding. Authors may lose valid Canon contradictions because Canon counter-evidence can be treated as an ungrounded manuscript quote and dropped or demoted."
+    },
+    {
+      "findingId": "ecc85b7c27ac9845",
+      "severity": "P3",
+      "filePath": "ghostreader/llm.py",
+      "line": 255,
+      "category": "python-exception",
+      "verdict": "wontfix",
+      "bucket": "wontfix",
+      "evidence": "llm.py:251-256: 'except OSError: pass' wraps a best-effort write to the once-per-day probe-cache file. Losing it only means re-probing, so the silent swallow is intentional fail-soft.",
+      "message": "Exception handler body is only `pass` \u2014 errors are silently discarded. Log the error, re-raise, or handle it explicitly."
+    },
+    {
+      "findingId": "f28b79bc4209fe77",
+      "severity": "P3",
+      "filePath": "ghostreader/companion/pipeline.py",
+      "line": 14,
+      "category": "Syntax Error",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "run_companion_pipeline (pipeline.py:306+) puts genre and the others after a bare '*', where keyword-only args without defaults are legal. ast.parse of the file succeeds.",
+      "message": "ghostreader/companion/pipeline.py:313 \u2014 Invalid parameter ordering prevents import. Users cannot run `ghostreader companion` because Python raises `SyntaxError: non-default argument follows default argument`."
+    },
+    {
+      "findingId": "ff5b52ff80408093",
+      "severity": "P1",
+      "filePath": "ghostreader/usage.py",
+      "line": 84,
+      "category": "Cross-Run Usage Attribution",
+      "verdict": "false-positive",
+      "bucket": "wontfix",
+      "evidence": "usage.py:66-93: a child task inherits a copy of the context, so it keeps the tracker of the run that spawned it. Its usage is credited to that earlier run, which is the correct attribution. start_usage in a later run only rebinds that run's own context.",
+      "message": "ghostreader/usage.py:84\u201393 \u2014 Cross-run usage attribution. Callers tracking overlapping runs are hurt: a child task from an earlier run can update its inherited tracker after a later run starts, so usage is assigned to the wrong run."
+    }
+  ]
+}
