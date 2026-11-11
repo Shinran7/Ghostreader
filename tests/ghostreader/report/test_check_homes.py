@@ -81,6 +81,28 @@ class TestConfigFlags:
         assert runner.invoke(app, ["config", "set", "earth_anachronism", "null"]).exit_code == 0
         assert GhostreaderConfig.load(tmp_path / "book.md").earth_anachronism is None
 
+    def test_companion_flag_turns_gce_on(self, tmp_path: Path) -> None:
+        from ghostreader.commands.companion import companion_config
+
+        GhostreaderConfig(prose_vocabulary=True).save(tmp_path)
+        book = tmp_path / "book.md"
+        assert not companion_config(book).gce_in_pipeline
+        cfg = companion_config(book, gce_in_pipeline=True)
+        # The flag drops the GCE-owned checks; explicit config flags still win.
+        assert cfg.dropped_dimensions() == {"prose.rhythm", "prose.earth_anachronism"}
+
+    def test_companion_cli_passes_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: dict[str, object] = {}
+
+        async def fake_run(path: Path, **kwargs: object) -> int:
+            seen.update(kwargs)
+            return 0
+
+        monkeypatch.setattr("ghostreader.commands.companion.run_companion", fake_run)
+        result = CliRunner().invoke(app, ["companion", "ch.md", "--gce-in-pipeline"])
+        assert result.exit_code == 0, result.output
+        assert seen["gce_in_pipeline"] is True
+
 
 class TestDrops:
     def test_drop_report_dimensions_reranks_and_recounts(self) -> None:

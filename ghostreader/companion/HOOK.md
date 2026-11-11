@@ -156,7 +156,8 @@ Cost and input (#19).
   in `config.yaml` can each name a model. A job with no model uses the main
   model. The probe runs on each distinct model.
 - `check_homes` — `{dropped_dimensions: [...]}`. One home per check: with
-  `gce_in_pipeline: true` in `config.yaml`, `prose.rhythm`,
+  `gce_in_pipeline: true` in `config.yaml` (or `companion --gce-in-pipeline`
+  for one run), `prose.rhythm`,
   `prose.vocabulary` and `prose.earth_anachronism` are left to
   GhostCopyeditor. They are removed from `craft_findings` and
   `craft_ratings` and cannot drive the verdict. Per-check flags

@@ -571,6 +571,16 @@ def companion(
             help="Write the LLM chapter note with --format json (always on for terminal).",
         ),
     ] = False,
+    gce_in_pipeline: Annotated[
+        bool,
+        typer.Option(
+            "--gce-in-pipeline",
+            help=(
+                "GhostCopyeditor also runs on this chapter: leave rhythm, vocabulary and "
+                "earth anachronism to it (same as gce_in_pipeline: true in config.yaml)."
+            ),
+        ),
+    ] = False,
     model: ModelOption = None,
     genre: GenreOption = None,
 ) -> None:
@@ -600,6 +610,7 @@ def companion(
             model=model,
             genre=genre,
             note=note,
+            gce_in_pipeline=gce_in_pipeline,
         )
     )
     raise typer.Exit(code=code)

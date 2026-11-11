@@ -20,6 +20,14 @@ from ghostreader.paths import companion_reports_dir, story_state_dir_for
 _ERR = Console(stderr=True)
 
 
+def companion_config(path: Path, *, gce_in_pipeline: bool = False) -> GhostreaderConfig:
+    """Load config; ``--gce-in-pipeline`` turns the config flag on for this run (#19)."""
+    cfg = GhostreaderConfig.load(path)
+    if gce_in_pipeline and not cfg.gce_in_pipeline:
+        cfg = cfg.model_copy(update={"gce_in_pipeline": True})
+    return cfg
+
+
 async def run_companion(
     path: Path,
     *,
@@ -34,6 +42,7 @@ async def run_companion(
     model: str | None = None,
     genre: str | None = None,
     note: bool = False,
+    gce_in_pipeline: bool = False,
 ) -> int:
     """Run companion pipeline. Returns process exit code (0/1/2)."""
     from ghostreader.llm import get_job_llms, get_llm, load_secrets
@@ -56,7 +65,7 @@ async def run_companion(
         _ERR.print(f"[red]Error:[/red] {exc}")
         return 1
 
-    cfg = GhostreaderConfig.load(path)
+    cfg = companion_config(path, gce_in_pipeline=gce_in_pipeline)
     typesafe_on = resolve_typesafe_enabled(typesafe, cfg)
     load_secrets()
 
