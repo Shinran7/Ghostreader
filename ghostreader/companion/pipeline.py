@@ -325,6 +325,7 @@ async def run_companion_pipeline(
     companion_register_watch: bool = True,
     companion_voice_card_watch: bool = True,
     companion_shape_watch: bool = True,
+    companion_dialogue_watch: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     quote_verification: bool = True,
@@ -429,6 +430,7 @@ async def run_companion_pipeline(
     register_findings: list[dict[str, Any]] = []
     voice_card_findings: list[dict[str, Any]] = []
     shape_findings: list[dict[str, Any]] = []
+    dialogue_findings: list[dict[str, Any]] = []
     continuity_raw: list[dict[str, Any]] = []
     continuity_ratings_map: dict[str, dict[str, str]] = {}
     info_ratings_map: dict[str, dict[str, str]] = {}
@@ -680,6 +682,14 @@ async def run_companion_pipeline(
             quiet_stdout_json=json_mode,
         )
 
+    # Dialogue shape (#21): focus chapter, no LLM; watch rows, never the verdict.
+    if companion_dialogue_watch and not continuity_only:
+        from ghostreader.report.dialogue_export import analyze_dialogue
+
+        _, dialogue_findings = analyze_dialogue(
+            [{"chapter_number": focus.chapter_number, "content": focus.content}]
+        )
+
     continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
     if facts_poison:
         continuity_status = "failed"
@@ -813,6 +823,7 @@ async def run_companion_pipeline(
         register_findings=register_findings,
         voice_card_findings=voice_card_findings,
         shape_findings=shape_findings,
+        dialogue_findings=dialogue_findings,
         warnings=warnings,
         continuity_status=continuity_status,
         quote_stats=quote_stats,

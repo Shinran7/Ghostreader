@@ -85,6 +85,10 @@ class ReportOutput:
     # False when depth/kill-switch skipped the watcher (so [] ≠ "ran, found nothing").
     register_findings_enabled: bool = True
     thrash_findings_enabled: bool = True
+    # Dialogue shape rows (#21): volleys, missing long speech, too-fluent speech.
+    dialogue_findings: list[dict[str, Any]] = field(default_factory=list)
+    dialogue_totals: dict[str, Any] = field(default_factory=dict)
+    dialogue_findings_enabled: bool = True
     # Concerns whose quotes were not found in the manuscript (#17); kept out of
     # prioritized_findings and the counts. quote_stats: verified / unverified / dropped.
     unverified_findings: list[dict[str, Any]] = field(default_factory=list)
@@ -112,6 +116,9 @@ class ReportOutput:
         thrash_findings: list[dict[str, Any]] | None = None,
         register_findings_enabled: bool = True,
         thrash_findings_enabled: bool = True,
+        dialogue_findings: list[dict[str, Any]] | None = None,
+        dialogue_totals: dict[str, Any] | None = None,
+        dialogue_findings_enabled: bool = True,
     ) -> ReportOutput:
         """Build a ``ReportOutput`` from the synthesis ``final_report`` dict."""
         ratings = [
@@ -167,6 +174,9 @@ class ReportOutput:
             thrash_findings=list(thrash_findings or []),
             register_findings_enabled=register_findings_enabled,
             thrash_findings_enabled=thrash_findings_enabled,
+            dialogue_findings=list(dialogue_findings or []),
+            dialogue_totals=dict(dialogue_totals or {}),
+            dialogue_findings_enabled=dialogue_findings_enabled,
             raw=report,
         )
 

@@ -1,4 +1,4 @@
-# Companion JSON hook (0.2.9)
+# Companion JSON hook (0.2.10)
 
 Autonomicon calls:
 
@@ -8,11 +8,11 @@ ghostreader companion chapter-NNN.md --format json
 
 Stdout is one JSON object. Stderr is progress only. Ignore unknown fields.
 
-`ghostreader_version` on this payload is **`0.2.9`**. It is the **companion brief contract**, not the install version and not the analyze contract.
+`ghostreader_version` on this payload is **`0.2.10`**. It is the **companion brief contract**, not the install version and not the analyze contract.
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | Companion JSON contract (**`0.2.9`**). Independent of analyze JSON (`0.2.5`) and of package `__version__`. |
+| `ghostreader_version` | Companion JSON contract (**`0.2.10`**). Independent of analyze JSON (`0.2.6`) and of package `__version__`. |
 | `package_version` | Installed package version (`ghostreader.__version__`). Additive; ignore if unused. **No** brief contract bump for this field. |
 
 Do **not** assume companion and analyze `ghostreader_version` strings match. Correlate installs with `package_version` on both surfaces. See `ghostreader/report/ANALYZE_HOOK.md` for analyze.
@@ -106,6 +106,34 @@ Always present (empty lists until filled):
 | `budget` | int \| null | Allowed unexplained count (default 3) |
 | `chapter` | int | Focus chapter number |
 | `normalized_key` | string \| null | Lowercased collapsed key for Autonomicon dedup |
+
+### Since 0.2.10
+
+- `dialogue_findings` for the focus chapter (empty list OK; missing ≡ `[]`).
+  Never flips the verdict. Kill switch: `companion_dialogue_watch: false`.
+
+Dialogue shape rows (#21). No LLM. Thresholds come from ten public-domain
+novels. Rows are watch signals, never defects on their own.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` |
+| `severity` | string | `high` \| `moderate` \| `low` |
+| `chapter` | int | Chapter number |
+| `summary` / `message` | string | Plain-language note (same text) |
+| `quote` | string | Volley only: the first four turns, joined with ` / ` |
+| `turns` | int | Volley length, or spoken turns in the chapter |
+| `start_paragraph` | int | Volley only: 1-based paragraph where it starts |
+| `metric` | float | Volley length, longest turn words, or hesitant share |
+
+- `volley`: 10+ turns in a row of 12 spoken words or fewer. `low` unless
+  under 3% of the chapter's turns run 40+ words; then `moderate`, or `high`
+  at 16+ turns.
+- `no_long_speech`: 25+ turns and none runs 40+ words.
+- `fluent_speech`: 25+ turns and under 5% hesitate (trailing off, broken-off
+  lines, fillers, hedges); `high` under 2%. Human novels run 15 to 35%.
+- Standalone: `ghostreader dialogue <story dir or file> [--json]` prints the
+  per-chapter table and every row.
 
 ### Since 0.2.9
 
@@ -297,7 +325,7 @@ Shape Autonomicon should accept (unknown keys ignored):
 
 ```json
 {
-  "ghostreader_version": "0.2.9",
+  "ghostreader_version": "0.2.10",
   "package_version": "0.1.0",
   "mode": "progressive",
   "generated_at": "2026-09-22T12:00:00+00:00",
@@ -357,7 +385,7 @@ Ghostreader cannot run Autonomicon smoke from this workspace. Operators should A
 
 1. Point Autonomicon at Ghostreader `master` with `companion_light_narrative: true` (default).
 2. Run companion on a mid/late chapter (e.g. `chapter-018.md`) with `--format json`.
-3. Confirm stdout parses; `ghostreader_version` is `0.2.9`; `continuity_status` is `ok`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, `shape_findings`, and `package_version`.
+3. Confirm stdout parses; `ghostreader_version` is `0.2.10`; `continuity_status` is `ok`; additive keys exist including `repetition_findings`, `register_findings`, `voice_card_findings`, `shape_findings`, `dialogue_findings`, and `package_version`.
 4. Confirm info-only concerns leave `verdict` as `ship` (or leave drivers without inventing `"info"`).
 5. Force a grounded narrative concern (or compare a known soft chapter) and confirm `verdict_drivers` includes `"narrative"` without exit `2`.
 6. Rollback check: set `companion_light_narrative: false` and confirm narrative arrays empty / no narrative driver.

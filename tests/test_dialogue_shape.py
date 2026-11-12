@@ -1,0 +1,118 @@
+"""Dialogue shape (#21): detector plus the ``ghostreader dialogue`` command end to end."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from ghostreader.analyzers.dialogue_shape import detect_dialogue_shape, extract_turns
+from ghostreader.cli import app
+from ghostreader.report.dialogue_export import analyze_dialogue
+
+runner = CliRunner()
+
+NARRATION = (
+    "The corridor smelled of coolant and old coffee, and the lights along the ceiling "
+    "flickered in a slow wave that nobody had fixed since the last refit of the ship."
+)
+
+
+def _tennis_chapter(turns: int = 30) -> str:
+    """Clean, certain one-liners, no long speech: the AI pattern."""
+    lines = ["# Chapter 1", "", NARRATION, ""]
+    for i in range(turns):
+        who = "Mara" if i % 2 == 0 else "Teo"
+        lines += [f'"The relay is down on deck {i}," {who} said.', ""]
+    return "\n".join(lines)
+
+
+def _human_chapter() -> str:
+    """Hesitant turns and a long answer between short ones."""
+    lines = ["# Chapter 1", "", NARRATION, ""]
+    long_answer = (
+        '"I went down there because I thought, well, somebody had to, and the hatch was '
+        "already open when I got to it, and there was water on the floor, a lot of water, "
+        "more than the pumps could ever have let in, so I knew before I even looked that "
+        'someone had been inside before me and left in a hurry," Mara said.'
+    )
+    for i in range(30):
+        if i % 6 == 0:
+            lines += [long_answer, ""]
+        elif i % 3 == 0:
+            lines += ['"I don\'t know. Maybe it was the... no."', ""]
+        else:
+            lines += [f'"Deck {i} is quiet," Teo said.', ""]
+    return "\n".join(lines)
+
+
+def test_extract_turns_reads_curly_and_straight_quotes() -> None:
+    paras = ["\u201cWait\u2014I mean, maybe,\u201d she said.", "No speech here.", '"Fine."']
+    turns = extract_turns(paras)
+    assert turns[1] is None
+    first = turns[0]
+    assert first is not None
+    assert set(first.hesitations) >= {"broken_off", "filler", "hedge"}
+    assert turns[2] is not None and turns[2].hesitations == []
+
+
+def test_tennis_chapter_flags_volley_no_long_speech_and_fluent() -> None:
+    report = detect_dialogue_shape(_tennis_chapter(), chapter_number=3)
+    kinds = {f.kind: f for f in report.findings}
+    assert kinds["volley"].severity == "high"
+    assert kinds["volley"].turns == 30
+    assert kinds["volley"].chapter == 3
+    assert "None of this chapter's turns" in kinds["volley"].summary
+    assert kinds["no_long_speech"].severity == "moderate"
+    assert kinds["fluent_speech"].severity == "high"
+    assert report.stats.hesitant_turn_share == 0.0
+
+
+def test_human_chapter_stays_quiet() -> None:
+    report = detect_dialogue_shape(_human_chapter())
+    assert report.findings == []
+    assert report.stats.longest_turn_words >= 40
+    assert report.stats.hesitant_turn_share > 0.2
+
+
+def test_few_turns_skip_chapter_rows() -> None:
+    report = detect_dialogue_shape(_tennis_chapter(turns=12))
+    assert [f.kind for f in report.findings] == ["volley"]
+
+
+def test_analyze_dialogue_disabled_and_cap() -> None:
+    chapters = [{"chapter_number": 1, "content": _tennis_chapter()}]
+    assert analyze_dialogue(chapters, enabled=False) == ([], [])
+    stats, rows = analyze_dialogue(chapters, cap=1)
+    assert len(stats) == 1 and len(rows) == 1
+    assert rows[0]["kind"] == "volley" and rows[0]["message"] == rows[0]["summary"]
+
+
+def _story(tmp_path: Path) -> Path:
+    story = tmp_path / "story"
+    chapters = story / "chapters"
+    chapters.mkdir(parents=True)
+    (chapters / "chapter-01.md").write_text(_tennis_chapter(), encoding="utf-8")
+    (chapters / "chapter-02.md").write_text(_human_chapter(), encoding="utf-8")
+    return story
+
+
+def test_dialogue_cli_json(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["dialogue", str(_story(tmp_path)), "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert [c["chapter"] for c in data["chapters"]] == [1, 2]
+    rows = data["dialogue_findings"]
+    assert {r["chapter"] for r in rows} == {1}
+    assert rows[0]["kind"] == "volley" and rows[0]["severity"] == "high"
+
+
+def test_dialogue_cli_markdown_out(tmp_path: Path) -> None:
+    out = tmp_path / "dialogue.md"
+    result = runner.invoke(app, ["dialogue", str(_story(tmp_path)), "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    text = out.read_text(encoding="utf-8")
+    assert "# Dialogue shape" in text
+    assert "| Ch | Turns |" in text
+    assert "`fluent_speech`" in text

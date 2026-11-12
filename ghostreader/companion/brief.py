@@ -22,7 +22,7 @@ from ghostreader.report import (
 )
 
 # Companion brief JSON contract (independent of package __version__ / analyze).
-GHOSTREADER_VERSION = "0.2.9"
+GHOSTREADER_VERSION = "0.2.10"
 
 
 @dataclass
@@ -60,6 +60,9 @@ class CompanionBrief:
     # Anti-tidy narrative shape rows (#8, 0.2.9; empty OK). Severity "watch"
     # only; never flips the verdict. Progressive mode only.
     shape_findings: list[dict[str, Any]] = field(default_factory=list)
+    # Dialogue shape rows for the focus chapter (#21, 0.2.10; empty OK; no LLM).
+    # Kinds: volley | no_long_speech | fluent_speech. Never flips the verdict.
+    dialogue_findings: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     # "ok" = continuity ran; "failed" = it could not be checked (parse failure
     # or poisoned fact sheets); "skipped" = --craft-only. Added in 0.2.4.
@@ -181,6 +184,7 @@ def brief_to_payload(brief: CompanionBrief) -> dict[str, Any]:
         "register_findings": list(brief.register_findings),
         "voice_card_findings": list(brief.voice_card_findings),
         "shape_findings": list(brief.shape_findings),
+        "dialogue_findings": list(brief.dialogue_findings),
         "warnings": list(brief.warnings),
         "continuity_status": brief.continuity_status,
         "quote_stats": dict(brief.quote_stats),

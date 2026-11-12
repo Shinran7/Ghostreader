@@ -29,7 +29,7 @@ from ghostreader.report import ReportOutput
 # 0.2.0: always-present repetition_findings.
 # 0.2.1: additive thrash kinds (chapter_rare / common_word / phrase / dialogue_tag)
 #        + nullable lemma / phrase field on thrash rows (#10).
-ANALYZE_JSON_VERSION = "0.2.5"
+ANALYZE_JSON_VERSION = "0.2.6"
 
 
 def export_json(
@@ -98,6 +98,9 @@ def _build_payload(report: ReportOutput) -> dict[str, Any]:
         "register_findings_enabled": bool(report.register_findings_enabled),
         "thrash_findings": list(report.thrash_findings),
         "thrash_findings_enabled": bool(report.thrash_findings_enabled),
+        "dialogue_findings": list(report.dialogue_findings),
+        "dialogue_totals": dict(report.dialogue_totals),
+        "dialogue_findings_enabled": bool(report.dialogue_findings_enabled),
         "rewrite_suggestions": [asdict(s) for s in report.rewrite_suggestions]
         if report.rewrite_suggestions
         else [],

@@ -193,6 +193,7 @@ async def _run_analyze(
     from ghostreader.ingestion.summarizer import build_summary_hierarchy
     from ghostreader.llm import load_secrets
     from ghostreader.report import ReportOutput
+    from ghostreader.report.dialogue_export import analyze_dialogue, book_totals
     from ghostreader.report.json_export import export_json
     from ghostreader.report.markdown_writer import write_markdown_report
     from ghostreader.report.register_export import analyze_register_findings
@@ -432,6 +433,8 @@ async def _run_analyze(
     manuscript_name = manuscript_display_name(path)
     register_enabled = cfg.analyze_register_watch and analysis_depth in {"standard", "deep"}
     thrash_enabled = cfg.analyze_thrash_watch and analysis_depth in {"standard", "deep"}
+    dialogue_enabled = cfg.analyze_dialogue_watch and analysis_depth in {"standard", "deep"}
+    dialogue_stats, dialogue_rows = analyze_dialogue(chapter_dicts, enabled=dialogue_enabled)
     report = ReportOutput.from_final_report(
         final_report,
         manuscript_name=manuscript_name,
@@ -454,6 +457,9 @@ async def _run_analyze(
         ),
         register_findings_enabled=register_enabled,
         thrash_findings_enabled=thrash_enabled,
+        dialogue_findings=dialogue_rows,
+        dialogue_totals=book_totals(dialogue_stats) if dialogue_enabled else {},
+        dialogue_findings_enabled=dialogue_enabled,
     )
 
     # ── 5a. One home per check (#19) ──
@@ -684,6 +690,47 @@ def canon_audit(
         if json_out
         else render_audit_markdown(results)
     )
+    if out:
+        out.write_text(text, encoding="utf-8")
+        rprint(f"Wrote {out}")
+    else:
+        typer.echo(text)
+
+
+@app.command()
+def dialogue(
+    path: Annotated[
+        Path,
+        typer.Argument(help="A story dir (uses chapters/), a chapters dir, or one .md / .epub."),
+    ],
+    json_out: Annotated[bool, typer.Option("--json", help="Print JSON.")] = False,
+    out: Annotated[Path | None, typer.Option("--out", help="Write the report here.")] = None,
+) -> None:
+    """Dialogue shape: tennis volleys, missing long speeches, too-fluent speech (no LLM)."""
+    import json
+
+    from ghostreader.ingestion import load_chapters
+    from ghostreader.report.dialogue_export import (
+        analyze_dialogue,
+        book_totals,
+        render_dialogue_markdown,
+    )
+
+    source = path / "chapters" if (path / "chapters").is_dir() else path
+    try:
+        chapters = load_chapters(source)
+    except (FileNotFoundError, ValueError) as exc:
+        rprint(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    dicts = [{"chapter_number": c.chapter_number, "content": c.content} for c in chapters]
+    stats, rows = analyze_dialogue(dicts, cap=1000)
+    name = manuscript_display_name(path)
+    if json_out:
+        payload = {"manuscript": name, "book": book_totals(stats), "chapters": stats}
+        payload["dialogue_findings"] = rows
+        text = json.dumps(payload, indent=2, ensure_ascii=False)
+    else:
+        text = render_dialogue_markdown(name, stats, rows)
     if out:
         out.write_text(text, encoding="utf-8")
         rprint(f"Wrote {out}")

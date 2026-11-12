@@ -69,6 +69,7 @@ def write_markdown_report(
     sections.append(_algorithmic_repetition(report))
     sections.append(_register(report))
     sections.append(_thrash(report))
+    sections.append(_dialogue(report))
     sections.append(_canon(report))
 
     if show_rewrites and report.rewrite_suggestions:
@@ -270,6 +271,17 @@ def _thrash(report: ReportOutput) -> str:
         "Reader-visible repeats; keep the first use, vary the later ones.",
         report.thrash_findings,
         _thrash_row,
+    )
+
+
+def _dialogue(report: ReportOutput) -> str:
+    from ghostreader.report.dialogue_export import HUMAN_BASELINE, dialogue_row_markdown
+
+    return _capped(
+        "Dialogue shape",
+        "Tennis volleys, missing long speeches, too-fluent speech (no LLM). " + HUMAN_BASELINE,
+        report.dialogue_findings,
+        dialogue_row_markdown,
     )
 
 

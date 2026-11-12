@@ -62,6 +62,8 @@ class GhostreaderConfig(BaseModel):
     # Anti-tidy narrative shape watch (#8): one LLM call, progressive only,
     # watch rows in shape_findings. Default on.
     companion_shape_watch: bool = True
+    # Dialogue shape watch (#21): focus chapter, no LLM, dialogue_findings rows.
+    companion_dialogue_watch: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -106,6 +108,8 @@ class GhostreaderConfig(BaseModel):
     analyze_thrash_watch: bool = True
     # Max algorithmic thrash_findings rows in analyze JSON.
     analyze_thrash_findings_cap: int = 40
+    # Analyze dialogue_findings export (#21; standard/deep only). Default on.
+    analyze_dialogue_watch: bool = True
     # Motif / load-bearing lemmas for common-word thrash (higher threshold).
     # Empty = ordinary thresholds for every word (KD-5 protect set may be empty).
     analyze_thrash_load_bearing: list[str] = []
@@ -259,6 +263,9 @@ class GhostreaderConfig(BaseModel):
             "# Anti-tidy narrative shape watch (progressive; watch rows; false = off).",
             f"companion_shape_watch: {_fmt(self.companion_shape_watch)}",
             "",
+            "# Dialogue shape watch (focus chapter; no LLM; watch rows; false = off).",
+            f"companion_dialogue_watch: {_fmt(self.companion_dialogue_watch)}",
+            "",
             "# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",
             "",
@@ -314,6 +321,9 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Max algorithmic thrash_findings rows in analyze JSON export.",
             f"analyze_thrash_findings_cap: {_fmt(self.analyze_thrash_findings_cap)}",
+            "",
+            "# Analyze dialogue_findings on standard/deep (#21; false = always []).",
+            f"analyze_dialogue_watch: {_fmt(self.analyze_dialogue_watch)}",
             "",
             "# Motif / load-bearing words for common-word thrash (higher bar).",
             "# Empty list = ordinary thresholds for every word.",

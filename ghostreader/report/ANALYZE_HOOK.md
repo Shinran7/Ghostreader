@@ -1,4 +1,4 @@
-# Analyze JSON hook (0.2.5)
+# Analyze JSON hook (0.2.6)
 
 Autonomicon (and scripts) read analyze JSON from:
 
@@ -31,12 +31,12 @@ embedding model change. LanceDB and local embeddings (torch) are the optional
 
 | Field | Meaning |
 | --- | --- |
-| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.5`**. Bumps only when analyze payload shape changes. |
+| `ghostreader_version` | **Analyze JSON contract** (`ANALYZE_JSON_VERSION`). Currently **`0.2.6`**. Bumps only when analyze payload shape changes. |
 | `package_version` | Installed package version (`ghostreader.__version__`). For correlating which install produced the file. |
 
-Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.9`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
+Do **not** assume `ghostreader_version` equals companion brief `ghostreader_version`, or equals `package_version`. Companion briefs stay on their own contract (today **`0.2.10`**). Package `__version__` is released separately and was **not** bumped with this contract wave.
 
-## Contract shape (0.2.5)
+## Contract shape (0.2.6)
 
 Always present:
 
@@ -50,6 +50,36 @@ Always present:
   `overview` counts; `prioritized_findings` is re-ranked.
 - `quote_stats` — `{verified, unverified, dropped, recovered, recovery_calls}`
   (`{}` when `quote_verification: false`).
+
+### Since 0.2.6: dialogue shape (#21)
+
+- `dialogue_findings` (sorted, cap 30), `dialogue_totals` (book turn-weighted
+  shares, longest turn, longest volley) and `dialogue_findings_enabled`.
+  Emitted on `standard` and `deep` when `analyze_dialogue_watch` is on;
+  `quick` / kill-off → `[]` and `{}`.
+
+Dialogue shape rows (#21). No LLM. Thresholds come from ten public-domain
+novels. Rows are watch signals, never defects on their own.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` |
+| `severity` | string | `high` \| `moderate` \| `low` |
+| `chapter` | int | Chapter number |
+| `summary` / `message` | string | Plain-language note (same text) |
+| `quote` | string | Volley only: the first four turns, joined with ` / ` |
+| `turns` | int | Volley length, or spoken turns in the chapter |
+| `start_paragraph` | int | Volley only: 1-based paragraph where it starts |
+| `metric` | float | Volley length, longest turn words, or hesitant share |
+
+- `volley`: 10+ turns in a row of 12 spoken words or fewer. `low` unless
+  under 3% of the chapter's turns run 40+ words; then `moderate`, or `high`
+  at 16+ turns.
+- `no_long_speech`: 25+ turns and none runs 40+ words.
+- `fluent_speech`: 25+ turns and under 5% hesitate (trailing off, broken-off
+  lines, fillers, hedges); `high` under 2%. Human novels run 15 to 35%.
+- Standalone: `ghostreader dialogue <story dir or file> [--json]` prints the
+  per-chapter table and every row.
 
 ### Since 0.2.5: usage and per-job models (#19)
 
@@ -166,7 +196,7 @@ Consumers that do not know `thrash_findings` or unknown kinds ignore them. Missi
 
 ```json
 {
-  "ghostreader_version": "0.2.5",
+  "ghostreader_version": "0.2.6",
   "package_version": "0.1.0",
   "repetition_findings": [],
   "register_findings": [],
