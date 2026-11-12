@@ -191,3 +191,87 @@ def test_dialogue_cli_judge_json(tmp_path: Path, monkeypatch) -> None:  # type: 
     data = json.loads(result.output)
     assert data["judge"]["book"]["tennis_returns"] == 10
     assert data["dialogue_findings"][0]["kind"] == "tennis_habit"
+
+
+# -- LLM comedy-source judge (fake model) --------------------------------
+
+
+class _ComedyLLM:
+    """Every scene: three quips, no situation, one unearned laugh."""
+
+    def __init__(self, fail_first: bool = False) -> None:
+        self.calls = 0
+        self.fail_first = fail_first
+
+    async def ainvoke(self, messages: list) -> object:
+        self.calls += 1
+        if self.fail_first and self.calls == 1:
+            raise RuntimeError("boom")
+        payload = [
+            {
+                "intent": 1,
+                "escalation": False,
+                "moments": [
+                    {"kind": "verbal", "quote": f"Quip {self.calls}a"},
+                    {"kind": "verbal", "quote": f"Quip {self.calls}b"},
+                    {"kind": "verbal", "quote": f"Quip {self.calls}c"},
+                    {"kind": "announced", "quote": "Mara grinned despite herself."},
+                ],
+            }
+        ]
+
+        class _R:
+            content = json.dumps(payload)
+
+        return _R()
+
+
+def _long_chapter(words: int = 2400) -> str:
+    paras = ["# Chapter 1", ""]
+    while sum(len(p.split()) for p in paras) < words:
+        paras += [NARRATION, ""]
+    return "\n".join(paras)
+
+
+def test_comedy_judge_flags_quip_only_humor() -> None:
+    import asyncio
+
+    from ghostreader.analyzers.comedy_judge import judge_comedy, scene_windows
+
+    text = _long_chapter()
+    assert len(scene_windows(text)) == 2
+    llm = _ComedyLLM(fail_first=True)
+    rows, stats, warnings = asyncio.run(judge_comedy(llm, text, chapter_number=2))  # type: ignore[arg-type]
+    assert len(warnings) == 1
+    assert stats["windows"] == 1
+    assert stats["moments"]["verbal"] == 3
+    # Three quips is under the four-moment floor: no quip row yet.
+    assert [r["kind"] for r in rows] == ["announced_levity"]
+
+    rows, stats, warnings = asyncio.run(judge_comedy(_ComedyLLM(), text, chapter_number=2))  # type: ignore[arg-type]
+    assert warnings == []
+    quip = rows[0]
+    assert quip["kind"] == "quip_humor"
+    assert quip["severity"] == "high"
+    assert quip["quote"].startswith("Quip 1a / ")
+    assert [r["kind"] for r in rows[1:]] == ["announced_levity", "announced_levity"]
+
+
+def test_dialogue_cli_comedy_json(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import ghostreader.llm as llm_mod
+
+    story = tmp_path / "story"
+    (story / "chapters").mkdir(parents=True)
+    (story / "chapters" / "chapter-01.md").write_text(_long_chapter(), encoding="utf-8")
+    monkeypatch.setattr(llm_mod, "get_llm", lambda *a, **k: _ComedyLLM())
+    result = runner.invoke(app, ["dialogue", str(story), "--json", "--comedy"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    book = data["comedy"]["book"]
+    assert book["moments"]["verbal"] == 6
+    assert book["situation_share"] == 0.0
+    assert data["dialogue_findings"][0]["kind"] == "quip_humor"
+    out = tmp_path / "d.md"
+    result = runner.invoke(app, ["dialogue", str(story), "--comedy", "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "0% from situation" in out.read_text(encoding="utf-8")

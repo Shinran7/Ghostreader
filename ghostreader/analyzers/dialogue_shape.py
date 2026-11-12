@@ -204,10 +204,8 @@ def detect_dialogue_shape(text: str, *, chapter_number: int = 1) -> DialogueShap
     for run in volleys:
         if len(run) < VOLLEY_MIN_TURNS:
             continue
-        if not starved:
-            sev = "low"
-        else:
-            sev = "high" if len(run) >= VOLLEY_HIGH_TURNS else "moderate"
+        big = len(run) >= VOLLEY_HIGH_TURNS
+        sev = ("high" if big else "moderate") if starved else "low"
         long_pct = round(stats.long_turn_share * 100)
         few = "None" if long_pct == 0 else f"Only {long_pct}%"
         why = (
@@ -278,7 +276,9 @@ _KIND_RANK = {
     "volley": 1,
     "no_long_speech": 2,
     "fluent_speech": 3,
-    "tennis_return": 4,
+    "quip_humor": 4,
+    "tennis_return": 5,
+    "announced_levity": 6,
 }
 
 

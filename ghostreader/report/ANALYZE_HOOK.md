@@ -63,11 +63,11 @@ novels. Rows are watch signals, never defects on their own.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` \| `tennis_habit` \| `tennis_return` |
+| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` \| `tennis_habit` \| `tennis_return` \| `quip_humor` \| `announced_levity` |
 | `severity` | string | `high` \| `moderate` \| `low` |
 | `chapter` | int | Chapter number |
 | `summary` / `message` | string | Plain-language note (same text) |
-| `quote` | string | Volley only: the first four turns, joined with ` / ` |
+| `quote` | string | Volley: first four turns; returns, quips, laughs: the lines |
 | `turns` | int | Volley length, or spoken turns in the chapter |
 | `start_paragraph` | int | Volley only: 1-based paragraph where it starts |
 | `metric` | float | Volley length, longest turn words, or hesitant share |
@@ -86,8 +86,17 @@ novels. Rows are watch signals, never defects on their own.
   `tennis_return` rows (`low`) carry the quotes. Companion runs it on the focus
   chapter (`companion_dialogue_judge`, one call per 60 exchanges); analyze does
   not; `ghostreader dialogue --judge` runs it on every chapter.
-- Standalone: `ghostreader dialogue <story dir or file> [--json]` prints the
-  per-chapter table and every row.
+- `quip_humor` / `announced_levity` (LLM comedy judge, one call per ~1,100-word
+  scene): sorts each comic moment by source: situation, character, verbal
+  (quips), or announced (narration says people laugh with no funny cause).
+  `quip_humor` per chapter at 4+ comic moments when under 25% come from
+  situation or character (`high` under 10%); quotes are sample quips. Comic
+  human novels: 33 to 84%; Autonomicon: 0 to 19%. Up to three
+  `announced_levity` rows (`low`) per chapter. Companion runs it on the focus
+  chapter (`companion_comedy_judge`); `ghostreader dialogue --comedy` runs it on
+  every chapter.
+- Standalone: `ghostreader dialogue <story dir or file> [--json] [--judge]
+  [--comedy]` prints the per-chapter table and every row.
 
 ### Since 0.2.5: usage and per-job models (#19)
 

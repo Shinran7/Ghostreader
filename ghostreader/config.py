@@ -66,6 +66,8 @@ class GhostreaderConfig(BaseModel):
     companion_dialogue_watch: bool = True
     # Tennis-return judge (#21): one LLM call per 60 exchanges in the focus chapter.
     companion_dialogue_judge: bool = True
+    # Comedy-source judge (#21): one LLM call per ~1,100-word scene in the focus chapter.
+    companion_comedy_judge: bool = True
     # Preflight: ask the chat model for {"ok": true} before expensive work.
     # Catches provider content-shape / JSON breakage after model switches.
     llm_json_probe: bool = True
@@ -270,6 +272,9 @@ class GhostreaderConfig(BaseModel):
             "",
             "# Tennis-return LLM judge on the focus chapter (#21; false = off).",
             f"companion_dialogue_judge: {_fmt(self.companion_dialogue_judge)}",
+            "",
+            "# Comedy-source LLM judge on the focus chapter (#21; false = off).",
+            f"companion_comedy_judge: {_fmt(self.companion_comedy_judge)}",
             "",
             "# Probe chat model JSON contract at analyze/companion start (model-switch guard).",
             f"llm_json_probe: {_fmt(self.llm_json_probe)}",

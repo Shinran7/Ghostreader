@@ -708,11 +708,18 @@ def dialogue(
     judge: Annotated[
         bool, typer.Option("--judge", help="Also run the LLM tennis-return judge.")
     ] = False,
-    model: Annotated[str | None, typer.Option("--model", help="Model for --judge.")] = None,
+    comedy: Annotated[
+        bool,
+        typer.Option("--comedy", help="Also run the LLM comedy-source judge (one call per scene)."),
+    ] = False,
+    model: Annotated[
+        str | None, typer.Option("--model", help="Model for --judge and --comedy.")
+    ] = None,
 ) -> None:
     """Dialogue shape: tennis volleys, missing long speeches, too-fluent speech.
 
-    No LLM unless --judge, which finds statement-then-retort exchanges.
+    No LLM unless --judge, which finds statement-then-retort exchanges, or
+    --comedy, which sorts the humor by source (situation versus quips).
     """
     import asyncio
     import json
@@ -721,6 +728,7 @@ def dialogue(
     from ghostreader.report.dialogue_export import (
         analyze_dialogue,
         book_totals,
+        judge_comedy_chapters,
         judge_dialogue,
         judge_totals,
         merge_rows,
@@ -736,13 +744,21 @@ def dialogue(
     dicts = [{"chapter_number": c.chapter_number, "content": c.content} for c in chapters]
     stats, rows = analyze_dialogue(dicts, cap=1000)
     judge_stats: list[dict[str, Any]] = []
-    if judge:
+    comedy_stats: list[dict[str, Any]] = []
+    if judge or comedy:
         from ghostreader.llm import get_llm
 
         llm = get_llm(model, manuscript_path=path)
-        judge_stats, judge_rows, judge_warnings = asyncio.run(judge_dialogue(dicts, llm))
-        rows = merge_rows(rows, judge_rows, cap=1000)
-        for w in judge_warnings:
+        extra_warnings: list[str] = []
+        if judge:
+            judge_stats, judge_rows, w1 = asyncio.run(judge_dialogue(dicts, llm))
+            rows = merge_rows(rows, judge_rows, cap=1000)
+            extra_warnings += w1
+        if comedy:
+            comedy_stats, comedy_rows, w2 = asyncio.run(judge_comedy_chapters(dicts, llm))
+            rows = merge_rows(rows, comedy_rows, cap=1000)
+            extra_warnings += w2
+        for w in extra_warnings:
             typer.echo(w, err=True)
     name = manuscript_display_name(path)
     if json_out:
@@ -753,10 +769,14 @@ def dialogue(
         }
         if judge:
             payload["judge"] = {"book": judge_totals(judge_stats), "chapters": judge_stats}
+        if comedy:
+            from ghostreader.analyzers.comedy_judge import comedy_totals
+
+            payload["comedy"] = {"book": comedy_totals(comedy_stats), "chapters": comedy_stats}
         payload["dialogue_findings"] = rows
         text = json.dumps(payload, indent=2, ensure_ascii=False)
     else:
-        text = render_dialogue_markdown(name, stats, rows, judge_stats)
+        text = render_dialogue_markdown(name, stats, rows, judge_stats, comedy_stats)
     if out:
         out.write_text(text, encoding="utf-8")
         rprint(f"Wrote {out}")

@@ -327,6 +327,7 @@ async def run_companion_pipeline(
     companion_shape_watch: bool = True,
     companion_dialogue_watch: bool = True,
     companion_dialogue_judge: bool = True,
+    companion_comedy_judge: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     quote_verification: bool = True,
@@ -701,6 +702,17 @@ async def run_companion_pipeline(
             )
             dialogue_findings = merge_rows(dialogue_findings, judge_rows, cap=30)
             warnings.extend(judge_warnings)
+        # Comedy source (#21): one LLM call per ~1,100-word scene; fail-soft.
+        if companion_comedy_judge:
+            from ghostreader.analyzers.comedy_judge import judge_comedy
+            from ghostreader.report.dialogue_export import merge_rows
+
+            _stderr("Running comedy judge...", quiet_stdout_json=json_mode)
+            comedy_rows, _, comedy_warnings = await judge_comedy(
+                narrative_llm, focus.content, chapter_number=focus.chapter_number
+            )
+            dialogue_findings = merge_rows(dialogue_findings, comedy_rows, cap=30)
+            warnings.extend(comedy_warnings)
 
     continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
     if facts_poison:

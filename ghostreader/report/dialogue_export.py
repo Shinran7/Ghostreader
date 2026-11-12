@@ -75,6 +75,34 @@ async def judge_dialogue(
     return stats, sort_findings(rows), warnings
 
 
+async def judge_comedy_chapters(
+    chapters: Sequence[Mapping[str, Any]],
+    llm: BaseChatModel,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """LLM comedy-source judge per chapter: (stats, rows, warnings). Fail-soft."""
+    from ghostreader.analyzers.comedy_judge import judge_comedy
+
+    gate = asyncio.Semaphore(JUDGE_CONCURRENCY)
+
+    async def one(ch: Mapping[str, Any]) -> Any:
+        async with gate:
+            return await judge_comedy(
+                llm,
+                str(ch.get("content") or ""),
+                chapter_number=int(ch.get("chapter_number") or 0),
+            )
+
+    results = await asyncio.gather(*(one(ch) for ch in chapters))
+    stats: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for r, s, w in results:
+        rows.extend(r)
+        stats.append(s)
+        warnings.extend(w)
+    return stats, sort_findings(rows), warnings
+
+
 def merge_rows(*groups: Sequence[dict[str, Any]], cap: int) -> list[dict[str, Any]]:
     """Sort and cap several row lists together."""
     rows = [r for g in groups for r in g]
@@ -123,6 +151,7 @@ def render_dialogue_markdown(
     stats: Sequence[Mapping[str, Any]],
     rows: Sequence[Mapping[str, Any]],
     judge_stats: Sequence[Mapping[str, Any]] | None = None,
+    comedy_stats: Sequence[Mapping[str, Any]] | None = None,
 ) -> str:
     """Markdown report for ``ghostreader dialogue``."""
     total = book_totals(stats)
@@ -144,6 +173,19 @@ def render_dialogue_markdown(
             f"Recast retorts (statement, then a reply that recasts it to deny it): "
             f"{jt['tennis_returns']} of {jt['pairs']} exchanges "
             f"({round(jt['tennis_return_share'] * 100, 1)}%). Human novels: about 0.2%.",
+            "",
+        ]
+    if comedy_stats:
+        from ghostreader.analyzers.comedy_judge import comedy_totals
+
+        ct = comedy_totals(list(comedy_stats))
+        m = ct["moments"]
+        lines += [
+            f"Comedy: {m['situation'] + m['character'] + m['verbal']} comic moments in "
+            f"{ct['windows']} scenes; {round(ct['situation_share'] * 100)}% from situation "
+            f"or character, the rest quips. {ct['escalating_windows']} scene(s) escalate. "
+            f"{m['announced']} announced laugh(s) with no funny cause. Comic human novels: "
+            "a third or more from situation, and a quarter or more of scenes escalate.",
             "",
         ]
     lines += [
@@ -187,6 +229,7 @@ __all__ = [
     "DEFAULT_DIALOGUE_FINDINGS_CAP",
     "HUMAN_BASELINE",
     "analyze_dialogue",
+    "judge_comedy_chapters",
     "judge_dialogue",
     "judge_totals",
     "merge_rows",
