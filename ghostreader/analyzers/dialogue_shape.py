@@ -273,7 +273,13 @@ def detect_dialogue_shape(text: str, *, chapter_number: int = 1) -> DialogueShap
 
 
 _SEVERITY_RANK = {"high": 0, "moderate": 1, "low": 2}
-_KIND_RANK = {"volley": 0, "no_long_speech": 1, "fluent_speech": 2}
+_KIND_RANK = {
+    "tennis_habit": 0,
+    "volley": 1,
+    "no_long_speech": 2,
+    "fluent_speech": 3,
+    "tennis_return": 4,
+}
 
 
 def finding_to_dict(finding: DialogueShapeFinding) -> dict[str, Any]:

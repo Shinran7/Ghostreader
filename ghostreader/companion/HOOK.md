@@ -117,7 +117,7 @@ novels. Rows are watch signals, never defects on their own.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` |
+| `kind` | string | `volley` \| `no_long_speech` \| `fluent_speech` \| `tennis_habit` \| `tennis_return` |
 | `severity` | string | `high` \| `moderate` \| `low` |
 | `chapter` | int | Chapter number |
 | `summary` / `message` | string | Plain-language note (same text) |
@@ -125,6 +125,7 @@ novels. Rows are watch signals, never defects on their own.
 | `turns` | int | Volley length, or spoken turns in the chapter |
 | `start_paragraph` | int | Volley only: 1-based paragraph where it starts |
 | `metric` | float | Volley length, longest turn words, or hesitant share |
+| `form` | string | `tennis_return` only: `recast` \| `x_not_y` |
 
 - `volley`: 10+ turns in a row of 12 spoken words or fewer. `low` unless
   under 3% of the chapter's turns run 40+ words; then `moderate`, or `high`
@@ -132,6 +133,13 @@ novels. Rows are watch signals, never defects on their own.
 - `no_long_speech`: 25+ turns and none runs 40+ words.
 - `fluent_speech`: 25+ turns and under 5% hesitate (trailing off, broken-off
   lines, fillers, hedges); `high` under 2%. Human novels run 15 to 35%.
+- `tennis_habit` / `tennis_return` (LLM judge): a statement, then a reply that
+  recasts it to deny it ("Sentiment." / "Logistics.") or corrects it with
+  "X, not Y". Human novels: about 0.2% of exchanges; Autonomicon about 3%.
+  `tennis_habit` per chapter at 2+ returns and 2% (`high` at 3.5%); up to five
+  `tennis_return` rows (`low`) carry the quotes. Companion runs it on the focus
+  chapter (`companion_dialogue_judge`, one call per 60 exchanges); analyze does
+  not; `ghostreader dialogue --judge` runs it on every chapter.
 - Standalone: `ghostreader dialogue <story dir or file> [--json]` prints the
   per-chapter table and every row.
 

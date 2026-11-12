@@ -54,7 +54,8 @@ def test_extract_turns_reads_curly_and_straight_quotes() -> None:
     first = turns[0]
     assert first is not None
     assert set(first.hesitations) >= {"broken_off", "filler", "hedge"}
-    assert turns[2] is not None and turns[2].hesitations == []
+    assert turns[2] is not None
+    assert turns[2].hesitations == []
 
 
 def test_tennis_chapter_flags_volley_no_long_speech_and_fluent() -> None:
@@ -85,8 +86,10 @@ def test_analyze_dialogue_disabled_and_cap() -> None:
     chapters = [{"chapter_number": 1, "content": _tennis_chapter()}]
     assert analyze_dialogue(chapters, enabled=False) == ([], [])
     stats, rows = analyze_dialogue(chapters, cap=1)
-    assert len(stats) == 1 and len(rows) == 1
-    assert rows[0]["kind"] == "volley" and rows[0]["message"] == rows[0]["summary"]
+    assert len(stats) == 1
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "volley"
+    assert rows[0]["message"] == rows[0]["summary"]
 
 
 def _story(tmp_path: Path) -> Path:
@@ -105,7 +108,8 @@ def test_dialogue_cli_json(tmp_path: Path) -> None:
     assert [c["chapter"] for c in data["chapters"]] == [1, 2]
     rows = data["dialogue_findings"]
     assert {r["chapter"] for r in rows} == {1}
-    assert rows[0]["kind"] == "volley" and rows[0]["severity"] == "high"
+    assert rows[0]["kind"] == "volley"
+    assert rows[0]["severity"] == "high"
 
 
 def test_dialogue_cli_markdown_out(tmp_path: Path) -> None:
@@ -116,3 +120,74 @@ def test_dialogue_cli_markdown_out(tmp_path: Path) -> None:
     assert "# Dialogue shape" in text
     assert "| Ch | Turns |" in text
     assert "`fluent_speech`" in text
+
+
+# -- LLM tennis-return judge (fake model) --------------------------------
+
+
+class _FakeLLM:
+    """Labels every pair whose reply starts with "Not" as an x_not_y retort."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def ainvoke(self, messages: list) -> object:
+        import re as _re
+
+        self.calls += 1
+        body = messages[-1].content
+        hits = []
+        for m in _re.finditer(r"\[(\d+)\]\nA: [^\n]*\nB: ([^\n]*)", body):
+            if m.group(2).startswith("Not"):
+                hits.append({"id": int(m.group(1)), "form": "x_not_y"})
+            elif m.group(2).startswith("No"):
+                hits.append({"id": int(m.group(1)), "form": "flat_denial"})
+
+        class _R:
+            content = json.dumps(hits)
+
+        return _R()
+
+
+def _retort_chapter() -> str:
+    lines = ["# Chapter 1", ""]
+    for i in range(20):
+        lines += [f'"The pump on deck {i} is fine," Mara said.', ""]
+        reply = f"Not fine. Failing, deck {i}." if i % 2 == 0 else "No. It is broken."
+        lines += [f'"{reply}"', "", NARRATION + " " + NARRATION, ""]
+    return "\n".join(lines)
+
+
+def test_judge_reports_recast_forms_only() -> None:
+    import asyncio
+
+    from ghostreader.analyzers.dialogue_judge import exchange_pairs, judge_tennis_returns
+
+    text = _retort_chapter()
+    assert len(exchange_pairs(text)) == 20
+    llm = _FakeLLM()
+    rows, stats, warnings = asyncio.run(judge_tennis_returns(llm, text, chapter_number=4))  # type: ignore[arg-type]
+    assert warnings == []
+    assert stats["pairs"] == 20
+    assert stats["tennis_returns"] == 10
+    assert stats["forms"] == {"x_not_y": 10, "flat_denial": 10}
+    habit = rows[0]
+    assert habit["kind"] == "tennis_habit"
+    assert habit["severity"] == "high"
+    instances = [r for r in rows if r["kind"] == "tennis_return"]
+    assert len(instances) == 5
+    assert instances[0]["quote"].startswith("The pump on deck 0 is fine, / Not fine.")
+
+
+def test_dialogue_cli_judge_json(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import ghostreader.llm as llm_mod
+
+    story = tmp_path / "story"
+    (story / "chapters").mkdir(parents=True)
+    (story / "chapters" / "chapter-01.md").write_text(_retort_chapter(), encoding="utf-8")
+    monkeypatch.setattr(llm_mod, "get_llm", lambda *a, **k: _FakeLLM())
+    result = runner.invoke(app, ["dialogue", str(story), "--json", "--judge"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["judge"]["book"]["tennis_returns"] == 10
+    assert data["dialogue_findings"][0]["kind"] == "tennis_habit"

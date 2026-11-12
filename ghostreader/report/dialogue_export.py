@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ghostreader.analyzers.dialogue_shape import (
     LONG_TURN_WORDS,
@@ -13,7 +14,12 @@ from ghostreader.analyzers.dialogue_shape import (
     sort_findings,
 )
 
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
+
 DEFAULT_DIALOGUE_FINDINGS_CAP = 30
+# Chapters judged at once by the LLM retort judge.
+JUDGE_CONCURRENCY = 4
 
 # Human baseline (ten public-domain novels, 2026-11-12), for report context.
 HUMAN_BASELINE = (
@@ -39,6 +45,50 @@ def analyze_dialogue(
         stats.append(asdict(report.stats))
         rows.extend(finding_to_dict(f) for f in report.findings)
     return stats, sort_findings(rows)[: max(0, int(cap))]
+
+
+async def judge_dialogue(
+    chapters: Sequence[Mapping[str, Any]],
+    llm: BaseChatModel,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """LLM tennis-return judge per chapter: (stats, rows, warnings). Fail-soft."""
+    from ghostreader.analyzers.dialogue_judge import judge_tennis_returns
+
+    gate = asyncio.Semaphore(JUDGE_CONCURRENCY)
+
+    async def one(ch: Mapping[str, Any]) -> Any:
+        async with gate:
+            return await judge_tennis_returns(
+                llm,
+                str(ch.get("content") or ""),
+                chapter_number=int(ch.get("chapter_number") or 0),
+            )
+
+    results = await asyncio.gather(*(one(ch) for ch in chapters))
+    stats: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for r, s, w in results:
+        rows.extend(r)
+        stats.append(s)
+        warnings.extend(w)
+    return stats, sort_findings(rows), warnings
+
+
+def merge_rows(*groups: Sequence[dict[str, Any]], cap: int) -> list[dict[str, Any]]:
+    """Sort and cap several row lists together."""
+    rows = [r for g in groups for r in g]
+    return sort_findings(rows)[: max(0, int(cap))]
+
+
+def judge_totals(stats: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    pairs = sum(int(s.get("pairs") or 0) for s in stats)
+    returns = sum(int(s.get("tennis_returns") or 0) for s in stats)
+    return {
+        "pairs": pairs,
+        "tennis_returns": returns,
+        "tennis_return_share": round(returns / pairs, 4) if pairs else 0.0,
+    }
 
 
 def book_totals(stats: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -72,6 +122,7 @@ def render_dialogue_markdown(
     name: str,
     stats: Sequence[Mapping[str, Any]],
     rows: Sequence[Mapping[str, Any]],
+    judge_stats: Sequence[Mapping[str, Any]] | None = None,
 ) -> str:
     """Markdown report for ``ghostreader dialogue``."""
     total = book_totals(stats)
@@ -86,6 +137,16 @@ def render_dialogue_markdown(
         "",
         f"*{HUMAN_BASELINE}*",
         "",
+    ]
+    if judge_stats:
+        jt = judge_totals(judge_stats)
+        lines += [
+            f"Recast retorts (statement, then a reply that recasts it to deny it): "
+            f"{jt['tennis_returns']} of {jt['pairs']} exchanges "
+            f"({round(jt['tennis_return_share'] * 100, 1)}%). Human novels: about 0.2%.",
+            "",
+        ]
+    lines += [
         "## Chapters",
         "",
         "| Ch | Turns | Talk | Short | 40+ | Hesitant | Longest | Volley |",
@@ -126,6 +187,9 @@ __all__ = [
     "DEFAULT_DIALOGUE_FINDINGS_CAP",
     "HUMAN_BASELINE",
     "analyze_dialogue",
+    "judge_dialogue",
+    "judge_totals",
+    "merge_rows",
     "book_totals",
     "dialogue_row_markdown",
     "render_dialogue_markdown",

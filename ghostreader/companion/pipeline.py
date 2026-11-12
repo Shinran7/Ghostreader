@@ -326,6 +326,7 @@ async def run_companion_pipeline(
     companion_voice_card_watch: bool = True,
     companion_shape_watch: bool = True,
     companion_dialogue_watch: bool = True,
+    companion_dialogue_judge: bool = True,
     typesafe_confidence_floor: float = 0.55,
     typesafe_noul_positive_threshold: float = 0.65,
     quote_verification: bool = True,
@@ -689,6 +690,17 @@ async def run_companion_pipeline(
         _, dialogue_findings = analyze_dialogue(
             [{"chapter_number": focus.chapter_number, "content": focus.content}]
         )
+        # Tennis returns (#21): one LLM call per 60 exchanges; fail-soft.
+        if companion_dialogue_judge:
+            from ghostreader.analyzers.dialogue_judge import judge_tennis_returns
+            from ghostreader.report.dialogue_export import merge_rows
+
+            _stderr("Running dialogue judge...", quiet_stdout_json=json_mode)
+            judge_rows, _, judge_warnings = await judge_tennis_returns(
+                narrative_llm, focus.content, chapter_number=focus.chapter_number
+            )
+            dialogue_findings = merge_rows(dialogue_findings, judge_rows, cap=30)
+            warnings.extend(judge_warnings)
 
     continuity_status: Literal["ok", "failed", "skipped"] = "skipped" if craft_only else "ok"
     if facts_poison:

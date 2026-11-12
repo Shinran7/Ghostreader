@@ -705,14 +705,25 @@ def dialogue(
     ],
     json_out: Annotated[bool, typer.Option("--json", help="Print JSON.")] = False,
     out: Annotated[Path | None, typer.Option("--out", help="Write the report here.")] = None,
+    judge: Annotated[
+        bool, typer.Option("--judge", help="Also run the LLM tennis-return judge.")
+    ] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Model for --judge.")] = None,
 ) -> None:
-    """Dialogue shape: tennis volleys, missing long speeches, too-fluent speech (no LLM)."""
+    """Dialogue shape: tennis volleys, missing long speeches, too-fluent speech.
+
+    No LLM unless --judge, which finds statement-then-retort exchanges.
+    """
+    import asyncio
     import json
 
     from ghostreader.ingestion import load_chapters
     from ghostreader.report.dialogue_export import (
         analyze_dialogue,
         book_totals,
+        judge_dialogue,
+        judge_totals,
+        merge_rows,
         render_dialogue_markdown,
     )
 
@@ -724,13 +735,28 @@ def dialogue(
         raise typer.Exit(1) from exc
     dicts = [{"chapter_number": c.chapter_number, "content": c.content} for c in chapters]
     stats, rows = analyze_dialogue(dicts, cap=1000)
+    judge_stats: list[dict[str, Any]] = []
+    if judge:
+        from ghostreader.llm import get_llm
+
+        llm = get_llm(model, manuscript_path=path)
+        judge_stats, judge_rows, judge_warnings = asyncio.run(judge_dialogue(dicts, llm))
+        rows = merge_rows(rows, judge_rows, cap=1000)
+        for w in judge_warnings:
+            typer.echo(w, err=True)
     name = manuscript_display_name(path)
     if json_out:
-        payload = {"manuscript": name, "book": book_totals(stats), "chapters": stats}
+        payload: dict[str, Any] = {
+            "manuscript": name,
+            "book": book_totals(stats),
+            "chapters": stats,
+        }
+        if judge:
+            payload["judge"] = {"book": judge_totals(judge_stats), "chapters": judge_stats}
         payload["dialogue_findings"] = rows
         text = json.dumps(payload, indent=2, ensure_ascii=False)
     else:
-        text = render_dialogue_markdown(name, stats, rows)
+        text = render_dialogue_markdown(name, stats, rows, judge_stats)
     if out:
         out.write_text(text, encoding="utf-8")
         rprint(f"Wrote {out}")
