@@ -121,7 +121,8 @@ def test_secret_state_changed_later_is_not_leaked(tmp_path: Path) -> None:
     # Hidden until a reveal in chapter 5: chapter 3 sees it hidden, no knowers.
     text = _secret_state(tmp_path / "a", 3, first_revealed_chapter=5, **later)
     assert "state hidden; knowers before Ch 3 not recorded" in text
-    assert "public" not in text and "ivo" not in text
+    assert "public" not in text
+    assert "ivo" not in text
     # Partly revealed in 2, public in 5: chapter 3 knows only the first reveal.
     text = _secret_state(tmp_path / "b", 3, first_revealed_chapter=2, **later)
     assert "state revealed since Ch 2" in text
