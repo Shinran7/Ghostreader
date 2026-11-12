@@ -1,0 +1,18 @@
+{
+  "bucket": "1-confirmed-bugs-to-fix",
+  "count": 1,
+  "auditCommit": "ed27810e",
+  "triageDir": ".tmp/audit-triage/2026-11-12-ghostreader",
+  "findings": [
+    {
+      "findingId": "bd69e9e4216c2085",
+      "severity": "P2",
+      "filePath": "ghostreader/canon.py",
+      "line": 265,
+      "verdict": "confirmed-bug",
+      "bucket": "fix",
+      "evidence": "ghostreader/canon.py:277-284 prints the live knowers whenever state_since_chapter is None or < N, but Autonomicon secret_registry.py:264-268,289-293 adds knowers from learned_by without changing state_since_chapter (it stays None for a never-revealed secret). Scenario: secret planted ch 2, stays hidden, character X learns it in ch 10 (knower_since={X:10}); checking ch 5 shows 'state hidden; known by X'. (The stated state leak with since=None is not the problem: None means it is still in the planted state.) Minimal fix: filter knowers by knower_since[slug] < N when knower_since is present, and, if state_history is present, take the last entry with chapter < N as the state.",
+      "message": "ghostreader/canon.py:265\u2013282 \u2014 Historical canon accuracy bug. Readers relying on chapter-specific canon are hurt: when `state_since_chapter` is missing or invalid, the live state and knowers are shown for earlier chapters, potentially revealing changes that had not yet occurred."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "bucket": "6-defer",
+  "count": 0,
+  "auditCommit": "ed27810e",
+  "triageDir": ".tmp/audit-triage/2026-11-12-ghostreader",
+  "findings": []
+}
