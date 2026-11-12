@@ -129,3 +129,31 @@ def test_secret_state_changed_later_is_not_leaked(tmp_path: Path) -> None:
     # Chapter 6 comes after the change: the latest state applies.
     text = _secret_state(tmp_path / "c", 6, first_revealed_chapter=2, **later)
     assert "state public; known by mara, ivo" in text
+
+
+def test_secret_history_and_dated_knowers_are_read_as_of_chapter(tmp_path: Path) -> None:
+    """Autonomicon #602 dates knowers and state changes; later ones must not leak."""
+    # Still hidden, so state_since_chapter is unset; ivo learns it in chapter 10.
+    row = {"state": "hidden", "knowers": ["mara", "ivo"], "knower_since": {"mara": 2, "ivo": 10}}
+    text = _secret_state(tmp_path / "a", 5, **row)
+    assert "state hidden; known by mara" in text
+    assert "ivo" not in text
+    text = _secret_state(tmp_path / "b", 11, **row)
+    assert "known by mara, ivo" in text
+    # Hidden, then partial in 3, public in 7: chapter 5 sees partial.
+    history = [
+        {"state": "hidden", "chapter": 1},
+        {"state": "partial", "chapter": 3},
+        {"state": "public", "chapter": 7},
+    ]
+    text = _secret_state(
+        tmp_path / "c",
+        5,
+        state="public",
+        state_since_chapter=7,
+        state_history=history,
+        knowers=["mara"],
+        knower_since={"mara": 3},
+    )
+    assert "state partial; known by mara" in text
+    assert "public" not in text

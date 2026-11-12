@@ -255,6 +255,44 @@ def _recent(b: _Builder, root: Path, loaded: list[str]) -> None:
             )
 
 
+def _secret_state_before(r: dict[str, Any], n: int) -> tuple[str, int] | None:
+    """State and its chapter as of chapter *n*, from ``state_history`` (#602)."""
+    history = r.get("state_history")
+    if not isinstance(history, list):
+        return None
+    prior = [
+        (c, str(h.get("state") or "?"))
+        for h in history
+        if isinstance(h, dict) and (c := _int(h.get("chapter"))) is not None and c < n
+    ]
+    if not prior:
+        return None
+    chapter, state = sorted(prior, key=lambda p: p[0])[-1]
+    return state, chapter
+
+
+def _knowers_before(r: dict[str, Any], n: int, *, undated_ok: bool) -> tuple[list[str], bool]:
+    """Knowers who knew before chapter *n*, and whether undated ones were dropped."""
+    knowers = r.get("knowers")
+    if not isinstance(knowers, list):
+        return [], False
+    dated = r.get("knower_since")
+    dated = dated if isinstance(dated, dict) else {}
+    names: list[str] = []
+    dropped = False
+    for k in knowers:
+        slug = str(k.get("slug") if isinstance(k, dict) else k)
+        learned = _int(dated.get(slug))
+        if learned is not None:
+            if learned < n:
+                names.append(slug)
+        elif undated_ok:
+            names.append(slug)
+        else:
+            dropped = True
+    return names, dropped
+
+
 def _plot(b: _Builder, root: Path, loaded: list[str]) -> None:
     secrets = [
         r
@@ -263,25 +301,34 @@ def _plot(b: _Builder, root: Path, loaded: list[str]) -> None:
     ]
     for r in secrets[:_MAX_SECRETS]:
         since = _int(r.get("state_since_chapter"))
-        if since is not None and since >= b.n:
-            # Live Canon holds only the latest state and knowers. The state
-            # changed in this chapter or later, so neither is known for N.
+        changed_later = since is not None and since >= b.n
+        asof = _secret_state_before(r, b.n)
+        chapter: Any
+        if asof is not None:
+            # Autonomicon #602 records every state change with its chapter.
+            state, chapter = asof
+        elif changed_later:
+            # Live Canon holds only the latest state. It changed in this
+            # chapter or later, so only the first reveal is known for N.
             revealed = _int(r.get("first_revealed_chapter"))
             if revealed is not None and revealed < b.n:
                 state = f"revealed since Ch {revealed}"
             else:
                 state = "hidden"
                 revealed = None
-            tail = f"state {state}; knowers before Ch {b.n} not recorded"
             chapter = revealed or r.get("planted_chapter")
         else:
-            knowers = r.get("knowers") or []
-            if isinstance(knowers, list):
-                knowers = ", ".join(
-                    str(k.get("slug") if isinstance(k, dict) else k) for k in knowers
-                )
-            tail = f"state {r.get('state') or '?'}; known by {knowers or 'no one recorded'}"
+            state = r.get("state") or "?"
             chapter = since or r.get("planted_chapter")
+        # Knowers without a recorded chapter are only trusted while the
+        # state has not changed since N; dated knowers (#602) are filtered.
+        names, undated_dropped = _knowers_before(r, b.n, undated_ok=not changed_later)
+        if names:
+            tail = f"state {state}; known by {', '.join(names)}"
+        elif undated_dropped or changed_later:
+            tail = f"state {state}; knowers before Ch {b.n} not recorded"
+        else:
+            tail = f"state {state}; known by no one recorded"
         text = (
             f"{r.get('name') or r.get('slug')}: {_clip(r.get('description_summary'), 140)}; {tail}"
         )
